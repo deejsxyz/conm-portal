@@ -383,8 +383,8 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     try {
         await pool.query(`
             UPDATE students 
-            SET student_number = $1, first_name = $1, middle_name = $2, last_name = $3, year_level = $4
-            WHERE student_id = $5
+            SET student_number = $1, first_name = $2, middle_name = $3, last_name = $4, year_level = $5
+            WHERE student_id = $6
         `, [cleanId, fName, mName, lName, year_level, cleanId]);
 
         await pool.query(`
@@ -512,7 +512,7 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         });
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error loading faculty editor');
+        res.status(500).send(`Error loading faculty editor: ${err.message}`);
     }
 });
 
@@ -538,12 +538,12 @@ app.post('/faculty/add-student', isAuthenticated, async (req, res) => {
             INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
             VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
             ON CONFLICT (student_id) DO NOTHING;
-        `, [cleanId, fName, mName, lName, year_level]);
+        `, [cleanId, fName, mName, lName, year_level || 1]);
 
         res.redirect(`/faculty/edit-grades?student_id=${cleanId}`);
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error adding new student.');
+        res.status(500).send(`Error adding new student: ${err.message}`);
     }
 });
 
