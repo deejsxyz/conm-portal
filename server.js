@@ -59,6 +59,16 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS instructor VARCHAR(100);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
+        
+        // ADD NEW COLUMN to support irregular students (tracking which term they actually took it)
+        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS enrolled_term VARCHAR(10);`);
+        // Safely migrate existing data
+        await pool.query(`
+            UPDATE grades g 
+            SET enrolled_term = c.term_id::varchar 
+            FROM courses c 
+            WHERE g.course_code = c.course_code AND g.enrolled_term IS NULL;
+        `);
 
         await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
         await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));`);
@@ -347,24 +357,23 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         let grades = [];
         let availableCourses = [];
 
-        // Fetch all courses to populate dynamic checklist on the registration form
+        // Fetch all courses for the dynamic checklist and dropdown
         const allCoursesRes = await pool.query('SELECT * FROM courses ORDER BY term_id, course_code');
         const allCoursesRaw = allCoursesRes.rows;
+        availableCourses = allCoursesRaw; 
 
         if (targetStudentId) {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
             student = studentRes.rows[0] || null;
 
             if (student && selectedTerm) {
-                const coursesRes = await pool.query('SELECT * FROM courses WHERE term_id = $1', [selectedTerm]);
-                availableCourses = coursesRes.rows;
-
+                // Fetch grades specifically based on the enrolled_term
                 const gradesRes = await pool.query(`
-                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, 
+                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term,
                            c.descriptive_title, c.lec_units, c.rle_units, c.total_units
                     FROM grades g
                     JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1 AND c.term_id = $2
+                    WHERE g.student_id = $1 AND g.enrolled_term = $2
                 `, [targetStudentId, selectedTerm]);
                 grades = gradesRes.rows;
             }
@@ -375,7 +384,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             selectedStudent: student,
             grades: grades,
             availableCourses: availableCourses,
-            allCoursesRaw: allCoursesRaw, // Passed to EJS for client-side filtering
+            allCoursesRaw: allCoursesRaw,
             currentTerm: selectedTerm,
             message: req.query.msg || null,
             error: req.query.err || null
@@ -386,7 +395,6 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 });
 
-// Registrar: Add Student & Enroll Immediately
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -399,33 +407,32 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     try {
         const defaultPasswordHash = await bcrypt.hash('password123', 10);
 
-        // 1. Create User
         await pool.query(`
             INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
             VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
             ON CONFLICT (username) DO NOTHING;
         `, [cleanId, defaultPasswordHash, fName, mName, lName]);
 
-        // 2. Create Student
         await pool.query(`
             INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
             VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
             ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
-        // 3. Immediately Enroll in Checked Subjects
+        // Enroll in all checked subjects under the selected term
         if (term && course_codes) {
             const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
             for (let code of codes) {
                 await pool.query(`
-                    INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
-                    VALUES ($1, $2, '', '', '')
-                    ON CONFLICT (student_id, course_code) DO NOTHING;
-                `, [cleanId, code]);
+                    INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
+                    VALUES ($1, $2, '', '', '', $3)
+                    ON CONFLICT (student_id, course_code) 
+                    DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
+                `, [cleanId, code, term]);
             }
         }
 
-        res.redirect(`/registrar?student_id=${cleanId}&term=${term || ''}&msg=Student registered and officially enrolled in subjects.`);
+        res.redirect(`/registrar?student_id=${cleanId}&term=${term || ''}&msg=Student registered and officially enrolled in selected subjects.`);
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding new student: ${err.message}`);
@@ -457,18 +464,42 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
     }
 });
 
+app.post('/registrar/init-courses', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, term } = req.body;
+    try {
+        const termCourses = await pool.query('SELECT course_code FROM courses WHERE term_id = $1', [term]);
+        
+        for (let course of termCourses.rows) {
+            await pool.query(`
+                INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
+                VALUES ($1, $2, '', '', '', $3)
+                ON CONFLICT (student_id, course_code) 
+                DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
+            `, [student_id, course.course_code, term]);
+        }
+
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=All standard term subjects enrolled.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+    }
+});
+
 app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
     const { student_id, course_code, term } = req.body;
     try {
         await pool.query(`
-            INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
-            VALUES ($1, $2, '', '', '')
-            ON CONFLICT (student_id, course_code) DO NOTHING;
-        `, [student_id, course_code]);
+            INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
+            VALUES ($1, $2, '', '', '', $3)
+            ON CONFLICT (student_id, course_code) 
+            DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
+        `, [student_id, course_code, term]);
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject added/enrolled.`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject successfully enrolled.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
@@ -542,6 +573,11 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     try {
         let student = null;
         let grades = [];
+        let availableCourses = [];
+
+        // Faculty can manually add un-enrolled subjects too, if needed
+        const allCoursesRes = await pool.query('SELECT * FROM courses ORDER BY term_id, course_code');
+        availableCourses = allCoursesRes.rows;
 
         if (targetStudentId && selectedTerm) {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
@@ -549,11 +585,11 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
 
             if (student) {
                 const gradesRes = await pool.query(`
-                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, 
+                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, 
                            c.descriptive_title, c.lec_units, c.rle_units, c.total_units
                     FROM grades g
                     JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1 AND c.term_id = $2
+                    WHERE g.student_id = $1 AND g.enrolled_term = $2
                 `, [targetStudentId, selectedTerm]);
                 grades = gradesRes.rows;
             }
@@ -563,6 +599,7 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             currentUser: req.session.user,
             selectedStudent: student,
             grades: grades,
+            availableCourses: availableCourses,
             currentTerm: selectedTerm,
             message: req.query.msg || null,
             error: req.query.err || null
@@ -570,6 +607,66 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error loading faculty editor: ${err.message}`);
+    }
+});
+
+app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    let { student_id, course_code, final_grade, instructor, term } = req.body;
+    
+    final_grade = final_grade ? final_grade.trim() : '';
+    if (/^\d+$/.test(final_grade)) {
+        final_grade = `${final_grade}.00`;
+    }
+
+    try {
+        const numGrade = parseFloat(final_grade);
+        let remarks = '';
+        const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
+
+        if (passedGrades.includes(final_grade)) remarks = 'PASSED';
+        else if (final_grade === '4.00') remarks = 'CONDITIONAL';
+        else if (final_grade === '5.00') remarks = 'FAILED';
+        else if (final_grade === 'X') remarks = 'DROPPED';
+        else if (final_grade === 'INC') remarks = 'INCOMPLETE';
+        else if (final_grade === 'W') remarks = 'ABSENT FROM EXAMINATION';
+        else if (final_grade === 'NG') remarks = 'NO GRADE';
+
+        await pool.query(`
+            INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (student_id, course_code) 
+            DO UPDATE SET final_grade = $3, instructor = $4, remarks = $5, enrolled_term = $6;
+        `, [student_id, course_code, final_grade, instructor || '', remarks, term]);
+
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Grade saved successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+    }
+});
+
+app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, term } = req.body;
+    try {
+        const termCourses = await pool.query('SELECT course_code FROM courses WHERE term_id = $1', [term]);
+        
+        for (let course of termCourses.rows) {
+            await pool.query(`
+                INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
+                VALUES ($1, $2, '', '', '', $3)
+                ON CONFLICT (student_id, course_code) 
+                DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
+            `, [student_id, course.course_code, term]);
+        }
+
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Courses initialized successfully with empty grades.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -608,6 +705,57 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+    }
+});
+
+app.post('/faculty/delete-grade', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, course_code, term } = req.body;
+    try {
+        await pool.query(`
+            DELETE FROM grades 
+            WHERE student_id = $1 AND course_code = $2
+        `, [student_id, course_code]);
+
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Grade record deleted.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+    }
+});
+
+// Portal Routes
+app.get('/portal', isAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    
+    if (user.role === 'admin') return res.redirect('/admin');
+    if (user.role === 'faculty') return res.redirect('/faculty/edit-grades');
+    if (user.role === 'registrar') return res.redirect('/registrar');
+
+    const selectedTerm = req.query.term || '4';
+
+    try {
+        const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [user.username]);
+        const student = studentRes.rows[0];
+
+        const gradesRes = await pool.query(`
+            SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term,
+                   c.descriptive_title, c.lec_units, c.rle_units, c.total_units
+            FROM grades g
+            JOIN courses c ON g.course_code = c.course_code
+            WHERE g.student_id = $1 AND g.enrolled_term = $2
+        `, [user.username, selectedTerm]);
+
+        res.render('portal', {
+            currentUser: user,
+            studentRecord: student,
+            grades: gradesRes.rows,
+            currentTerm: selectedTerm
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
     }
 });
 
