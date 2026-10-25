@@ -574,21 +574,21 @@ app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
 
     let { student_id, course_code, final_grade, instructor, term } = req.body;
     
-    final_grade = final_grade.trim();
+    final_grade = final_grade ? final_grade.trim() : '';
     if (/^\d+$/.test(final_grade)) {
         final_grade = `${final_grade}.00`;
     }
 
     try {
         const numGrade = parseFloat(final_grade);
-        const remarks = (numGrade && numGrade <= 3.00) ? 'PASSED' : 'FAILED';
+        const remarks = (numGrade && !isNaN(numGrade) && numGrade <= 3.00) ? 'PASSED' : (final_grade ? 'FAILED' : '');
 
         await pool.query(`
             INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (student_id, course_code) 
             DO UPDATE SET final_grade = $3, instructor = $4, remarks = $5;
-        `, [student_id, course_code, final_grade, instructor, remarks]);
+        `, [student_id, course_code, final_grade, instructor || '', remarks]);
 
         res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Grade saved successfully.`);
     } catch (err) {
@@ -604,15 +604,16 @@ app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
     try {
         const termCourses = await pool.query('SELECT course_code FROM courses WHERE term_id = $1', [term]);
         
+        // MODIFIED: Insert courses with EMPTY final_grade, instructor, and remarks so they are blank initially
         for (let course of termCourses.rows) {
             await pool.query(`
                 INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
-                VALUES ($1, $2, '1.50', $3, 'PASSED')
+                VALUES ($1, $2, '', '', '')
                 ON CONFLICT (student_id, course_code) DO NOTHING;
-            `, [student_id, course.course_code, req.session.user.fullName || 'TBD']);
+            `, [student_id, course.course_code]);
         }
 
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Courses initialized successfully.`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Courses initialized successfully with empty grades.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
@@ -638,8 +639,8 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
                 grade = `${grade}.00`;
             }
 
-            const inst = insts[i];
-            const rem = remarks[i];
+            const inst = insts[i] || '';
+            const rem = remarks[i] || '';
 
             if (code) {
                 await pool.query(`
