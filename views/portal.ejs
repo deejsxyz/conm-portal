@@ -18,11 +18,6 @@
                 print-color-adjust: exact !important;
             }
         }
-
-        /* Script font for the college name to mimic the reference image */
-        .font-script {
-            font-family: 'Brush Script MT', 'Lucida Handwriting', 'Apple Chancery', cursive;
-        }
         
         /* Official dark green color matching the reference */
         .text-official-green {
@@ -78,33 +73,31 @@
             <div class="flex justify-between items-center mb-6 pb-4">
                 
                 <!-- Left: CUP Logo -->
-                <div class="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 flex items-center justify-center">
-                    <!-- Note: Replace the src URL with the actual link to your CUP logo image -->
+                <div class="flex-shrink-0 flex items-center justify-center" style="width: 1in; height: 1in;">
                     <img src="https://upload.wikimedia.org/wikipedia/en/2/25/City_University_of_Pasay_logo.png" alt="CUP Logo" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'text-[10px] text-center text-slate-300 border border-slate-200 p-2\'>[CUP LOGO]</div>';">
                 </div>
 
                 <!-- Center: Official Text -->
                 <div class="text-center flex-grow px-2 text-official-green">
-                    <h1 class="text-2xl sm:text-3xl font-serif font-bold uppercase tracking-wide mb-0" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">
+                    <h1 class="font-bold uppercase tracking-wide mb-0" style="font-family: 'Algerian', serif; font-size: 15pt; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">
                         City University of Pasay
                     </h1>
-                    <h2 class="text-sm sm:text-base font-serif uppercase tracking-wider mb-0">
+                    <h2 class="uppercase mb-0" style="font-family: 'Tahoma', sans-serif; font-size: 10pt;">
                         (Pamantasan ng Lungsod ng Pasay)
                     </h2>
-                    <p class="text-sm font-medium mb-1">
+                    <p class="mb-1" style="font-family: 'Tahoma', sans-serif; font-size: 9pt;">
                         Pasadeña St., Pasay City
                     </p>
-                    <h3 class="text-2xl sm:text-4xl font-bold font-script mt-2 mb-1">
+                    <h3 class="font-bold mt-2 mb-1" style="font-size: 16pt;">
                         College of Nursing and School of Midwifery
                     </h3>
-                    <p class="text-xs font-medium">
+                    <p style="font-family: 'Tahoma', sans-serif; font-size: 8pt;">
                         4th Floor, Tramo Wing, Pasay City General Hospital, Burgos St., Pasay City
                     </p>
                 </div>
 
                 <!-- Right: CONM Logo -->
-                <div class="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 flex items-center justify-center">
-                    <!-- Note: Replace the src URL below with your actual CONM logo image link (e.g. from Imgur or your server) -->
+                <div class="flex-shrink-0 flex items-center justify-center" style="width: 1in; height: 1in;">
                     <img src="https://via.placeholder.com/150/ffffff/1b5e20?text=CONM+Logo" alt="CONM Logo" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'text-[10px] text-center text-slate-300 border border-slate-200 p-2\'>[CONM LOGO]</div>';">
                 </div>
             </div>
