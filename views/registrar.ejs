@@ -6,14 +6,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
-    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500">
+    <header class="bg-indigo-900 text-white shadow-md border-b-4 border-pink-500">
         <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
             <div>
                 <h2 class="text-base font-bold">City University of Pasay - Registrar Portal</h2>
                 <p class="text-xs text-pink-300">College of Nursing and School of Midwifery (CONM)</p>
             </div>
             <div class="flex items-center space-x-3">
-                <span class="text-xs bg-emerald-800 px-3 py-1.5 rounded-full text-emerald-100 font-medium">
+                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
                     <%= currentUser.fullName || currentUser.username %> (REGISTRAR)
                 </span>
                 <% if (currentUser.role === 'admin') { %>
@@ -44,7 +44,7 @@
             
             <!-- Dynamic Register & Enroll Student Form -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-3">Register Account & Enroll Student</h3>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
                 <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
                     <!-- Row 1: Personal Info -->
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -79,7 +79,7 @@
                         </div>
                         <div class="sm:col-span-2">
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Active Enrollment Term (Triggers Subjects)</label>
-                            <select name="term" id="reg_term_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-emerald-800">
+                            <select name="term" id="reg_term_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800">
                                 <option value="">-- Select Active Enrollment Term --</option>
                                 <option value="1">1st Year - 1st Sem</option>
                                 <option value="2">1st Year - 2nd Sem</option>
@@ -95,14 +95,15 @@
                     
                     <!-- Dynamic Subjects Checklist Container -->
                     <div class="pt-2">
-                        <label class="block text-[11px] uppercase font-bold text-emerald-900 mb-2">Select Subjects to Enroll (Available for Irregular / Back Subjects)</label>
+                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects to Enroll (Available for Irregular / Back Subjects)</label>
                         <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200">
                             <p class="text-xs text-slate-400 italic">Please select an Active Enrollment Term above to populate the full curriculum catalog.</p>
                         </div>
                     </div>
 
-                    <div>
-                        <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors">
+                    <div class="flex gap-3">
+                        <a href="/registrar" class="w-1/4 flex items-center justify-center py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors <%= selectedStudent ? 'pointer-events-none' : '' %>">Cancel</a>
+                        <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors">
                             + Register Account & Enroll Student in Checked Subjects
                         </button>
                     </div>
@@ -111,7 +112,7 @@
 
             <!-- Register Faculty -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-900 mb-3">Register New Faculty Account</h3>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-3">Register New Faculty Account</h3>
                 <form action="/registrar/add-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end text-sm">
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
@@ -133,9 +134,10 @@
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
                         <input type="text" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                     </div>
-                    <div>
-                        <button type="submit" class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                            + Register Faculty
+                    <div class="flex gap-2">
+                        <a href="/registrar" class="flex-1 flex items-center justify-center py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                        <button type="submit" class="flex-[2] py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                            + Register
                         </button>
                     </div>
                 </form>
@@ -148,9 +150,9 @@
                 <div class="flex-grow">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
                     <div class="flex gap-2">
-                        <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. 2024-7021" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-emerald-500">
+                        <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. 2024-7021" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
                         <input type="hidden" name="term" value="<%= currentTerm %>">
-                        <button type="submit" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
                     </div>
                 </div>
             </form>
@@ -178,17 +180,17 @@
 
         <% if (selectedStudent && currentTerm) { %>
             <!-- MANUAL ENROLL SINGLE SUBJECT -->
-            <div class="bg-emerald-50 rounded-xl shadow-sm border border-emerald-200 p-5">
+            <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5">
                 <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900">Enroll Extra / Back Subject for Term <%= currentTerm %></h3>
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">Enroll Extra / Back Subject for Term <%= currentTerm %></h3>
                 </div>
                 <form action="/registrar/add-single-course" method="POST" class="flex gap-3 items-end text-sm">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                     <input type="hidden" name="term" value="<%= currentTerm %>">
                     
                     <div class="flex-grow">
-                        <label class="block text-[10px] uppercase font-bold text-emerald-800 mb-1">Select Subject from Curriculum Catalog</label>
-                        <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-medium">
+                        <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Select Subject from Curriculum Catalog</label>
+                        <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
                             <% if (availableCourses.length === 0) { %>
                                 <option value="">No courses available</option>
                             <% } else { %>
@@ -204,8 +206,9 @@
                             <% } %>
                         </select>
                     </div>
-                    <div>
-                        <button type="submit" class="py-2 px-6 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                    <div class="flex gap-2">
+                        <a href="/registrar?student_id=<%= selectedStudent.student_id %>&term=<%= currentTerm %>" class="flex items-center justify-center px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                        <button type="submit" class="py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
                             + Enroll Single Subject
                         </button>
                     </div>
@@ -216,7 +219,7 @@
         <!-- FULL GRADE MANAGEMENT & EDITING SECTION -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <div class="border-b border-slate-100 pb-3 mb-4 flex justify-between items-center">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
                     Managing Grades & Enrollments For: 
                     <span class="text-pink-600">
                         <%= selectedStudent ? (selectedStudent.last_name + ', ' + selectedStudent.first_name + ' (' + selectedStudent.student_id + ')') : 'No Student Selected' %>
@@ -244,7 +247,7 @@
 
                                 <div>
                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Code</span>
-                                    <span class="font-mono font-bold text-emerald-900"><%= g.course_code %></span>
+                                    <span class="font-mono font-bold text-indigo-900"><%= g.course_code %></span>
                                 </div>
                                 <div class="sm:col-span-2">
                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Title</span>
@@ -252,7 +255,7 @@
                                 </div>
                                 <div>
                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Final Grade</span>
-                                    <select name="final_grades" onchange="autoMatchRemark(this, this.getAttribute('data-index'))" data-index="<%= index %>" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-emerald-700 bg-white text-xs">
+                                    <select name="final_grades" onchange="autoMatchRemark(this, this.getAttribute('data-index'))" data-index="<%= index %>" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-indigo-700 bg-white text-xs">
                                         <option value="" <%= !g.final_grade ? 'selected' : '' %>>-- Select --</option>
                                         <option value="1.00" <%= g.final_grade === '1.00' ? 'selected' : '' %>>1.00</option>
                                         <option value="1.25" <%= g.final_grade === '1.25' ? 'selected' : '' %>>1.25</option>
@@ -296,9 +299,12 @@
                             </div>
                         <% }) %>
 
-                        <!-- SINGLE SAVE ALL BUTTON -->
-                        <div class="pt-4 flex justify-end">
-                            <button type="submit" class="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors">
+                        <!-- SAVE & CANCEL BUTTONS -->
+                        <div class="pt-4 flex justify-end gap-3">
+                            <a href="/registrar?student_id=<%= selectedStudent.student_id %>&term=<%= currentTerm %>" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors">
+                                Cancel
+                            </a>
+                            <button type="submit" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors">
                                 💾 Save All Changes
                             </button>
                         </div>
@@ -348,15 +354,15 @@
 
                 const isCurrentTermGroup = String(i) === String(selectedTerm);
                 
-                html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-200'} shadow-sm">`;
-                html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-emerald-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-emerald-200' : 'border-slate-100'} pb-1">${termNames[i]} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
+                html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'} shadow-sm">`;
+                html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${termNames[i]} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
                 html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">`;
                 
                 termCourses.forEach(c => {
                     const isAutoChecked = isCurrentTermGroup ? 'checked' : '';
                     html += `
                         <label class="flex items-center space-x-2 p-1.5 rounded cursor-pointer hover:bg-slate-100 transition-colors">
-                            <input type="checkbox" name="course_codes" value="${c.course_code}" ${isAutoChecked} class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                            <input type="checkbox" name="course_codes" value="${c.course_code}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
                             <span class="text-[11px] font-semibold text-slate-700">[${c.course_code}] <span class="font-normal truncate block w-full">${c.descriptive_title}</span></span>
                         </label>
                     `;

@@ -73,8 +73,9 @@
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
                         <input type="text" name="temp_password" placeholder="Default provided" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                     </div>
-                    <div>
-                        <button type="submit" class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                    <div class="flex gap-2">
+                        <a href="/admin" class="flex-1 flex items-center justify-center py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                        <button type="submit" class="flex-[2] py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
                             + Add Staff
                         </button>
                     </div>
@@ -157,9 +158,10 @@
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Last Name</label>
                                 <input type="text" name="last_name" required value="<%= selectedStaff.last_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
                             </div>
-                            <div>
-                                <button type="submit" class="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                                    💾 Save Changes
+                            <div class="flex gap-2">
+                                <a href="/admin<%= locals.searchStudentId ? '?search_student_id=' + searchStudentId : '' %>" class="flex-1 flex items-center justify-center py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                                <button type="submit" class="flex-[2] py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                                    💾 Save
                                 </button>
                             </div>
                         </form>
@@ -207,8 +209,9 @@
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
                         <input type="text" name="temp_password" required value="password123" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                     </div>
-                    <div>
-                        <button type="submit" class="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                    <div class="flex gap-2">
+                        <a href="/admin" class="flex-1 flex items-center justify-center py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                        <button type="submit" class="flex-[2] py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
                             + Add Student
                         </button>
                     </div>
@@ -334,9 +337,10 @@
                                                     <option value="4" <%= Number(stu.year_level) === 4 ? 'selected' : '' %>>4th Year</option>
                                                 </select>
                                             </div>
-                                            <div>
-                                                <button type="submit" class="w-full py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-bold text-xs shadow-sm">
-                                                    Save Student Info
+                                            <div class="flex gap-2">
+                                                <a href="/admin<%= locals.searchStudentId ? '?search_student_id=' + searchStudentId : '' %>" class="flex-1 flex items-center justify-center py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm">Cancel</a>
+                                                <button type="submit" class="flex-[2] py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-bold text-xs shadow-sm">
+                                                    Save
                                                 </button>
                                             </div>
                                         </form>
