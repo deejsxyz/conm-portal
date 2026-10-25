@@ -528,7 +528,9 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             selectedStudent: student,
             grades: grades,
             availableCourses: availableCourses,
-            currentTerm: selectedTerm
+            currentTerm: selectedTerm,
+            message: req.query.msg || null,
+            error: req.query.err || null
         });
     } catch (err) {
         console.error(err);
@@ -560,7 +562,7 @@ app.post('/faculty/add-student', isAuthenticated, async (req, res) => {
             ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
-        res.redirect(`/faculty/edit-grades?student_id=${cleanId}`);
+        res.redirect(`/faculty/edit-grades?student_id=${cleanId}&msg=Student added successfully.`);
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding new student: ${err.message}`);
@@ -588,10 +590,10 @@ app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
             DO UPDATE SET final_grade = $3, instructor = $4, remarks = $5;
         `, [student_id, course_code, final_grade, instructor, remarks]);
 
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Grade saved successfully.`);
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error assigning grade');
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -610,10 +612,10 @@ app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
             `, [student_id, course.course_code, req.session.user.fullName || 'TBD']);
         }
 
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Courses initialized successfully.`);
     } catch (err) {
         console.error(err);
-        res.status(500).send(`Error initializing courses: ${err.message}`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -648,10 +650,10 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
             }
         }
 
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=All grade changes saved successfully!`);
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error updating grades batch');
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -665,10 +667,10 @@ app.post('/faculty/delete-grade', isAuthenticated, async (req, res) => {
             WHERE student_id = $1 AND course_code = $2
         `, [student_id, course_code]);
 
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Grade record deleted.`);
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error deleting grade record');
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
