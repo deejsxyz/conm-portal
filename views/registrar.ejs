@@ -6,14 +6,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
-    <header class="bg-indigo-900 text-white shadow-md border-b-4 border-pink-500">
+    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500">
         <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
             <div>
                 <h2 class="text-base font-bold">City University of Pasay - Registrar Portal</h2>
                 <p class="text-xs text-pink-300">College of Nursing and School of Midwifery (CONM)</p>
             </div>
             <div class="flex items-center space-x-3">
-                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
+                <span class="text-xs bg-emerald-800 px-3 py-1.5 rounded-full text-emerald-100 font-medium">
                     <%= currentUser.fullName || currentUser.username %> (REGISTRAR)
                 </span>
                 <% if (currentUser.role === 'admin') { %>
