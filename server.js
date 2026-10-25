@@ -31,6 +31,7 @@ function formatFullName(first, middle, last, fallback) {
 // Database seed and initialization function
 async function seedDatabase() {
     try {
+        // Create courses table if it doesn't exist
         await pool.query(`
             CREATE TABLE IF NOT EXISTS courses (
                 course_code VARCHAR(50) PRIMARY KEY,
@@ -42,6 +43,7 @@ async function seedDatabase() {
             );
         `);
 
+        // Create or update grades table schema automatically
         await pool.query(`
             CREATE TABLE IF NOT EXISTS grades (
                 id SERIAL PRIMARY KEY,
@@ -54,12 +56,14 @@ async function seedDatabase() {
             );
         `);
 
+        // Ensure columns exist if grades table was pre-existing
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS course_code VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS final_grade VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS instructor VARCHAR(100);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
 
+        // Seed default admin account if it doesn't exist
         const adminPassword = await bcrypt.hash('admin2026', 10);
         await pool.query(`
             INSERT INTO users (username, password_hash, role, first_name, last_name) 
@@ -67,7 +71,9 @@ async function seedDatabase() {
             ON CONFLICT (username) DO NOTHING;
         `, [adminPassword]);
 
+        // Official BSN Curriculum Seed
         const allCourses = [
+            // Term 1
             ['GEC 101', 'Understanding the Self', 3, 0, 3, 1],
             ['GEC 104', 'Mathematics in the Modern World', 3, 0, 3, 1],
             ['GEC 206', 'Art Appreciation', 3, 0, 3, 1],
@@ -76,6 +82,7 @@ async function seedDatabase() {
             ['MC 1', 'Anatomy and Physiology', 3, 2, 5, 1],
             ['MC2', 'Biochemistry', 3, 2, 5, 1],
             ['PHE 101', 'Wellness and Fitness', 2, 0, 2, 1],
+            // Term 2
             ['GEC 105', 'Purposive Communication', 3, 0, 3, 2],
             ['GEC 108', 'Ethics', 3, 0, 3, 2],
             ['COR 102', 'Contemporary Mathematics', 3, 0, 3, 2],
@@ -84,6 +91,7 @@ async function seedDatabase() {
             ['NCM 103', 'Fundamentals of Nursing Practice', 3, 2, 5, 2],
             ['MC3', 'Microbiology and Parasitology', 3, 1, 4, 2],
             ['PE 2', 'Self Defense', 2, 0, 2, 2],
+            // Term 3
             ['NCM 104', 'Community Health Nursing 1', 3, 1, 4, 3],
             ['NCM 105', 'Nutrition and Diet Therapy', 3, 0, 3, 3],
             ['NCM 106', 'Pharmacology', 3, 0, 3, 3],
@@ -91,25 +99,30 @@ async function seedDatabase() {
             ['NCM 108', 'Health Care Ethics (Bioethics)', 3, 0, 3, 3],
             ['NSTP 101', 'NSTP', 3, 0, 3, 3],
             ['PHE 3', 'Swimming', 2, 0, 2, 3],
+            // Term 4
             ['GEC 102', 'Readings in Philippine History', 3, 0, 3, 4],
             ['GEC 107', 'Science, Technology, & Society', 3, 0, 3, 4],
             ['GEC E1', 'The Entrepreneurial Mind (Nursing Entrepreneurial)', 3, 0, 3, 4],
             ['NCM 110', 'Care of Mother, Child Adolescent (Acute and Chronic)', 6, 6, 12, 4],
             ['NSTP 102', 'NSTP', 3, 0, 3, 4],
             ['PHE 4', 'Sports', 2, 0, 2, 4],
+            // Term 5
             ['NCM 111', 'Nursing Research 1', 3, 0, 3, 5],
             ['NCM 112', 'Care of Clients with Problems in Oxygenation, Fluid & Electrolytes, Infectious, Inflammatory, & Immunologic Response, Cellular Aberrations; Acute and Chronic', 8, 6, 14, 5],
             ['NCM 113', 'Community Health Nursing 2 (Population Group and Community Guide Clients)', 2, 1, 3, 5],
             ['NCM 114', 'Care of Older Adult', 2, 1, 3, 5],
             ['COR 104', 'Great Books and Philippine Popular Culture', 3, 0, 3, 5],
+            // Term 6
             ['NCM 115', 'Nursing Research 2', 3, 0, 3, 6],
             ['NCM 116', 'Care of Clients with Problems in Nutrition & Gastro-Intestinal, Metabolism and Endocrine Perception & Coordination (Acute & Chronic)', 5, 4, 9, 6],
             ['NCM 117', 'Care of Clients with Maladaptive Patterns of Behavior (Acute & Chronic)', 4, 4, 8, 6],
             ['GEC E3', 'Elective 3-Nursing Personality Enhancement Program (NPEP)', 3, 0, 3, 6],
+            // Term 7
             ['GEC 109', 'Life, Works, and Writings of Rizal', 3, 0, 3, 7],
             ['NCM 118', 'Nursing Care of Clients with Life Threatening Conditions, Acutely III/Multi-organs Problems, High Acuity & Emergency Situation, Acute & Chronic', 5, 4, 9, 7],
             ['NCM 119', 'Nursing Leadership & Management', 4, 3, 7, 7],
             ['CA 1', 'Course Audit 1', 3, 0, 3, 7],
+            // Term 8
             ['GEC 103', 'The Contemporary World', 3, 0, 3, 8],
             ['NCM 121', 'Disaster Nursing', 2, 1, 3, 8],
             ['NCM 122', 'Intensive Nursing Practicum (Hospital and Community Settings)', 0, 8, 8, 8],
@@ -485,21 +498,20 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
     
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-    const selectedTerm = req.query.term || '';
+    const selectedTerm = req.query.term || '4';
 
     try {
         let student = null;
         let grades = [];
-        let availableCourses = [];
 
-        if (targetStudentId && selectedTerm) {
+        const coursesRes = await pool.query('SELECT * FROM courses WHERE term_id = $1', [selectedTerm]);
+        const availableCourses = coursesRes.rows;
+
+        if (targetStudentId) {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
             student = studentRes.rows[0] || null;
 
             if (student) {
-                const coursesRes = await pool.query('SELECT * FROM courses WHERE term_id = $1', [selectedTerm]);
-                availableCourses = coursesRes.rows;
-
                 const gradesRes = await pool.query(`
                     SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, 
                            c.descriptive_title, c.lec_units, c.rle_units, c.total_units
@@ -569,16 +581,7 @@ app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
 
     try {
         const numGrade = parseFloat(final_grade);
-        let remarks = '';
-        const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
-
-        if (passedGrades.includes(final_grade)) remarks = 'PASSED';
-        else if (final_grade === '4.00') remarks = 'CONDITIONAL';
-        else if (final_grade === '5.00') remarks = 'FAILED';
-        else if (final_grade === 'X') remarks = 'DROPPED';
-        else if (final_grade === 'INC') remarks = 'INCOMPLETE';
-        else if (final_grade === 'W') remarks = 'ABSENT FROM EXAMINATION';
-        else if (final_grade === 'NG') remarks = 'NO GRADE';
+        const remarks = (numGrade && !isNaN(numGrade) && numGrade <= 3.00) ? 'PASSED' : (final_grade ? 'FAILED' : '');
 
         await pool.query(`
             INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
@@ -601,6 +604,7 @@ app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
     try {
         const termCourses = await pool.query('SELECT course_code FROM courses WHERE term_id = $1', [term]);
         
+        // MODIFIED: Insert courses with EMPTY final_grade, instructor, and remarks so they are blank initially
         for (let course of termCourses.rows) {
             await pool.query(`
                 INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
@@ -647,8 +651,7 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
             }
         }
 
-        // Redirect with no student_id and term so the page resets completely!
-        res.redirect(`/faculty/edit-grades?msg=All grade changes saved successfully!`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=All grade changes saved successfully!`);
     } catch (err) {
         console.error(err);
         res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
@@ -676,6 +679,7 @@ app.get('/logout', (req, res) => {
     req.session.destroy(() => res.redirect('/'));
 });
 
+// Secure Server Startup wrapped correctly in an async function
 async function startServer() {
     try {
         await seedDatabase();
