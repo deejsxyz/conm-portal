@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CONM Registrar Portal - Enrollment & Curriculum Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+    <header class="bg-indigo-900 text-white shadow-md border-b-4 border-pink-500">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div>
+                <h2 class="text-base font-bold">City University of Pasay - Registrar Portal</h2>
+                <p class="text-xs text-pink-300">College of Nursing and School of Midwifery (CONM)</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
+                    <%= currentUser.fullName || currentUser.username %> (REGISTRAR)
+                </span>
+                <% if (currentUser.role === 'admin') { %>
+                    <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
+                <% } %>
+                <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
+                <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        
+        <% if (locals.message) { %>
+            <div style="background: #d4edda; color: #155724; padding: 12px 20px; border-radius: 6px; border: 1px solid #c3e6cb; font-weight: 500; text-align: center;">
+                <%= message %>
+            </div>
+        <% } %>
+
+        <% if (locals.error) { %>
+            <div style="background: #f8d7da; color: #721c24; padding: 12px 20px; border-radius: 6px; border: 1px solid #f5c6cb; font-weight: 500; text-align: center;">
+                <%= error %>
+            </div>
+        <% } %>
+
+        <!-- SEARCH STUDENT & TERM TOOLBAR -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+            <form method="GET" action="/registrar" class="flex items-center gap-2">
+                <div class="flex-grow">
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. 2024-7021" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+                        <input type="hidden" name="term" value="<%= currentTerm %>">
+                        <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
+                    </div>
+                </div>
+            </form>
+
+            <form method="GET" action="/registrar" class="flex items-center gap-2">
+                <div class="flex-grow">
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Semester Term:</label>
+                    <div class="flex gap-2">
+                        <select name="term" onchange="this.form.submit()" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
+                            <option value="" <%= !currentTerm ? 'selected' : '' %>>-- Select Term/Semester --</option>
+                            <option value="1" <%= currentTerm === '1' ? 'selected' : '' %>>1st Year - 1st Sem</option>
+                            <option value="2" <%= currentTerm === '2' ? 'selected' : '' %>>1st Year - 2nd Sem</option>
+                            <option value="3" <%= currentTerm === '3' ? 'selected' : '' %>>2nd Year - 1st Sem</option>
+                            <option value="4" <%= currentTerm === '4' ? 'selected' : '' %>>2nd Year - 2nd Sem</option>
+                            <option value="5" <%= currentTerm === '5' ? 'selected' : '' %>>3rd Year - 1st Sem</option>
+                            <option value="6" <%= currentTerm === '6' ? 'selected' : '' %>>3rd Year - 2nd Sem</option>
+                            <option value="7" <%= currentTerm === '7' ? 'selected' : '' %>>4th Year - 1st Sem</option>
+                            <option value="8" <%= currentTerm === '8' ? 'selected' : '' %>>4th Year - 2nd Sem</option>
+                        </select>
+                        <input type="hidden" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>">
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- REGISTER NEW STUDENT ACCOUNT -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register / Add New Student Account</h3>
+            <form action="/registrar/add-student" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end text-sm">
+                <div>
+                    <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
+                    <input type="text" name="student_id" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. 2024-00150" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                </div>
+                <div>
+                    <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
+                    <input type="text" name="first_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. Juan" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                </div>
+                <div>
+                    <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
+                    <input type="text" name="middle_name" <%= selectedStudent ? 'disabled' : '' %> placeholder="e.g. Reyes" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                </div>
+                <div>
+                    <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
+                    <input type="text" name="last_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. Dela Cruz" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                </div>
+                <div>
+                    <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year Level</label>
+                    <select name="year_level" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                        <option value="1">1st Year</option>
+                        <option value="2" selected>2nd Year</option>
+                        <option value="3">3rd Year</option>
+                        <option value="4">4th Year</option>
+                    </select>
+                </div>
+                <div>
+                    <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                        + Register Student
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <% if (selectedStudent && currentTerm) { %>
+            <!-- ENROLL SUBJECTS CARD -->
+            <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">Enroll Subjects for Student</h3>
+                    <form action="/registrar/init-courses" method="POST">
+                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                        <input type="hidden" name="term" value="<%= currentTerm %>">
+                        <button type="submit" class="text-xs bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-1.5 rounded font-bold shadow-sm">
+                            ⚡ Auto-Enroll All Term Subjects
+                        </button>
+                    </form>
+                </div>
+                <form action="/registrar/add-single-course" method="POST" class="flex gap-3 items-end text-sm">
+                    <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                    <input type="hidden" name="term" value="<%= currentTerm %>">
+                    
+                    <div class="flex-grow">
+                        <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Select Subject from Curriculum Catalog</label>
+                        <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                            <% if (availableCourses.length === 0) { %>
+                                <option value="">No courses available</option>
+                            <% } else { %>
+                                <% availableCourses.forEach(c => { %>
+                                    <option value="<%= c.course_code %>">[<%= c.course_code %>] <%= c.descriptive_title %></option>
+                                <% }) %>
+                            <% } %>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                            + Enroll Subject
+                        </button>
+                    </div>
+                </form>
+            </div>
+        <% } %>
+
+        <!-- ENROLLED SUBJECTS LIST -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-4">
+                Enrolled Subjects For: 
+                <span class="text-pink-600">
+                    <%= selectedStudent ? (selectedStudent.last_name + ', ' + selectedStudent.first_name + ' (' + selectedStudent.student_id + ')') : 'No Student Selected' %>
+                </span>
+            </h3>
+
+            <% if (!selectedStudent || !currentTerm) { %>
+                <div class="text-center py-12 text-slate-400">
+                    <p class="text-sm">Please search a student and select a term to manage enrollments.</p>
+                </div>
+            <% } else if (grades.length === 0) { %>
+                <div class="text-center py-8 text-slate-400 text-xs">
+                    No subjects enrolled for this student in this term yet. Use the options above to enroll subjects.
+                </div>
+            <% } else { %>
+                <div class="space-y-3">
+                    <% grades.forEach(g => { %>
+                        <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm">
+                            <div>
+                                <span class="font-mono font-bold text-indigo-900 mr-2">[<%= g.course_code %>]</span>
+                                <span class="text-slate-700 text-xs font-medium"><%= g.descriptive_title %></span>
+                            </div>
+                            <form action="/registrar/delete-grade" method="POST" onsubmit="return confirm('Remove enrollment for <%= g.course_code %>?');">
+                                <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                <input type="hidden" name="course_code" value="<%= g.course_code %>">
+                                <input type="hidden" name="term" value="<%= currentTerm %>">
+                                <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold shadow">Unenroll</button>
+                            </form>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } %>
+        </div>
+    </main>
+    <script>
+        document.getElementById('studentSearchInput').addEventListener('click', function() {
+            this.value = '';
+        });
+    </script>
+</body>
+</html>
