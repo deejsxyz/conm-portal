@@ -11,6 +11,22 @@
             .no-print { display: none !important; }
             .print-border { border: 1px solid #000 !important; }
             .print-text-black { color: #000 !important; }
+            
+            /* Force the browser to print the green text colors and background graphics */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+
+        /* Script font for the college name to mimic the reference image */
+        .font-script {
+            font-family: 'Brush Script MT', 'Lucida Handwriting', 'Apple Chancery', cursive;
+        }
+        
+        /* Official dark green color matching the reference */
+        .text-official-green {
+            color: #1b5e20 !important; /* Forest Green */
         }
     </style>
 </head>
@@ -33,7 +49,7 @@
         </div>
     </header>
 
-    <main class="flex-grow max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
+    <main class="flex-grow max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
 
         <!-- TERM SELECTOR & PRINT BUTTON (Hidden during Print) -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 no-print">
@@ -56,34 +72,69 @@
         </div>
 
         <!-- COG OFFICIAL DOCUMENT AREA -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 print:shadow-none print:border-none print:p-0 print-text-black">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 print:shadow-none print:border-none print:p-0">
             
-            <!-- COG Document Header -->
-            <div class="text-center mb-8 border-b-2 border-slate-200 pb-6 print:border-black">
-                <h1 class="text-xl font-black uppercase tracking-wider">City University of Pasay</h1>
-                <h2 class="text-sm font-bold uppercase text-pink-700 print:text-black">College of Nursing and School of Midwifery (CONM)</h2>
-                <h3 class="text-lg font-bold mt-4 tracking-widest uppercase">Certificate of Grades</h3>
+            <!-- OFFICIAL LETTERHEAD -->
+            <div class="flex justify-between items-center mb-6 pb-4">
+                
+                <!-- Left: CUP Logo -->
+                <div class="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 flex items-center justify-center">
+                    <!-- Note: Replace the src URL with the actual link to your CUP logo image -->
+                    <img src="https://upload.wikimedia.org/wikipedia/en/2/25/City_University_of_Pasay_logo.png" alt="CUP Logo" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'text-[10px] text-center text-slate-300 border border-slate-200 p-2\'>[CUP LOGO]</div>';">
+                </div>
+
+                <!-- Center: Official Text -->
+                <div class="text-center flex-grow px-2 text-official-green">
+                    <h1 class="text-2xl sm:text-3xl font-serif font-bold uppercase tracking-wide mb-0" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">
+                        City University of Pasay
+                    </h1>
+                    <h2 class="text-sm sm:text-base font-serif uppercase tracking-wider mb-0">
+                        (Pamantasan ng Lungsod ng Pasay)
+                    </h2>
+                    <p class="text-sm font-medium mb-1">
+                        Pasadeña St., Pasay City
+                    </p>
+                    <h3 class="text-2xl sm:text-4xl font-bold font-script mt-2 mb-1">
+                        College of Nursing and School of Midwifery
+                    </h3>
+                    <p class="text-xs font-medium">
+                        4th Floor, Tramo Wing, Pasay City General Hospital, Burgos St., Pasay City
+                    </p>
+                </div>
+
+                <!-- Right: CONM Logo -->
+                <div class="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 flex items-center justify-center">
+                    <!-- Note: Replace the src URL below with your actual CONM logo image link (e.g. from Imgur or your server) -->
+                    <img src="https://via.placeholder.com/150/ffffff/1b5e20?text=CONM+Logo" alt="CONM Logo" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'text-[10px] text-center text-slate-300 border border-slate-200 p-2\'>[CONM LOGO]</div>';">
+                </div>
+            </div>
+
+            <!-- Title: Certificate of Grades -->
+            <div class="text-center mb-6">
+                <h3 class="text-lg font-bold tracking-widest uppercase border-t-2 border-b-2 border-slate-800 print:border-black py-2 inline-block px-12">
+                    Certificate of Grades
+                </h3>
             </div>
 
             <!-- Student Information Block -->
-            <div class="grid grid-cols-2 gap-4 mb-6 text-sm">
+            <div class="grid grid-cols-2 gap-4 mb-6 text-sm print-text-black">
                 <div>
-                    <p><span class="font-bold uppercase text-xs text-slate-500 print:text-black">Student Name:</span> <br> 
-                       <span class="font-bold text-base"><%= studentRecord.last_name %>, <%= studentRecord.first_name %> <%= studentRecord.middle_name %></span>
+                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Student Name:</span> <br> 
+                       <span class="font-bold text-base uppercase"><%= studentRecord.last_name %>, <%= studentRecord.first_name %> <%= studentRecord.middle_name %></span>
                     </p>
                 </div>
                 <div class="text-right">
-                    <p><span class="font-bold uppercase text-xs text-slate-500 print:text-black">Student Number:</span> <br> 
+                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Student Number:</span> <br> 
                        <span class="font-mono font-bold text-base"><%= studentRecord.student_id %></span>
                     </p>
                 </div>
                 <div>
-                    <p><span class="font-bold uppercase text-xs text-slate-500 print:text-black">Program:</span> <br> 
+                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Program:</span> <br> 
                        <span class="font-medium"><%= studentRecord.program %></span>
                     </p>
                 </div>
                 <div class="text-right">
-                    <p><span class="font-bold uppercase text-xs text-slate-500 print:text-black">Year Level:</span> <br> 
+                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Year Level:</span> <br> 
                        <span class="font-medium">Level <%= studentRecord.year_level %></span>
                     </p>
                 </div>
@@ -95,25 +146,25 @@
                     <p class="text-sm">No subjects enrolled or grades recorded for this term.</p>
                 </div>
             <% } else { %>
-                <div class="overflow-hidden border border-slate-300 rounded-lg print:border-black print:rounded-none">
-                    <table class="w-full text-left border-collapse text-sm">
+                <div class="overflow-hidden border border-slate-400 print:border-black rounded-lg print:rounded-none">
+                    <table class="w-full text-left border-collapse text-sm print-text-black">
                         <thead>
-                            <tr class="bg-slate-100 print:bg-transparent border-b border-slate-300 print:border-black">
-                                <th class="p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-300 print:border-black">Course Code</th>
-                                <th class="p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-300 print:border-black">Descriptive Title</th>
-                                <th class="p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-300 print:border-black text-center">Units</th>
-                                <th class="p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-300 print:border-black text-center">Final Grade</th>
-                                <th class="p-3 font-bold uppercase text-[10px] tracking-wider text-center">Remarks</th>
+                            <tr class="bg-slate-100 print:bg-transparent border-b border-slate-400 print:border-black">
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black">Course Code</th>
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black">Descriptive Title</th>
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black text-center">Units</th>
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black text-center">Final Grade</th>
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider text-center">Remarks</th>
                             </tr>
                         </thead>
                         <tbody>
                             <% grades.forEach(g => { %>
-                                <tr class="border-b border-slate-200 print:border-black last:border-0">
-                                    <td class="p-3 font-mono font-bold border-r border-slate-300 print:border-black whitespace-nowrap"><%= g.course_code %></td>
-                                    <td class="p-3 font-medium border-r border-slate-300 print:border-black"><%= g.descriptive_title %></td>
-                                    <td class="p-3 text-center border-r border-slate-300 print:border-black"><%= g.total_units %></td>
-                                    <td class="p-3 text-center font-bold border-r border-slate-300 print:border-black"><%= g.final_grade || '---' %></td>
-                                    <td class="p-3 text-center text-xs font-bold uppercase <%= g.remarks === 'PASSED' ? 'text-emerald-600 print:text-black' : (g.remarks === 'FAILED' ? 'text-red-600 print:text-black' : '') %>">
+                                <tr class="border-b border-slate-300 print:border-black last:border-0">
+                                    <td class="p-2 sm:p-3 font-mono font-bold border-r border-slate-400 print:border-black whitespace-nowrap"><%= g.course_code %></td>
+                                    <td class="p-2 sm:p-3 font-medium border-r border-slate-400 print:border-black"><%= g.descriptive_title %></td>
+                                    <td class="p-2 sm:p-3 text-center border-r border-slate-400 print:border-black"><%= g.total_units %></td>
+                                    <td class="p-2 sm:p-3 text-center font-bold border-r border-slate-400 print:border-black"><%= g.final_grade || '---' %></td>
+                                    <td class="p-2 sm:p-3 text-center text-xs font-bold uppercase <%= g.remarks === 'PASSED' ? 'text-emerald-600 print:text-black' : (g.remarks === 'FAILED' ? 'text-red-600 print:text-black' : '') %>">
                                         <%= g.remarks || '---' %>
                                     </td>
                                 </tr>
@@ -124,15 +175,15 @@
             <% } %>
 
             <!-- AUTHENTICATION NOTE (Automatically included in Print) -->
-            <div class="mt-12 p-5 border-2 border-dashed border-slate-300 print:border-solid print:border-black bg-slate-50 print:bg-transparent rounded-lg print:rounded-none text-center">
-                <p class="text-[11px] font-semibold leading-relaxed text-slate-600 print:text-black">
-                    <strong class="uppercase tracking-wider">Note:</strong> This document does not require a signature. To verify the authenticity of this Certification, you may contact the College of Nursing and School of Midwifery (CONM) directly at the 4th Floor Tramo Wing, Pasay City General Hospital, P. Burgos St, Pasay City, Metro Manila.
+            <div class="mt-12 p-4 sm:p-5 border border-slate-300 print:border-solid print:border-black bg-slate-50 print:bg-transparent rounded-lg print:rounded-none text-center">
+                <p class="text-[11px] sm:text-xs font-medium leading-relaxed text-slate-700 print-text-black">
+                    <strong class="uppercase tracking-wider font-bold">Note:</strong> This document does not require a signature. To verify the authenticity of this Certification, you may contact the College of Nursing and School of Midwifery (CONM) directly at the 4th Floor Tramo Wing, Pasay City General Hospital, P. Burgos St, Pasay City, Metro Manila.
                 </p>
             </div>
             
             <!-- Timestamp (Visible only on the printed page) -->
-            <div class="mt-6 text-right text-[10px] text-slate-400 print:text-black print:block hidden">
-                Generated by System: <script>document.write(new Date().toLocaleString());</script>
+            <div class="mt-6 text-right text-[10px] text-slate-400 print:text-black print:block hidden font-mono">
+                System Generated: <script>document.write(new Date().toLocaleString());</script>
             </div>
 
         </div>
