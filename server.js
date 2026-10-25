@@ -31,7 +31,7 @@ function formatFullName(first, middle, last, fallback) {
 // Database seed and initialization function
 async function seedDatabase() {
     try {
-        // Create courses table if it doesn't exist just in case
+        // Create courses table if it doesn't exist
         await pool.query(`
             CREATE TABLE IF NOT EXISTS courses (
                 course_code VARCHAR(50) PRIMARY KEY,
@@ -42,6 +42,26 @@ async function seedDatabase() {
                 term_id INT NOT NULL
             );
         `);
+
+        // Create or update grades table schema automatically
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS grades (
+                id SERIAL PRIMARY KEY,
+                student_id VARCHAR(100),
+                student_number VARCHAR(100),
+                course_code VARCHAR(50),
+                final_grade VARCHAR(50),
+                instructor VARCHAR(100),
+                remarks VARCHAR(50)
+            );
+        `);
+
+        // Ensure columns exist if grades table was pre-existing
+        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS course_code VARCHAR(50);`);
+        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS final_grade VARCHAR(50);`);
+        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS instructor VARCHAR(100);`);
+        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
+        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
 
         // Seed default admin account if it doesn't exist
         const adminPassword = await bcrypt.hash('admin2026', 10);
