@@ -143,8 +143,8 @@
                         </div>
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-emerald-800 mb-1">Final Grade</label>
-                            <select name="final_grade" class="w-full px-2 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-bold text-emerald-900">
-                                <option value="" <%= !locals.grade || grade === '' ? 'selected' : '' %>>-- Select --</option>
+                            <select name="final_grade" id="single_final_grade" onchange="autoMatchSingleRemark()" class="w-full px-2 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-bold text-emerald-900">
+                                <option value="">-- Select --</option>
                                 <option value="1.00">1.00</option>
                                 <option value="1.25">1.25</option>
                                 <option value="1.50">1.50</option>
@@ -199,7 +199,7 @@
                                 No grades recorded for this student in this term yet. Use the dropdown above or click "Auto-Load All Subjects" to get started.
                             </div>
                         <% } else { %>
-                            <% grades.forEach(g => { %>
+                            <% grades.forEach((g, index) => { %>
                                 <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-center bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm">
                                     <input type="hidden" name="course_codes" value="<%= g.course_code %>">
 
@@ -213,7 +213,7 @@
                                     </div>
                                     <div>
                                         <span class="text-[10px] uppercase text-slate-400 block font-bold">Final Grade</span>
-                                        <select name="final_grades" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-emerald-700 bg-white text-xs">
+                                        <select name="final_grades" onchange="autoMatchRemark(this, <%= index %>)" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-emerald-700 bg-white text-xs">
                                             <option value="" <%= !g.final_grade ? 'selected' : '' %>>-- Select --</option>
                                             <option value="1.00" <%= g.final_grade === '1.00' ? 'selected' : '' %>>1.00</option>
                                             <option value="1.25" <%= g.final_grade === '1.25' ? 'selected' : '' %>>1.25</option>
@@ -238,7 +238,7 @@
                                     <div class="flex items-end gap-2">
                                         <div class="flex-grow">
                                             <span class="text-[10px] uppercase text-slate-400 block font-bold">Remarks</span>
-                                            <select name="remarks_list" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium">
+                                            <select name="remarks_list" id="remark_<%= index %>" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium">
                                                 <option value="" <%= !g.remarks ? 'selected' : '' %>>-- Select Remark --</option>
                                                 <option value="PASSED" <%= g.remarks === 'PASSED' ? 'selected' : '' %>>PASSED</option>
                                                 <option value="FAILED" <%= g.remarks === 'FAILED' ? 'selected' : '' %>>FAILED</option>
@@ -277,8 +277,39 @@
         </div>
     </main>
 
-    <!-- SCRIPT TO CLEAR WORKFLOW CONTAINER ON SEARCH INPUT CLICK -->
+    <!-- SCRIPT FOR AUTO-MATCHING GRADES TO REMARKS AND CLEARING WORKFLOW -->
     <script>
+        // Auto-match for the single grade assignment row
+        function autoMatchSingleRemark() {
+            // Not needed with single row unless a remark dropdown exists there, but kept for clean layout.
+        }
+
+        // Auto-match for the batch editing rows based on your reference chart
+        function autoMatchRemark(selectElement, index) {
+            const grade = selectElement.value;
+            const remarkSelect = document.getElementById('remark_' + index);
+            if (!remarkSelect) return;
+
+            const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
+
+            if (passedGrades.includes(grade)) {
+                remarkSelect.value = 'PASSED';
+            } else if (grade === '4.00') {
+                remarkSelect.value = 'CONDITIONAL';
+            } else if (grade === '5.00') {
+                remarkSelect.value = 'FAILED';
+            } else if (grade === 'X') {
+                remarkSelect.value = 'DROPPED';
+            } else if (grade === 'INC') {
+                remarkSelect.value = 'INCOMPLETE';
+            } else if (grade === 'W') {
+                remarkSelect.value = 'ABSENT FROM EXAMINATION';
+            } else {
+                remarkSelect.value = '';
+            }
+        }
+
+        // Clear workflow container on search input click
         document.getElementById('studentSearchInput').addEventListener('click', function() {
             const container = document.getElementById('studentWorkflowContainer');
             if (container) {
