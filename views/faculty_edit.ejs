@@ -143,7 +143,7 @@
                         </div>
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-emerald-800 mb-1">Final Grade</label>
-                            <select name="final_grade" id="single_final_grade" onchange="autoMatchSingleRemark()" class="w-full px-2 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-bold text-emerald-900">
+                            <select name="final_grade" class="w-full px-2 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-bold text-emerald-900">
                                 <option value="">-- Select --</option>
                                 <option value="1.00">1.00</option>
                                 <option value="1.25">1.25</option>
@@ -159,6 +159,7 @@
                                 <option value="X">X</option>
                                 <option value="INC">INC</option>
                                 <option value="W">W</option>
+                                <option value="NG">NG</option>
                             </select>
                         </div>
                         <div>
@@ -229,6 +230,7 @@
                                             <option value="X" <%= g.final_grade === 'X' ? 'selected' : '' %>>X</option>
                                             <option value="INC" <%= g.final_grade === 'INC' ? 'selected' : '' %>>INC</option>
                                             <option value="W" <%= g.final_grade === 'W' ? 'selected' : '' %>>W</option>
+                                            <option value="NG" <%= g.final_grade === 'NG' ? 'selected' : '' %>>NG</option>
                                         </select>
                                     </div>
                                     <div>
@@ -246,6 +248,7 @@
                                                 <option value="CONDITIONAL" <%= g.remarks === 'CONDITIONAL' ? 'selected' : '' %>>CONDITIONAL</option>
                                                 <option value="DROPPED" <%= g.remarks === 'DROPPED' ? 'selected' : '' %>>DROPPED</option>
                                                 <option value="ABSENT FROM EXAMINATION" <%= g.remarks === 'ABSENT FROM EXAMINATION' ? 'selected' : '' %>>ABSENT FROM EXAMINATION</option>
+                                                <option value="NO GRADE" <%= g.remarks === 'NO GRADE' ? 'selected' : '' %>>NO GRADE</option>
                                             </select>
                                         </div>
                                         
@@ -279,11 +282,6 @@
 
     <!-- SCRIPT FOR AUTO-MATCHING GRADES TO REMARKS AND CLEARING WORKFLOW -->
     <script>
-        // Auto-match for the single grade assignment row
-        function autoMatchSingleRemark() {
-            // Not needed with single row unless a remark dropdown exists there, but kept for clean layout.
-        }
-
         // Auto-match for the batch editing rows based on your reference chart
         function autoMatchRemark(selectElement, index) {
             const grade = selectElement.value;
@@ -304,6 +302,8 @@
                 remarkSelect.value = 'INCOMPLETE';
             } else if (grade === 'W') {
                 remarkSelect.value = 'ABSENT FROM EXAMINATION';
+            } else if (grade === 'NG') {
+                remarkSelect.value = 'NO GRADE';
             } else {
                 remarkSelect.value = '';
             }
