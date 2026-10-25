@@ -367,7 +367,7 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
         res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student created successfully.`);
     } catch (err) {
         console.error(err);
-        res.redirect('/admin?err=Database error while creating student.');
+        res.redirect(`/admin?err=${encodeURIComponent(err.message)}`);
     }
 });
 
