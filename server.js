@@ -359,8 +359,8 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await pool.query(`
-            INSERT INTO students (student_id, first_name, middle_name, last_name, program, year_level) 
-            VALUES ($1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
+            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
+            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
             ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
@@ -383,9 +383,9 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     try {
         await pool.query(`
             UPDATE students 
-            SET first_name = $1, middle_name = $2, last_name = $3, year_level = $4
+            SET student_number = $1, first_name = $1, middle_name = $2, last_name = $3, year_level = $4
             WHERE student_id = $5
-        `, [fName, mName, lName, year_level, cleanId]);
+        `, [cleanId, fName, mName, lName, year_level, cleanId]);
 
         await pool.query(`
             UPDATE users 
@@ -535,8 +535,8 @@ app.post('/faculty/add-student', isAuthenticated, async (req, res) => {
         `, [cleanId, defaultPasswordHash, fName, mName, lName]);
 
         await pool.query(`
-            INSERT INTO students (student_id, first_name, middle_name, last_name, program, year_level) 
-            VALUES ($1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
+            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
+            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
             ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level]);
 
