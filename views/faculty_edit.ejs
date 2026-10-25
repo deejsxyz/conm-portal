@@ -58,6 +58,7 @@
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Semester Term:</label>
                     <div class="flex gap-2">
                         <select name="term" onchange="this.form.submit()" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
+                            <option value="" <%= !currentTerm ? 'selected' : '' %>>-- Select Term/Semester --</option>
                             <option value="1" <%= currentTerm === '1' ? 'selected' : '' %>>1st Year - 1st Sem</option>
                             <option value="2" <%= currentTerm === '2' ? 'selected' : '' %>>1st Year - 2nd Sem</option>
                             <option value="3" <%= currentTerm === '3' ? 'selected' : '' %>>2nd Year - 1st Sem</option>
@@ -73,29 +74,34 @@
             </form>
         </div>
 
-        <!-- REGISTER / ADD NEW STUDENT ACCOUNT -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-3">Register / Add New Student Account</h3>
+        <!-- REGISTER / ADD NEW STUDENT ACCOUNT (DISABLED IF EDITING GRADES) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-3">
+                Register / Add New Student Account 
+                <% if (selectedStudent) { %>
+                    <span class="text-xs text-amber-600 font-normal lowercase">(Disabled while editing grades)</span>
+                <% } %>
+            </h3>
             <form action="/faculty/add-student" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end text-sm">
                 <div>
                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
-                    <input type="text" name="student_id" required placeholder="e.g. 2024-00150" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                    <input type="text" name="student_id" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. 2024-00150" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                 </div>
                 <div>
                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
-                    <input type="text" name="first_name" required placeholder="e.g. Juan" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    <input type="text" name="first_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. Juan" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                 </div>
                 <div>
                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
-                    <input type="text" name="middle_name" placeholder="e.g. Reyes" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    <input type="text" name="middle_name" <%= selectedStudent ? 'disabled' : '' %> placeholder="e.g. Reyes" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                 </div>
                 <div>
                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
-                    <input type="text" name="last_name" required placeholder="e.g. Dela Cruz" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    <input type="text" name="last_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. Dela Cruz" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                 </div>
                 <div>
                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year Level</label>
-                    <select name="year_level" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                    <select name="year_level" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
                         <option value="1">1st Year</option>
                         <option value="2" selected>2nd Year</option>
                         <option value="3">3rd Year</option>
@@ -103,14 +109,14 @@
                     </select>
                 </div>
                 <div>
-                    <button type="submit" class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                    <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
                         + Add Student Information
                     </button>
                 </div>
             </form>
         </div>
 
-        <!-- DYNAMIC CONTENT CONTAINER THAT CLEARS ON CLICK/FOCUS -->
+        <!-- DYNAMIC CONTENT CONTAINER -->
         <div id="studentWorkflowContainer" class="space-y-6">
             <% if (selectedStudent) { %>
                 <!-- QUICK ASSIGN SUBJECT DROPDOWN CARD -->
@@ -181,14 +187,14 @@
                     <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900">
                         Editing Grades For: 
                         <span class="text-pink-600">
-                            <%= selectedStudent ? (selectedStudent.last_name + ', ' + selectedStudent.first_name + (selectedStudent.middle_name ? ' ' + selectedStudent.middle_name : '') + ' (' + selectedStudent.student_id + ')') : 'No Student Found' %>
+                            <%= selectedStudent ? (selectedStudent.last_name + ', ' + selectedStudent.first_name + (selectedStudent.middle_name ? ' ' + selectedStudent.middle_name : '') + ' (' + selectedStudent.student_id + ')') : 'No Student Selected' %>
                         </span>
                     </h3>
                 </div>
 
                 <% if (!selectedStudent) { %>
                     <div class="text-center py-12 text-slate-400">
-                        <p class="text-sm">Please search a valid student ID number above to view and edit grades.</p>
+                        <p class="text-sm">Please search a valid student ID number and select a term above to view and edit grades.</p>
                     </div>
                 <% } else { %>
                     <form action="/faculty/update-grades-batch" method="POST" class="space-y-4">
@@ -214,7 +220,7 @@
                                     </div>
                                     <div>
                                         <span class="text-[10px] uppercase text-slate-400 block font-bold">Final Grade</span>
-                                        <select name="final_grades" onchange="autoMatchRemark(this, <%= index %>)" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-emerald-700 bg-white text-xs">
+                                        <select name="final_grades" onchange="autoMatchRemark(this, this.getAttribute('data-index'))" data-index="<%= index %>" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-emerald-700 bg-white text-xs">
                                             <option value="" <%= !g.final_grade ? 'selected' : '' %>>-- Select --</option>
                                             <option value="1.00" <%= g.final_grade === '1.00' ? 'selected' : '' %>>1.00</option>
                                             <option value="1.25" <%= g.final_grade === '1.25' ? 'selected' : '' %>>1.25</option>
@@ -280,9 +286,8 @@
         </div>
     </main>
 
-    <!-- SCRIPT FOR AUTO-MATCHING GRADES TO REMARKS AND CLEARING WORKFLOW -->
+    <!-- SCRIPT FOR AUTO-MATCHING GRADES TO REMARKS -->
     <script>
-        // Auto-match for the batch editing rows based on your reference chart
         function autoMatchRemark(selectElement, index) {
             const grade = selectElement.value;
             const remarkSelect = document.getElementById('remark_' + index);
@@ -309,16 +314,9 @@
             }
         }
 
-        // Clear workflow container on search input click
+        // Clear search box on click
         document.getElementById('studentSearchInput').addEventListener('click', function() {
-            const container = document.getElementById('studentWorkflowContainer');
-            if (container) {
-                container.innerHTML = `
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center text-slate-400">
-                        <p class="text-sm">Search box activated. Enter a Student ID and click Search to load records.</p>
-                    </div>
-                `;
-            }
+            this.value = '';
         });
     </script>
 </body>
