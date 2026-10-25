@@ -318,9 +318,11 @@
     </main>
 
     <!-- SCRIPT FOR SUBJECT CHECKLIST & GRADES AUTO-MATCHING -->
+    <script id="courses-data" type="application/json">
+        <%- JSON.stringify(locals.allCoursesRaw || []) %>
+    </script>
     <script>
-        // JSON injection from the server for all curriculum courses
-        const allCoursesData = <%- JSON.stringify(locals.allCoursesRaw || []) %>;
+        const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
         
         function updateSubjectChecklist() {
             const termSelect = document.getElementById('reg_term_select');

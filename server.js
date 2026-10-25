@@ -60,9 +60,7 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
         
-        // ADD NEW COLUMN to support irregular students (tracking which term they actually took it)
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS enrolled_term VARCHAR(10);`);
-        // Safely migrate existing data
         await pool.query(`
             UPDATE grades g 
             SET enrolled_term = c.term_id::varchar 
@@ -350,14 +348,13 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-    const selectedTerm = req.query.term || '';
+    let selectedTerm = req.query.term || '';
 
     try {
         let student = null;
         let grades = [];
         let availableCourses = [];
 
-        // Fetch all courses for the dynamic checklist and dropdown
         const allCoursesRes = await pool.query('SELECT * FROM courses ORDER BY term_id, course_code');
         const allCoursesRaw = allCoursesRes.rows;
         availableCourses = allCoursesRaw; 
@@ -366,16 +363,31 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
             student = studentRes.rows[0] || null;
 
-            if (student && selectedTerm) {
-                // Fetch grades specifically based on the enrolled_term
-                const gradesRes = await pool.query(`
-                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term,
-                           c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-                    FROM grades g
-                    JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1 AND g.enrolled_term = $2
-                `, [targetStudentId, selectedTerm]);
-                grades = gradesRes.rows;
+            if (student) {
+                // AUTO-DETECT TERM IF NONE SELECTED
+                if (!selectedTerm) {
+                    const termRes = await pool.query(`
+                        SELECT enrolled_term 
+                        FROM grades 
+                        WHERE student_id = $1 AND enrolled_term IS NOT NULL AND enrolled_term != ''
+                        ORDER BY enrolled_term DESC 
+                        LIMIT 1
+                    `, [targetStudentId]);
+                    if (termRes.rows.length > 0) {
+                        selectedTerm = termRes.rows[0].enrolled_term;
+                    }
+                }
+
+                if (selectedTerm) {
+                    const gradesRes = await pool.query(`
+                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term,
+                               c.descriptive_title, c.lec_units, c.rle_units, c.total_units
+                        FROM grades g
+                        JOIN courses c ON g.course_code = c.course_code
+                        WHERE g.student_id = $1 AND g.enrolled_term = $2
+                    `, [targetStudentId, selectedTerm]);
+                    grades = gradesRes.rows;
+                }
             }
         }
 
@@ -419,7 +431,6 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
-        // Enroll in all checked subjects under the selected term
         if (term && course_codes) {
             const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
             for (let code of codes) {
@@ -568,30 +579,45 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
     
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-    const selectedTerm = req.query.term || '';
+    let selectedTerm = req.query.term || '';
 
     try {
         let student = null;
         let grades = [];
         let availableCourses = [];
 
-        // Faculty can manually add un-enrolled subjects too, if needed
         const allCoursesRes = await pool.query('SELECT * FROM courses ORDER BY term_id, course_code');
         availableCourses = allCoursesRes.rows;
 
-        if (targetStudentId && selectedTerm) {
+        if (targetStudentId) {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
             student = studentRes.rows[0] || null;
 
             if (student) {
-                const gradesRes = await pool.query(`
-                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, 
-                           c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-                    FROM grades g
-                    JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1 AND g.enrolled_term = $2
-                `, [targetStudentId, selectedTerm]);
-                grades = gradesRes.rows;
+                // AUTO-DETECT TERM IF NONE SELECTED
+                if (!selectedTerm) {
+                    const termRes = await pool.query(`
+                        SELECT enrolled_term 
+                        FROM grades 
+                        WHERE student_id = $1 AND enrolled_term IS NOT NULL AND enrolled_term != ''
+                        ORDER BY enrolled_term DESC 
+                        LIMIT 1
+                    `, [targetStudentId]);
+                    if (termRes.rows.length > 0) {
+                        selectedTerm = termRes.rows[0].enrolled_term;
+                    }
+                }
+
+                if (selectedTerm) {
+                    const gradesRes = await pool.query(`
+                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, 
+                               c.descriptive_title, c.lec_units, c.rle_units, c.total_units
+                        FROM grades g
+                        JOIN courses c ON g.course_code = c.course_code
+                        WHERE g.student_id = $1 AND g.enrolled_term = $2
+                    `, [targetStudentId, selectedTerm]);
+                    grades = gradesRes.rows;
+                }
             }
         }
 
@@ -701,7 +727,7 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
             }
         }
 
-        res.redirect(`/faculty/edit-grades?msg=All grade changes saved successfully!`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=All grade changes saved successfully!`);
     } catch (err) {
         console.error(err);
         res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
