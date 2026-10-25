@@ -30,7 +30,7 @@ function formatFullName(first, middle, last, fallback) {
 // Automatically update schema, seed accounts, and load official BSN curriculum on startup
 async function seedDatabase() {
     try {
-        // 1. Create tables first if they do not exist
+        // 1. Create users table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -45,6 +45,7 @@ async function seedDatabase() {
             );
         `);
 
+        // 2. Create students / grades tables (adjust table names to match your app)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS students (
                 id SERIAL PRIMARY KEY,
@@ -54,6 +55,39 @@ async function seedDatabase() {
                 last_name VARCHAR(100)
             );
         `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS grades (
+                id SERIAL PRIMARY KEY,
+                student_number VARCHAR(100),
+                subject_code VARCHAR(50),
+                grade NUMERIC(5,2),
+                semester VARCHAR(50)
+            );
+        `);
+
+        // 3. Run column checks / role constraints
+        await pool.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;');
+        await pool.query("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('student', 'faculty', 'admin', 'superadmin'));");
+        
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);');
+
+        // Seed default accounts...
+        const adminPassword = await bcrypt.hash('admin2026', 10);
+        await pool.query(`
+            INSERT INTO users (username, password_hash, role, first_name, last_name) 
+            VALUES ('admin', $1, 'admin', 'System', 'Administrator')
+            ON CONFLICT (username) DO NOTHING;
+        `, [adminPassword]);
+
+        console.log("Database tables and seed accounts verified successfully!");
+    } catch (err) {
+        console.error("Error seeding database:", err);
+    }
+}
 
         // 2. Now run your existing alter statements and seeding code
         await pool.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;');
