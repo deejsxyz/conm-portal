@@ -30,20 +30,19 @@ function formatFullName(first, middle, last, fallback) {
 // Automatically update schema, seed accounts, and load official BSN curriculum on startup
 async function seedDatabase() {
     try {
-        // 1. Create users table
+        // Seed default admin account if it doesn't exist
+        const adminPassword = await bcrypt.hash('admin2026', 10);
         await pool.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(100) UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                role VARCHAR(50) DEFAULT 'student',
-                must_change_password BOOLEAN DEFAULT FALSE,
-                first_name VARCHAR(100),
-                middle_name VARCHAR(100),
-                last_name VARCHAR(100),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `);
+            INSERT INTO users (username, password_hash, role, first_name, last_name) 
+            VALUES ('admin', $1, 'admin', 'System', 'Administrator')
+            ON CONFLICT (username) DO NOTHING;
+        `, [adminPassword]);
+
+        console.log("Database connection and seed check completed successfully!");
+    } catch (err) {
+        console.error("Error in database seed check:", err);
+    }
+}
 
         // 2. Create students / grades tables (adjust table names to match your app)
         await pool.query(`
