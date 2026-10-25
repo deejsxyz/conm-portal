@@ -774,3 +774,18 @@ app.get('/logout', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+// Wrap your startup and seeding logic in an async function
+async function startServer() {
+    try {
+        await seedDatabase();
+        
+        const PORT = process.env.PORT || 10000;
+        app.listen(PORT, () => {
+            console.log(`Server running at http://localhost:${PORT}`);
+        });
+    } catch (err) {
+        console.error("Failed to start server:", err);
+    }
+}
+
+startServer();
