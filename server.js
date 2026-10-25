@@ -60,6 +60,10 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
 
+        // Ensure users table role check constraint allows 'registrar'
+        await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
+        await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));`);
+
         // Seed default admin account
         const adminPassword = await bcrypt.hash('admin2026', 10);
         await pool.query(`
@@ -68,12 +72,13 @@ async function seedDatabase() {
             ON CONFLICT (username) DO NOTHING;
         `, [adminPassword]);
 
-        // Seed default registrar account
+        // Seed default registrar account (Guarantees login credentials: registrar / registrar2026)
         const registrarPassword = await bcrypt.hash('registrar2026', 10);
         await pool.query(`
-            INSERT INTO users (username, password_hash, role, first_name, last_name) 
-            VALUES ('registrar', $1, 'registrar', 'CONM', 'Registrar')
-            ON CONFLICT (username) DO NOTHING;
+            INSERT INTO users (username, password_hash, role, first_name, last_name, must_change_password) 
+            VALUES ('registrar', $1, 'registrar', 'CONM', 'Registrar', FALSE)
+            ON CONFLICT (username) 
+            DO UPDATE SET password_hash = $1, role = 'registrar', must_change_password = FALSE;
         `, [registrarPassword]);
 
         const allCourses = [
@@ -227,10 +232,10 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
             res.redirect('/admin');
         } else if (req.session.user.role === 'registrar') {
             res.redirect('/registrar');
-        } else if (req.session.user.role === 'faculty') {
-            res.redirect('/faculty/edit-grades');
+        } else if (user.role === 'faculty') {
+            return res.redirect('/faculty/edit-grades');
         } else {
-            res.redirect('/portal');
+            return res.redirect('/portal');
         }
     } catch (err) {
         console.error(err);
@@ -238,24 +243,24 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Routes
+// Admin Routes (Updated to manage both faculty and registrar accounts)
 app.get('/admin', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.redirect('/portal');
 
-    const selectedFacultyUsername = req.query.faculty_user ? req.query.faculty_user.trim() : '';
+    const selectedStaffUsername = req.query.staff_user ? req.query.staff_user.trim() : '';
     const searchStudentId = req.query.search_student_id ? req.query.search_student_id.trim() : '';
 
     try {
-        const facultyRes = await pool.query(`
+        const staffRes = await pool.query(`
             SELECT username, role, must_change_password, first_name, middle_name, last_name 
             FROM users 
-            WHERE role = 'faculty' 
-            ORDER BY last_name ASC, username ASC
+            WHERE role IN ('faculty', 'registrar') 
+            ORDER BY role DESC, last_name ASC, username ASC
         `);
 
-        let selectedFaculty = null;
-        if (selectedFacultyUsername) {
-            selectedFaculty = facultyRes.rows.find(f => f.username === selectedFacultyUsername) || null;
+        let selectedStaff = null;
+        if (selectedStaffUsername) {
+            selectedStaff = staffRes.rows.find(f => f.username === selectedStaffUsername) || null;
         }
 
         const countsRes = await pool.query(`
@@ -283,8 +288,8 @@ app.get('/admin', isAuthenticated, async (req, res) => {
 
         res.render('admin', {
             currentUser: req.session.user,
-            facultyList: facultyRes.rows,
-            selectedFaculty: selectedFaculty,
+            staffList: staffRes.rows,
+            selectedStaff: selectedStaff,
             yearCounts: yearCounts,
             searchStudentId: searchStudentId,
             searchedStudents: searchedStudents,
@@ -297,7 +302,41 @@ app.get('/admin', isAuthenticated, async (req, res) => {
     }
 });
 
-// Registrar Portal Routes (Enrollment, Account Registration, and Full Grade Management)
+app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { username, role, first_name, middle_name, last_name, temp_password } = req.body;
+    const cleanUser = username ? username.trim() : '';
+    const staffRole = role === 'registrar' ? 'registrar' : 'faculty';
+    const fName = first_name ? first_name.trim() : '';
+    const mName = middle_name ? middle_name.trim() : '';
+    const lName = last_name ? last_name.trim() : '';
+    const pass = temp_password ? temp_password.trim() : (staffRole === 'registrar' ? 'registrar2026' : 'conm2026');
+
+    if (!cleanUser || !fName || !lName) {
+        return res.redirect('/admin?err=Username, First Name, and Last Name are required.');
+    }
+
+    try {
+        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanUser]);
+        if (existing.rows.length > 0) {
+            return res.redirect('/admin?err=Username already exists.');
+        }
+
+        const hashedPassword = await bcrypt.hash(pass, 10);
+        await pool.query(`
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
+            VALUES ($1, $2, $3, TRUE, $4, $5, $6)
+        `, [cleanUser, hashedPassword, staffRole, fName, mName, lName]);
+
+        res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}&msg=Staff account created successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect('/admin?err=Database error while creating staff account.');
+    }
+});
+
+// Registrar Portal Routes
 app.get('/registrar', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
@@ -496,7 +535,7 @@ app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty Portal Routes (Grades Encoding Only)
+// Faculty Portal Routes
 app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
@@ -565,7 +604,7 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
                 await pool.query(`
                     UPDATE grades 
                     SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $4 AND course_code = $5
+                    WHERE student_id = $1 AND course_code = $2
                 `, [grade, inst, rem, student_id, code]);
             }
         }

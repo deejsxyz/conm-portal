@@ -16,6 +16,7 @@
                 <span class="text-xs bg-emerald-800 px-3 py-1.5 rounded-full text-emerald-100 font-medium">
                     <%= currentUser.fullName || currentUser.username %> (<%= currentUser.role.toUpperCase() %>)
                 </span>
+                <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
                 <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Open Grade Editor</a>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
@@ -25,29 +26,36 @@
 
     <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-8">
 
-        <% if (message) { %>
+        <% if (locals.message) { %>
             <div class="p-4 bg-emerald-100 border border-emerald-400 text-emerald-800 text-xs font-bold rounded-xl shadow-sm">
                 ✅ <%= message %>
             </div>
         <% } %>
 
-        <% if (error) { %>
+        <% if (locals.error) { %>
             <div class="p-4 bg-red-100 border border-red-400 text-red-700 text-xs font-bold rounded-xl shadow-sm">
                 ⚠️ <%= error %>
             </div>
         <% } %>
 
-        <!-- ==================== FACULTY MANAGEMENT SECTION ==================== -->
+        <!-- ==================== STAFF MANAGEMENT SECTION ==================== -->
         <div class="space-y-4">
-            <!-- Register New Faculty -->
+            <!-- Register New Staff -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Register New Faculty Member</h3>
-                <p class="text-xs text-slate-500 mb-4">Enter the faculty member's full name and login credentials. They will be prompted to update their password on first login.</p>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Register New Staff Member</h3>
+                <p class="text-xs text-slate-500 mb-4">Create accounts for Faculty or CONM Registrars.</p>
                 
-                <form action="/admin/add-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
+                <form action="/admin/add-staff" method="POST" class="grid grid-cols-1 sm:grid-cols-7 gap-3 items-end">
                     <div>
-                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username / Employee ID</label>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
                         <input type="text" name="username" required placeholder="e.g. prof.dizon" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Role</label>
+                        <select name="role" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                            <option value="registrar">Registrar</option>
+                            <option value="faculty">Faculty</option>
+                        </select>
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
@@ -63,48 +71,48 @@
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
-                        <input type="text" name="temp_password" required value="conm2026" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                        <input type="text" name="temp_password" placeholder="Default provided" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                     </div>
                     <div>
                         <button type="submit" class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                            + Add Faculty
+                            + Add Staff
                         </button>
                     </div>
                 </form>
             </div>
 
-            <!-- Faculty Dropdown Selector & Edit Panel -->
+            <!-- Staff Dropdown Selector & Edit Panel -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-5">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
-                        <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Registered Faculty Members (<%= facultyList.length %>)</h4>
-                        <p class="text-xs text-slate-500">Select a faculty member from the dropdown list to view, edit, reset password, or delete.</p>
+                        <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Registered Staff Members (<%= locals.staffList ? staffList.length : 0 %>)</h4>
+                        <p class="text-xs text-slate-500">Select a staff member from the dropdown list to view, edit, reset password, or delete.</p>
                     </div>
 
                     <form method="GET" action="/admin" class="w-full sm:w-80">
-                        <% if (searchStudentId) { %>
+                        <% if (locals.searchStudentId) { %>
                             <input type="hidden" name="search_student_id" value="<%= searchStudentId %>">
                         <% } %>
-                        <select name="faculty_user" onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500">
-                            <option value="">-- Select Faculty Member (<%= facultyList.length %> Registered) --</option>
-                            <% facultyList.forEach(fac => { 
-                                const fullName = [fac.first_name, fac.middle_name, fac.last_name].filter(Boolean).join(' ') || fac.username;
+                        <select name="staff_user" onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500">
+                            <option value="">-- Select Staff Member --</option>
+                            <% if (locals.staffList) { staffList.forEach(staff => { 
+                                const fullName = [staff.first_name, staff.middle_name, staff.last_name].filter(Boolean).join(' ') || staff.username;
                             %>
-                                <option value="<%= fac.username %>" <%= (selectedFaculty && selectedFaculty.username === fac.username) ? 'selected' : '' %>>
-                                    <%= fullName %> (<%= fac.username %>)
+                                <option value="<%= staff.username %>" <%= (locals.selectedStaff && selectedStaff.username === staff.username) ? 'selected' : '' %>>
+                                    [<%= staff.role.toUpperCase() %>] <%= fullName %> (<%= staff.username %>)
                                 </option>
-                            <% }) %>
+                            <% }) } %>
                         </select>
                     </form>
                 </div>
 
-                <% if (selectedFaculty) { %>
+                <% if (locals.selectedStaff) { %>
                     <div class="bg-emerald-50/70 rounded-xl border border-emerald-200 p-5 space-y-4">
                         <div class="flex flex-wrap justify-between items-center gap-2">
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold uppercase text-emerald-900">Editing Faculty Account:</span>
-                                <span class="font-mono text-xs font-bold bg-emerald-900 text-white px-2.5 py-0.5 rounded"><%= selectedFaculty.username %></span>
-                                <% if (selectedFaculty.must_change_password) { %>
+                                <span class="text-xs font-bold uppercase text-emerald-900">Editing Account:</span>
+                                <span class="font-mono text-xs font-bold bg-emerald-900 text-white px-2.5 py-0.5 rounded"><%= selectedStaff.username %></span>
+                                <% if (selectedStaff.must_change_password) { %>
                                     <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800">Pending First-Login Password Change</span>
                                 <% } else { %>
                                     <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">Active / Verified</span>
@@ -112,46 +120,46 @@
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <form action="/admin/reset-user-password" method="POST" class="inline" onsubmit="return confirm('Reset password for <%= selectedFaculty.username %> to default (conm2026)?');">
-                                    <input type="hidden" name="username" value="<%= selectedFaculty.username %>">
-                                    <input type="hidden" name="role" value="faculty">
+                                <form action="/admin/reset-user-password" method="POST" class="inline" onsubmit="return confirm('Reset password for <%= selectedStaff.username %>?');">
+                                    <input type="hidden" name="username" value="<%= selectedStaff.username %>">
+                                    <input type="hidden" name="role" value="<%= selectedStaff.role %>">
                                     <button type="submit" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-sm">
                                         Reset Password
                                     </button>
                                 </form>
 
-                                <form action="/admin/delete-user" method="POST" class="inline" onsubmit="return confirm('Permanently delete faculty account <%= selectedFaculty.username %>?');">
-                                    <input type="hidden" name="username" value="<%= selectedFaculty.username %>">
-                                    <input type="hidden" name="role" value="faculty">
+                                <form action="/admin/delete-user" method="POST" class="inline" onsubmit="return confirm('Permanently delete account <%= selectedStaff.username %>?');">
+                                    <input type="hidden" name="username" value="<%= selectedStaff.username %>">
+                                    <input type="hidden" name="role" value="<%= selectedStaff.role %>">
                                     <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm">
-                                        Delete Faculty
+                                        Delete Staff
                                     </button>
                                 </form>
                             </div>
                         </div>
 
-                        <!-- Edit Faculty Form -->
+                        <!-- Edit Staff Form -->
                         <form action="/admin/edit-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end pt-2 border-t border-emerald-200/60">
-                            <input type="hidden" name="original_username" value="<%= selectedFaculty.username %>">
+                            <input type="hidden" name="original_username" value="<%= selectedStaff.username %>">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Username / ID</label>
-                                <input type="text" name="username" required value="<%= selectedFaculty.username %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-mono font-bold text-emerald-950">
+                                <input type="text" name="username" required value="<%= selectedStaff.username %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-mono font-bold text-emerald-950">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">First Name</label>
-                                <input type="text" name="first_name" required value="<%= selectedFaculty.first_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
+                                <input type="text" name="first_name" required value="<%= selectedStaff.first_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Middle Name</label>
-                                <input type="text" name="middle_name" value="<%= selectedFaculty.middle_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
+                                <input type="text" name="middle_name" value="<%= selectedStaff.middle_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Last Name</label>
-                                <input type="text" name="last_name" required value="<%= selectedFaculty.last_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
+                                <input type="text" name="last_name" required value="<%= selectedStaff.last_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
                             </div>
                             <div>
                                 <button type="submit" class="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                                    💾 Save Faculty Changes
+                                    💾 Save Changes
                                 </button>
                             </div>
                         </form>
@@ -215,15 +223,15 @@
                 </div>
 
                 <form method="GET" action="/admin" class="flex items-center gap-2 w-full sm:w-auto">
-                    <% if (selectedFaculty) { %>
-                        <input type="hidden" name="faculty_user" value="<%= selectedFaculty.username %>">
+                    <% if (locals.selectedStaff) { %>
+                        <input type="hidden" name="staff_user" value="<%= selectedStaff.username %>">
                     <% } %>
-                    <input type="text" name="search_student_id" value="<%= searchStudentId %>" placeholder="Enter Student ID (e.g. 2024-7020)" class="w-full sm:w-64 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
+                    <input type="text" name="search_student_id" value="<%= locals.searchStudentId || '' %>" placeholder="Enter Student ID (e.g. 2024-7020)" class="w-full sm:w-64 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
                     <button type="submit" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow">
                         Search ID
                     </button>
-                    <% if (searchStudentId) { %>
-                        <a href="/admin<%= selectedFaculty ? '?faculty_user=' + encodeURIComponent(selectedFaculty.username) : '' %>" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">
+                    <% if (locals.searchStudentId) { %>
+                        <a href="/admin<%= locals.selectedStaff ? '?staff_user=' + encodeURIComponent(selectedStaff.username) : '' %>" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">
                             Clear
                         </a>
                     <% } %>
@@ -242,7 +250,7 @@
                 %>
 
                 <% [1, 2, 3, 4].forEach(level => { 
-                    const levelMatches = searchedStudents.filter(s => Number(s.year_level) === level);
+                    const levelMatches = locals.searchedStudents ? searchedStudents.filter(s => Number(s.year_level) === level) : [];
                 %>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
@@ -250,11 +258,11 @@
                                 <%= yearLabels[level] %>
                             </h4>
                             <span class="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
-                                Total Registered: <%= yearCounts[level] || 0 %>
+                                Total Registered: <%= locals.yearCounts ? (yearCounts[level] || 0) : 0 %>
                             </span>
                         </div>
 
-                        <% if (!searchStudentId) { %>
+                        <% if (!locals.searchStudentId) { %>
                             <div class="py-4 px-5 text-xs text-slate-400 italic">
                                 Use the Search Student ID bar above to look up a Level <%= level %> student account.
                             </div>
