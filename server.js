@@ -60,11 +60,9 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
 
-        // Ensure users table role check constraint allows 'registrar'
         await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
         await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));`);
 
-        // Seed default admin account
         const adminPassword = await bcrypt.hash('admin2026', 10);
         await pool.query(`
             INSERT INTO users (username, password_hash, role, first_name, last_name) 
@@ -72,7 +70,6 @@ async function seedDatabase() {
             ON CONFLICT (username) DO NOTHING;
         `, [adminPassword]);
 
-        // Seed default registrar account (Guarantees login credentials: registrar / registrar2026)
         const registrarPassword = await bcrypt.hash('registrar2026', 10);
         await pool.query(`
             INSERT INTO users (username, password_hash, role, first_name, last_name, must_change_password) 
@@ -232,10 +229,10 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
             res.redirect('/admin');
         } else if (req.session.user.role === 'registrar') {
             res.redirect('/registrar');
-        } else if (user.role === 'faculty') {
-            return res.redirect('/faculty/edit-grades');
+        } else if (req.session.user.role === 'faculty') {
+            res.redirect('/faculty/edit-grades');
         } else {
-            return res.redirect('/portal');
+            res.redirect('/portal');
         }
     } catch (err) {
         console.error(err);
@@ -243,7 +240,7 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Routes (Updated to manage both faculty and registrar accounts)
+// Admin Routes
 app.get('/admin', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.redirect('/portal');
 
@@ -350,6 +347,10 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         let grades = [];
         let availableCourses = [];
 
+        // Fetch all courses to populate dynamic checklist on the registration form
+        const allCoursesRes = await pool.query('SELECT * FROM courses ORDER BY term_id, course_code');
+        const allCoursesRaw = allCoursesRes.rows;
+
         if (targetStudentId) {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
             student = studentRes.rows[0] || null;
@@ -374,6 +375,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             selectedStudent: student,
             grades: grades,
             availableCourses: availableCourses,
+            allCoursesRaw: allCoursesRaw, // Passed to EJS for client-side filtering
             currentTerm: selectedTerm,
             message: req.query.msg || null,
             error: req.query.err || null
@@ -384,10 +386,11 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 });
 
+// Registrar: Add Student & Enroll Immediately
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, first_name, middle_name, last_name, year_level } = req.body;
+    const { student_id, first_name, middle_name, last_name, year_level, term, course_codes } = req.body;
     const cleanId = student_id ? student_id.trim() : '';
     const fName = first_name ? first_name.trim() : '';
     const mName = middle_name ? middle_name.trim() : '';
@@ -396,19 +399,33 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     try {
         const defaultPasswordHash = await bcrypt.hash('password123', 10);
 
+        // 1. Create User
         await pool.query(`
             INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
             VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
             ON CONFLICT (username) DO NOTHING;
         `, [cleanId, defaultPasswordHash, fName, mName, lName]);
 
+        // 2. Create Student
         await pool.query(`
             INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
             VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
             ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
-        res.redirect(`/registrar?student_id=${cleanId}&msg=Student registered successfully.`);
+        // 3. Immediately Enroll in Checked Subjects
+        if (term && course_codes) {
+            const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
+            for (let code of codes) {
+                await pool.query(`
+                    INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
+                    VALUES ($1, $2, '', '', '')
+                    ON CONFLICT (student_id, course_code) DO NOTHING;
+                `, [cleanId, code]);
+            }
+        }
+
+        res.redirect(`/registrar?student_id=${cleanId}&term=${term || ''}&msg=Student registered and officially enrolled in subjects.`);
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding new student: ${err.message}`);
@@ -437,28 +454,6 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding faculty: ${err.message}`);
-    }
-});
-
-app.post('/registrar/init-courses', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, term } = req.body;
-    try {
-        const termCourses = await pool.query('SELECT course_code FROM courses WHERE term_id = $1', [term]);
-        
-        for (let course of termCourses.rows) {
-            await pool.query(`
-                INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks)
-                VALUES ($1, $2, '', '', '')
-                ON CONFLICT (student_id, course_code) DO NOTHING;
-            `, [student_id, course.course_code]);
-        }
-
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=All term subjects enrolled.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -604,7 +599,7 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
                 await pool.query(`
                     UPDATE grades 
                     SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $1 AND course_code = $2
+                    WHERE student_id = $4 AND course_code = $5
                 `, [grade, inst, rem, student_id, code]);
             }
         }
