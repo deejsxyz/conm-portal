@@ -297,7 +297,7 @@ app.get('/admin', isAuthenticated, async (req, res) => {
     }
 });
 
-// Registrar Portal Routes
+// Registrar Portal Routes (Enrollment, Account Registration, and Full Grade Management)
 app.get('/registrar', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
@@ -376,6 +376,31 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
+app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { username, first_name, middle_name, last_name, temp_password } = req.body;
+    const cleanUser = username ? username.trim() : '';
+    const fName = first_name ? first_name.trim() : '';
+    const mName = middle_name ? middle_name.trim() : '';
+    const lName = last_name ? last_name.trim() : '';
+    const pass = temp_password ? temp_password.trim() : 'conm2026';
+
+    try {
+        const hashedPassword = await bcrypt.hash(pass, 10);
+        await pool.query(`
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
+            VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5)
+            ON CONFLICT (username) DO NOTHING;
+        `, [cleanUser, hashedPassword, fName, mName, lName]);
+
+        res.redirect(`/registrar?msg=Faculty account created successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send(`Error adding faculty: ${err.message}`);
+    }
+});
+
 app.post('/registrar/init-courses', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -391,7 +416,7 @@ app.post('/registrar/init-courses', isAuthenticated, async (req, res) => {
             `, [student_id, course.course_code]);
         }
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subjects auto-loaded for enrollment.`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=All term subjects enrolled.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
@@ -409,7 +434,45 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             ON CONFLICT (student_id, course_code) DO NOTHING;
         `, [student_id, course_code]);
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject enrolled successfully.`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject added/enrolled.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+    }
+});
+
+app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, term, course_codes, final_grades, instructors, remarks_list } = req.body;
+    
+    try {
+        const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
+        let grades = Array.isArray(final_grades) ? final_grades : [final_grades];
+        const insts = Array.isArray(instructors) ? instructors : [instructors];
+        const remarks = Array.isArray(remarks_list) ? remarks_list : [remarks_list];
+
+        for (let i = 0; i < codes.length; i++) {
+            const code = codes[i];
+            let grade = grades[i] ? grades[i].trim() : '';
+            
+            if (/^\d+$/.test(grade)) {
+                grade = `${grade}.00`;
+            }
+
+            const inst = insts[i] || '';
+            const rem = remarks[i] || '';
+
+            if (code) {
+                await pool.query(`
+                    UPDATE grades 
+                    SET final_grade = $1, instructor = $2, remarks = $3 
+                    WHERE student_id = $4 AND course_code = $5
+                `, [grade, inst, rem, student_id, code]);
+            }
+        }
+
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Grades and records updated successfully!`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
@@ -426,14 +489,14 @@ app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
             WHERE student_id = $1 AND course_code = $2
         `, [student_id, course_code]);
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Enrolled subject removed.`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject removed from student record.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
-// Faculty Portal Routes (Grades Encoding Only for Enrolled Subjects)
+// Faculty Portal Routes (Grades Encoding Only)
 app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
@@ -451,7 +514,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             student = studentRes.rows[0] || null;
 
             if (student) {
-                // Only fetch grades/subjects that have already been enrolled for this student in this term
                 const gradesRes = await pool.query(`
                     SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, 
                            c.descriptive_title, c.lec_units, c.rle_units, c.total_units
