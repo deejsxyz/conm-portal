@@ -613,7 +613,7 @@ app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
         res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}`);
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error initializing courses');
+        res.status(500).send(`Error initializing courses: ${err.message}`);
     }
 });
 
