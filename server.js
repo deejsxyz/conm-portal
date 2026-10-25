@@ -12,6 +12,7 @@ const pool = new Pool({
     rejectUnauthorized: false
   }
 });
+
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 
@@ -27,101 +28,27 @@ function formatFullName(first, middle, last, fallback) {
     return parts.length > 0 ? parts.join(' ') : fallback;
 }
 
-// Automatically update schema, seed accounts, and load official BSN curriculum on startup
+// Database seed and initialization function
 async function seedDatabase() {
     try {
+        // Create courses table if it doesn't exist just in case
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS courses (
+                course_code VARCHAR(50) PRIMARY KEY,
+                descriptive_title VARCHAR(255) NOT NULL,
+                lec_units INT DEFAULT 0,
+                rle_units INT DEFAULT 0,
+                total_units INT DEFAULT 0,
+                term_id INT NOT NULL
+            );
+        `);
+
         // Seed default admin account if it doesn't exist
         const adminPassword = await bcrypt.hash('admin2026', 10);
         await pool.query(`
             INSERT INTO users (username, password_hash, role, first_name, last_name) 
             VALUES ('admin', $1, 'admin', 'System', 'Administrator')
             ON CONFLICT (username) DO NOTHING;
-        `, [adminPassword]);
-
-        console.log("Database connection and seed check completed successfully!");
-    } catch (err) {
-        console.error("Error in database seed check:", err);
-    }
-}
-
-        // 2. Create students / grades tables (adjust table names to match your app)
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS students (
-                id SERIAL PRIMARY KEY,
-                student_number VARCHAR(100) UNIQUE NOT NULL,
-                first_name VARCHAR(100),
-                middle_name VARCHAR(100),
-                last_name VARCHAR(100)
-            );
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS grades (
-                id SERIAL PRIMARY KEY,
-                student_number VARCHAR(100),
-                subject_code VARCHAR(50),
-                grade NUMERIC(5,2),
-                semester VARCHAR(50)
-            );
-        `);
-
-        // 3. Run column checks / role constraints
-        await pool.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;');
-        await pool.query("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('student', 'faculty', 'admin', 'superadmin'));");
-        
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);');
-
-        // Seed default accounts...
-        const adminPassword = await bcrypt.hash('admin2026', 10);
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, first_name, last_name) 
-            VALUES ('admin', $1, 'admin', 'System', 'Administrator')
-            ON CONFLICT (username) DO NOTHING;
-        `, [adminPassword]);
-
-        console.log("Database tables and seed accounts verified successfully!");
-    } catch (err) {
-        console.error("Error seeding database:", err);
-    }
-}
-
-        // 2. Now run your existing alter statements and seeding code
-        await pool.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;');
-        await pool.query("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('student', 'faculty', 'admin', 'superadmin'));");
-        
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);');
-        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);');
-        await pool.query('ALTER TABLE students ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);');
-
-        const studentPassword = await bcrypt.hash('password123', 10);
-        const facultyPassword = await bcrypt.hash('conm2026', 10);
-        const adminPassword = await bcrypt.hash('admin2026', 10);
-
-        // Seed default accounts...
-        // (Keep your rest of the seeding queries below here)
-
-        // Seed default faculty with full name
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
-            VALUES ('faculty', $1, 'faculty', FALSE, 'Maria', 'Clara', 'Santos')
-            ON CONFLICT (username) DO UPDATE 
-            SET first_name = COALESCE(users.first_name, EXCLUDED.first_name),
-                middle_name = COALESCE(users.middle_name, EXCLUDED.middle_name),
-                last_name = COALESCE(users.last_name, EXCLUDED.last_name);
-        `, [facultyPassword]);
-
-        // Seed default admin with full name
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
-            VALUES ('admin', $1, 'admin', FALSE, 'System', '', 'Administrator')
-            ON CONFLICT (username) DO UPDATE 
-            SET first_name = COALESCE(users.first_name, EXCLUDED.first_name),
-                last_name = COALESCE(users.last_name, EXCLUDED.last_name);
         `, [adminPassword]);
 
         // Official BSN Curriculum Seed
@@ -196,8 +123,6 @@ async function seedDatabase() {
     }
 }
 
-seedDatabase();
-
 function isAuthenticated(req, res, next) {
     if (req.session.user) return next();
     res.redirect('/');
@@ -256,7 +181,6 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// Password Change Routes for Students, Faculty, and Admin
 app.get('/change-password', isAuthenticated, (req, res) => {
     res.render('change_password', { error: null });
 });
@@ -294,8 +218,7 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
     }
 });
 
-// ================= ADMIN ROUTES (FACULTY DROPDOWN & 4 YEAR-LEVEL STUDENT SEARCH) =================
-
+// Admin Routes
 app.get('/admin', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.redirect('/portal');
 
@@ -303,7 +226,6 @@ app.get('/admin', isAuthenticated, async (req, res) => {
     const searchStudentId = req.query.search_student_id ? req.query.search_student_id.trim() : '';
 
     try {
-        // 1. Fetch Faculty List for the dropdown
         const facultyRes = await pool.query(`
             SELECT username, role, must_change_password, first_name, middle_name, last_name 
             FROM users 
@@ -311,13 +233,11 @@ app.get('/admin', isAuthenticated, async (req, res) => {
             ORDER BY last_name ASC, username ASC
         `);
 
-        // 2. Find currently selected faculty from dropdown (if any)
         let selectedFaculty = null;
         if (selectedFacultyUsername) {
             selectedFaculty = facultyRes.rows.find(f => f.username === selectedFacultyUsername) || null;
         }
 
-        // 3. Get total student counts per year level (1 to 4) without loading all rows
         const countsRes = await pool.query(`
             SELECT year_level, COUNT(*) AS total 
             FROM students 
@@ -328,7 +248,6 @@ app.get('/admin', isAuthenticated, async (req, res) => {
             yearCounts[r.year_level] = parseInt(r.total, 10);
         });
 
-        // 4. Only query students if the Admin typed an ID in the search bar
         let searchedStudents = [];
         if (searchStudentId) {
             const stuSearchRes = await pool.query(`
@@ -358,7 +277,6 @@ app.get('/admin', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin: Add New Faculty Member
 app.post('/admin/add-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -384,14 +302,13 @@ app.post('/admin/add-faculty', isAuthenticated, async (req, res) => {
             VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5)
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
-        res.redirect(`/admin?faculty_user=${encodeURIComponent(cleanUser)}&msg=Faculty account for "${fName} ${lName}" (${cleanUser}) created successfully.`);
+        res.redirect(`/admin?faculty_user=${encodeURIComponent(cleanUser)}&msg=Faculty account created successfully.`);
     } catch (err) {
         console.error(err);
         res.redirect('/admin?err=Database error while creating faculty.');
     }
 });
 
-// Admin: Edit / Update Existing Faculty Member Details
 app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -402,15 +319,11 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
     const mName = middle_name ? middle_name.trim() : '';
     const lName = last_name ? last_name.trim() : '';
 
-    if (!origUser || !newUser || !fName || !lName) {
-        return res.redirect(`/admin?faculty_user=${encodeURIComponent(origUser)}&err=Username, First Name, and Last Name are required.`);
-    }
-
     try {
         if (origUser !== newUser) {
             const check = await pool.query('SELECT 1 FROM users WHERE username = $1', [newUser]);
             if (check.rows.length > 0) {
-                return res.redirect(`/admin?faculty_user=${encodeURIComponent(origUser)}&err=Username "${newUser}" is already taken.`);
+                return res.redirect(`/admin?faculty_user=${encodeURIComponent(origUser)}&err=Username already taken.`);
             }
         }
 
@@ -420,14 +333,13 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
             WHERE username = $5 AND role = 'faculty'
         `, [newUser, fName, mName, lName, origUser]);
 
-        res.redirect(`/admin?faculty_user=${encodeURIComponent(newUser)}&msg=Faculty profile for "${fName} ${lName}" updated successfully.`);
+        res.redirect(`/admin?faculty_user=${encodeURIComponent(newUser)}&msg=Faculty profile updated successfully.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/admin?faculty_user=${encodeURIComponent(origUser)}&err=Error updating faculty details.`);
     }
 });
 
-// Admin: Add New Student Account
 app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -438,36 +350,27 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     const lName = last_name ? last_name.trim() : '';
     const pass = temp_password ? temp_password.trim() : 'password123';
 
-    if (!cleanId || !fName || !lName) {
-        return res.redirect('/admin?err=Student Number, First Name, and Last Name are required.');
-    }
-
     try {
-        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanId]);
-        if (existing.rows.length > 0) {
-            return res.redirect('/admin?err=Student ID already exists.');
-        }
-
         const hashedPassword = await bcrypt.hash(pass, 10);
-
         await pool.query(`
             INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
             VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
+            ON CONFLICT (username) DO NOTHING;
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await pool.query(`
             INSERT INTO students (student_id, first_name, middle_name, last_name, program, year_level) 
             VALUES ($1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
+            ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
-        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student account for "${fName} ${lName}" (${cleanId}) created successfully.`);
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student created successfully.`);
     } catch (err) {
         console.error(err);
         res.redirect('/admin?err=Database error while creating student.');
     }
 });
 
-// Admin: Edit Student Profile (Name & Year Level)
 app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -490,14 +393,13 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
             WHERE username = $4 AND role = 'student'
         `, [fName, mName, lName, cleanId]);
 
-        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student record for "${fName} ${lName}" (${cleanId}) updated.`);
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student record updated.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&err=Error updating student record.`);
     }
 });
 
-// Admin: Reset Any User Password (Faculty or Student)
 app.post('/admin/reset-user-password', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -513,14 +415,13 @@ app.post('/admin/reset-user-password', isAuthenticated, async (req, res) => {
             WHERE username = $2
         `, [defaultHash, username]);
 
-        res.redirect(`/admin?${redirectQuery}msg=Password for "${username}" reset to default (${defaultPass}).`);
+        res.redirect(`/admin?${redirectQuery}msg=Password reset successfully.`);
     } catch (err) {
         console.error(err);
         res.redirect('/admin?err=Failed to reset password.');
     }
 });
 
-// Admin: Delete User Account (Faculty or Student)
 app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -531,29 +432,19 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
             await pool.query(`DELETE FROM students WHERE student_id = $1`, [username]);
         }
         await pool.query(`DELETE FROM users WHERE username = $1`, [username]);
-        res.redirect(`/admin?msg=${role.toUpperCase()} account "${username}" removed.`);
+        res.redirect(`/admin?msg=Account removed successfully.`);
     } catch (err) {
         console.error(err);
         res.redirect('/admin?err=Failed to delete account.');
     }
 });
 
-// ================= STUDENT & FACULTY ROUTES =================
-
+// Student & Faculty Portal Routes
 app.get('/portal', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     
-    const userCheck = await pool.query('SELECT must_change_password FROM users WHERE username = $1', [user.username]);
-    if (userCheck.rows.length > 0 && userCheck.rows[0].must_change_password) {
-        return res.redirect('/change-password');
-    }
-
-    if (user.role === 'admin') {
-        return res.redirect('/admin');
-    }
-    if (user.role === 'faculty') {
-        return res.redirect('/faculty/edit-grades');
-    }
+    if (user.role === 'admin') return res.redirect('/admin');
+    if (user.role === 'faculty') return res.redirect('/faculty/edit-grades');
 
     const selectedTerm = req.query.term || '4';
 
@@ -581,7 +472,6 @@ app.get('/portal', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty: View student grades for editing & search by ID number
 app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
@@ -593,10 +483,9 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     try {
         let student = null;
         let grades = [];
-        let availableCourses = [];
 
         const coursesRes = await pool.query('SELECT * FROM courses WHERE term_id = $1', [selectedTerm]);
-        availableCourses = coursesRes.rows;
+        const availableCourses = coursesRes.rows;
 
         if (targetStudentId) {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
@@ -627,7 +516,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty: Add a new student account (with Middle Name support)
 app.post('/faculty/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -659,7 +547,6 @@ app.post('/faculty/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty: Assign a single course grade with automatic whole-number .00 padding
 app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -688,7 +575,6 @@ app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty: Auto-load/initialize all term subjects for a student
 app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -711,7 +597,6 @@ app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty: Batch update all grades with automatic whole-number .00 padding
 app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -750,7 +635,6 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty: Delete a specific grade/subject record
 app.post('/faculty/delete-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -772,9 +656,7 @@ app.get('/logout', (req, res) => {
     req.session.destroy(() => res.redirect('/'));
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
-// Wrap your startup and seeding logic in an async function
+// Secure Server Startup wrapped correctly in an async function
 async function startServer() {
     try {
         await seedDatabase();
