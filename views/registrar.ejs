@@ -39,48 +39,105 @@
             </div>
         <% } %>
 
-        <!-- ACCOUNT REGISTRATION SECTION (STUDENT & FACULTY) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Register Student -->
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-3">Register New Student Account</h3>
-                <form action="/registrar/add-student" method="POST" class="space-y-3 text-sm">
-                    <div class="grid grid-cols-2 gap-2">
-                        <input type="text" name="student_id" required placeholder="Student Number (e.g. 2024-7020)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
-                        <select name="year_level" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
-                            <option value="1">1st Year</option>
-                            <option value="2" selected>2nd Year</option>
-                            <option value="3">3rd Year</option>
-                            <option value="4">4th Year</option>
-                        </select>
+        <!-- ACCOUNT REGISTRATION SECTION (STUDENT ENROLLMENT & FACULTY) -->
+        <div class="space-y-4">
+            
+            <!-- Dynamic Register & Enroll Student Form -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
+                <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
+                    <!-- Row 1: Personal Info -->
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
+                            <input type="text" name="student_id" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. 2024-00150" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
+                            <input type="text" name="first_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
+                            <input type="text" name="middle_name" <%= selectedStudent ? 'disabled' : '' %> placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
+                            <input type="text" name="last_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                        </div>
                     </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <input type="text" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        <input type="text" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        <input type="text" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+
+                    <!-- Row 2: Level, Term, and Subject Selection -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year Level</label>
+                            <select name="year_level" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                                <option value="1">1st Year</option>
+                                <option value="2" selected>2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester Term (Triggers Enrollment Subjects)</label>
+                            <select name="term" id="reg_term_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800">
+                                <option value="">-- Select Term to View Subjects --</option>
+                                <option value="1">1st Year - 1st Sem</option>
+                                <option value="2">1st Year - 2nd Sem</option>
+                                <option value="3">2nd Year - 1st Sem</option>
+                                <option value="4">2nd Year - 2nd Sem</option>
+                                <option value="5">3rd Year - 1st Sem</option>
+                                <option value="6">3rd Year - 2nd Sem</option>
+                                <option value="7">4th Year - 1st Sem</option>
+                                <option value="8">4th Year - 2nd Sem</option>
+                            </select>
+                        </div>
                     </div>
-                    <button type="submit" class="w-full py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                        + Register Student
-                    </button>
+                    
+                    <!-- Dynamic Subjects Checklist Container -->
+                    <div class="pt-2">
+                        <label class="block text-xs font-bold text-indigo-900 mb-2">Subjects to Enroll:</label>
+                        <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            <p class="text-xs text-slate-400 italic">Please select a term above to populate the subject checklist.</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-full py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors">
+                            + Register Account & Enroll Student in Checked Subjects
+                        </button>
+                    </div>
                 </form>
             </div>
 
             <!-- Register Faculty -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-3">Register New Faculty Account</h3>
-                <form action="/registrar/add-faculty" method="POST" class="space-y-3 text-sm">
-                    <div class="grid grid-cols-2 gap-2">
-                        <input type="text" name="username" required placeholder="Username (e.g. prof.dizon)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
-                        <input type="text" name="temp_password" placeholder="Temp Password (default conm2026)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                <form action="/registrar/add-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end text-sm">
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
+                        <input type="text" name="username" required placeholder="e.g. prof.dizon" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                     </div>
-                    <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
+                        <input type="text" name="temp_password" placeholder="Default conm2026" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
                         <input type="text" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
                         <input type="text" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
                         <input type="text" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                     </div>
-                    <button type="submit" class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                        + Register Faculty
-                    </button>
+                    <div>
+                        <button type="submit" class="w-full py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                            + Register Faculty
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -120,17 +177,10 @@
         </div>
 
         <% if (selectedStudent && currentTerm) { %>
-            <!-- ENROLL SUBJECTS CARD -->
+            <!-- MANUAL ENROLL SINGLE SUBJECT -->
             <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5">
                 <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">Enroll Subjects for Student</h3>
-                    <form action="/registrar/init-courses" method="POST">
-                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                        <input type="hidden" name="term" value="<%= currentTerm %>">
-                        <button type="submit" class="text-xs bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-1.5 rounded font-bold shadow-sm">
-                            ⚡ Auto-Enroll All Term Subjects
-                        </button>
-                    </form>
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">Enroll Extra / Back Subject</h3>
                 </div>
                 <form action="/registrar/add-single-course" method="POST" class="flex gap-3 items-end text-sm">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
@@ -150,7 +200,7 @@
                     </div>
                     <div>
                         <button type="submit" class="py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                            + Enroll Subject
+                            + Enroll Single Subject
                         </button>
                     </div>
                 </form>
@@ -161,7 +211,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <div class="border-b border-slate-100 pb-3 mb-4 flex justify-between items-center">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
-                    Managing Grades For: 
+                    Managing Grades & Enrollments For: 
                     <span class="text-pink-600">
                         <%= selectedStudent ? (selectedStudent.last_name + ', ' + selectedStudent.first_name + ' (' + selectedStudent.student_id + ')') : 'No Student Selected' %>
                     </span>
@@ -179,7 +229,7 @@
 
                     <% if (grades.length === 0) { %>
                         <div class="text-center py-8 text-slate-400 text-xs">
-                            No subjects enrolled for this student in this term yet. Use the enrollment options above.
+                            No subjects enrolled for this student in this term yet.
                         </div>
                     <% } else { %>
                         <% grades.forEach((g, index) => { %>
@@ -261,7 +311,41 @@
         </div>
     </main>
 
+    <!-- SCRIPT FOR SUBJECT CHECKLIST & GRADES AUTO-MATCHING -->
     <script>
+        // JSON injection from the server for all curriculum courses
+        const allCoursesData = <%- JSON.stringify(locals.allCoursesRaw || []) %>;
+        
+        function updateSubjectChecklist() {
+            const termSelect = document.getElementById('reg_term_select');
+            const container = document.getElementById('subjectChecklist');
+            const selectedTerm = termSelect.value;
+            
+            if (!selectedTerm) {
+                container.innerHTML = '<p class="text-xs text-slate-400 italic">Please select a term above to populate the subject checklist.</p>';
+                return;
+            }
+
+            const filteredCourses = allCoursesData.filter(c => String(c.term_id) === String(selectedTerm));
+            
+            if (filteredCourses.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 italic">No courses found for this term in the curriculum.</p>';
+                return;
+            }
+
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-2">';
+            filteredCourses.forEach(c => {
+                html += `
+                    <label class="flex items-center space-x-2 bg-white p-2 rounded border border-indigo-100 shadow-sm cursor-pointer hover:bg-indigo-50/50">
+                        <input type="checkbox" name="course_codes" value="${c.course_code}" checked class="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs font-semibold text-indigo-900">[${c.course_code}] <span class="font-normal">${c.descriptive_title}</span></span>
+                    </label>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
         function autoMatchRemark(selectElement, index) {
             const grade = selectElement.value;
             const remarkSelect = document.getElementById('remark_' + index);
