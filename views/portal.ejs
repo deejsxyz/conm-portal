@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CONM Student Grade Viewing Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500 no-print">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div>
+                <h2 class="text-base font-bold">City University of Pasay</h2>
+                <p class="text-xs text-pink-300">College of Nursing and School of Midwifery (CONM)</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span class="text-xs bg-emerald-800 px-3 py-1.5 rounded-full text-emerald-100 font-medium">
+                    <%= currentUser.fullName || currentUser.username %> (<%= currentUser.role.toUpperCase() %>)
+                </span>
+                <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium no-print">Change Password</a>
+                <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium no-print">Log Out</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        <!-- Term Selector Form -->
+        <form method="GET" action="/portal" class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 no-print">
+            <div class="flex items-center gap-3">
+                <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Select Semester:</label>
+                <select name="term" onchange="this.form.submit()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
+                    <option value="1" <%= currentTerm === '1' ? 'selected' : '' %>>1st Year - 1st Sem</option>
+                    <option value="2" <%= currentTerm === '2' ? 'selected' : '' %>>1st Year - 2nd Sem</option>
+                    <option value="3" <%= currentTerm === '3' ? 'selected' : '' %>>2nd Year - 1st Sem</option>
+                    <option value="4" <%= currentTerm === '4' ? 'selected' : '' %>>2nd Year - 2nd Sem</option>
+                    <option value="5" <%= currentTerm === '5' ? 'selected' : '' %>>3rd Year - 1st Sem</option>
+                    <option value="6" <%= currentTerm === '6' ? 'selected' : '' %>>3rd Year - 2nd Sem</option>
+                    <option value="7" <%= currentTerm === '7' ? 'selected' : '' %>>4th Year - 1st Sem</option>
+                    <option value="8" <%= currentTerm === '8' ? 'selected' : '' %>>4th Year - 2nd Sem</option>
+                </select>
+            </div>
+            <button type="button" onclick="window.print()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium rounded-lg shadow">
+                Print College Record (COG)
+            </button>
+        </form>
+
+        <!-- Student Info -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-3">Student Information</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm">
+                <div>
+                    <span class="block text-xs text-slate-400 font-semibold uppercase">Name</span>
+                    <strong class="text-slate-800">
+                        <%= [studentRecord.first_name, studentRecord.middle_name, studentRecord.last_name].filter(Boolean).join(' ') %>
+                    </strong>
+                </div>
+                <div><span class="block text-xs text-slate-400 font-semibold uppercase">Student Number</span><strong class="text-slate-800"><%= studentRecord.student_id %></strong></div>
+                <div><span class="block text-xs text-slate-400 font-semibold uppercase">Program</span><strong class="text-slate-800"><%= studentRecord.program %></strong></div>
+                <div><span class="block text-xs text-slate-400 font-semibold uppercase">Year Level</span><strong class="text-emerald-700">Level <%= studentRecord.year_level %></strong></div>
+            </div>
+        </div>
+
+        <!-- Grades Table -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="bg-slate-50 px-5 py-3 border-b border-slate-200">
+                <h4 class="font-bold text-slate-700 text-sm">Official Grade Report Record</h4>
+            </div>
+            <table class="w-full text-left border-collapse text-sm">
+                <thead>
+                    <tr class="bg-slate-100 text-slate-700 text-xs font-bold uppercase border-b border-slate-200">
+                        <th class="py-3 px-4">Subject Code</th>
+                        <th class="py-3 px-4">Descriptive Title</th>
+                        <th class="py-3 px-4 text-center">Credits</th>
+                        <th class="py-3 px-4 text-center">Final Grade</th>
+                        <th class="py-3 px-4">Instructor</th>
+                        <th class="py-3 px-4 text-center">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <% if (grades.length === 0) { %>
+                        <tr><td colspan="6" class="text-center py-6 text-slate-400 text-xs">No grade records found for this term.</td></tr>
+                    <% } else { %>
+                        <% 
+                            let totalCredits = 0;
+                            grades.forEach(g => { 
+                                totalCredits += parseFloat(g.total_units || 0);
+                        %>
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-3 px-4 font-mono font-bold text-emerald-900"><%= g.course_code %></td>
+                                <td class="py-3 px-4"><%= g.descriptive_title %></td>
+                                <td class="py-3 px-4 text-center font-semibold"><%= g.total_units %></td>
+                                <td class="py-3 px-4 text-center font-bold text-emerald-700"><%= g.final_grade %></td>
+                                <td class="py-3 px-4 text-xs text-slate-600"><%= g.instructor %></td>
+                                <td class="py-3 px-4 text-center"><span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800"><%= g.remarks %></span></td>
+                            </tr>
+                        <% }) %>
+                        <tr class="bg-slate-50 font-bold border-t border-slate-200">
+                            <td colspan="2" class="py-3 px-4 text-right uppercase text-xs text-slate-600">Total Credits:</td>
+                            <td class="py-3 px-4 text-center text-emerald-900"><%= totalCredits %></td>
+                            <td colspan="3"></td>
+                        </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </main>
+</body>
+</html>
