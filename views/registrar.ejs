@@ -561,7 +561,7 @@
             const div = document.createElement('div');
             div.className = 'flex items-center gap-2';
 
-            let optionsHtml = '<option value="" style="font-style: italic;">-- *Select CONM Subject* --</option>';
+            let optionsHtml = '<option value="" style="font-style: italic;">--Select Subject--</option>';
             allCoursesData.forEach(c => {
                 const selected = c.course_code === selectedValue ? 'selected' : '';
                 optionsHtml += `<option value="${c.course_code}" ${selected}>[${c.course_code}] ${c.descriptive_title}</option>`;
