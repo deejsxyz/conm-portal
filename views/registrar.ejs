@@ -14,7 +14,7 @@
             </div>
             <div class="flex items-center space-x-3">
                 <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
-                    <%= currentUser.fullName || currentUser.username %> (REGISTRAR)
+                    <%= currentUser.fullName || currentUser.username %>
                 </span>
                 <% if (currentUser.role === 'admin') { %>
                     <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
@@ -50,7 +50,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
-                            <input type="text" name="student_id" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. 2024-00150" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                            <input type="text" name="student_id" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                         </div>
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
@@ -150,7 +150,7 @@
                 <div class="flex-grow">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
                     <div class="flex gap-2">
-                        <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. 2024-7021" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+                        <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
                         <input type="hidden" name="term" value="<%= currentTerm %>">
                         <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
                     </div>
