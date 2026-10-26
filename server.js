@@ -3,6 +3,9 @@ const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const multer = require('multer');
+const csv = require('csv-parser');
+const fs = require('fs');
 
 const app = express();
 
@@ -12,6 +15,9 @@ const pool = new Pool({
     rejectUnauthorized: false
   }
 });
+
+// Configure Multer for temporary CSV uploads
+const upload = multer({ dest: 'uploads/' });
 
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
@@ -407,23 +413,102 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 });
 
+// CSV Batch Upload Route
+app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const students = [];
+    
+    fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (row) => {
+            students.push(row);
+        })
+        .on('end', async () => {
+            try {
+                for (const student of students) {
+                    // Generate 8-character password
+                    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                    const lower = 'abcdefghijklmnopqrstuvwxyz';
+                    const num = '0123456789';
+                    const special = '!@#$%^&*';
+                    const all = upper + lower + num + special;
+                    
+                    let passArray = [
+                        upper[Math.floor(Math.random() * upper.length)],
+                        lower[Math.floor(Math.random() * lower.length)],
+                        num[Math.floor(Math.random() * num.length)],
+                        special[Math.floor(Math.random() * special.length)]
+                    ];
+                    
+                    for (let i = 0; i < 4; i++) {
+                        passArray.push(all[Math.floor(Math.random() * all.length)]);
+                    }
+                    
+                    const tempPassword = passArray.sort(() => Math.random() - 0.5).join('');
+                    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+                    
+                    // Insert into users table
+                    await pool.query(
+                        `INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password) 
+                         VALUES ($1, $2, 'student', $3, $4, $5, TRUE) 
+                         ON CONFLICT (username) DO NOTHING`,
+                        [student.student_id, hashedPassword, student.first_name, student.middle_name, student.last_name]
+                    );
+
+                    // Insert into students profile table
+                    await pool.query(
+                        `INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
+                         VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
+                         ON CONFLICT (student_id) DO NOTHING`,
+                        [student.student_id, student.first_name, student.middle_name, student.last_name, student.year_level || 1]
+                    );
+
+                    // Enroll Checked Subjects
+                    if (student.term && student.subjects) {
+                        const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
+                        
+                        for (const code of courseCodes) {
+                            await pool.query(
+                                `INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term) 
+                                 VALUES ($1, $2, '', '', '', $3)
+                                 ON CONFLICT (student_id, course_code) 
+                                 DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';`,
+                                [student.student_id, code, student.term]
+                            );
+                        }
+                    }
+                }
+                
+                fs.unlinkSync(req.file.path);
+                res.redirect(`/registrar?msg=${encodeURIComponent(students.length + ' students successfully registered and enrolled via Google Forms CSV!')}`);
+                
+            } catch (err) {
+                console.error("Batch Upload Error:", err);
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                res.redirect('/registrar?err=Error processing batch upload. Ensure your CSV format is correct.');
+            }
+        });
+});
+
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, first_name, middle_name, last_name, year_level, term, course_codes } = req.body;
+    const { student_id, first_name, middle_name, last_name, year_level, term, course_codes, temp_password } = req.body;
     const cleanId = student_id ? student_id.trim() : '';
     const fName = first_name ? first_name.trim() : '';
     const mName = middle_name ? middle_name.trim() : '';
     const lName = last_name ? last_name.trim() : '';
+    const pass = temp_password ? temp_password.trim() : 'password123';
 
     try {
-        const defaultPasswordHash = await bcrypt.hash('password123', 10);
+        const hashedPassword = await bcrypt.hash(pass, 10);
 
         await pool.query(`
             INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
             VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
             ON CONFLICT (username) DO NOTHING;
-        `, [cleanId, defaultPasswordHash, fName, mName, lName]);
+        `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await pool.query(`
             INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
@@ -475,26 +560,21 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
     }
 });
 
-app.post('/registrar/init-courses', isAuthenticated, async (req, res) => {
+app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, term } = req.body;
+    const { student_id, new_password } = req.body;
     try {
-        const termCourses = await pool.query('SELECT course_code FROM courses WHERE term_id = $1', [term]);
-        
-        for (let course of termCourses.rows) {
-            await pool.query(`
-                INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
-                VALUES ($1, $2, '', '', '', $3)
-                ON CONFLICT (student_id, course_code) 
-                DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
-            `, [student_id, course.course_code, term]);
-        }
+        const hashedPassword = await bcrypt.hash(new_password, 10);
+        await pool.query(`
+            UPDATE users SET password_hash = $1, must_change_password = TRUE 
+            WHERE username = $2 AND role = 'student'
+        `, [hashedPassword, student_id]);
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=All standard term subjects enrolled.`);
+        res.redirect(`/registrar?student_id=${student_id}&msg=Password successfully reset for ${student_id}.`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/registrar?student_id=${student_id}&err=Failed to reset password.`);
     }
 });
 
@@ -673,29 +753,6 @@ app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
     }
 });
 
-app.post('/faculty/init-courses', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, term } = req.body;
-    try {
-        const termCourses = await pool.query('SELECT course_code FROM courses WHERE term_id = $1', [term]);
-        
-        for (let course of termCourses.rows) {
-            await pool.query(`
-                INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
-                VALUES ($1, $2, '', '', '', $3)
-                ON CONFLICT (student_id, course_code) 
-                DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
-            `, [student_id, course.course_code, term]);
-        }
-
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Courses initialized successfully with empty grades.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
-    }
-});
-
 app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -803,75 +860,3 @@ async function startServer() {
 }
 
 startServer();
-const multer = require('multer');
-const csv = require('csv-parser');
-const fs = require('fs');
-const bcrypt = require('bcrypt'); // Ensure bcrypt is required
-const upload = multer({ dest: 'uploads/' });
-
-app.post('/registrar/batch-upload', upload.single('file'), (req, res) => {
-    const students = [];
-    
-    fs.createReadStream(req.file.path)
-        .pipe(csv())
-        .on('data', (row) => {
-            students.push(row);
-        })
-        .on('end', async () => {
-            try {
-                for (const student of students) {
-                    // 1. Generate 8-character password (Upper, Lower, Number, Special)
-                    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                    const lower = 'abcdefghijklmnopqrstuvwxyz';
-                    const num = '0123456789';
-                    const special = '!@#$%^&*';
-                    const all = upper + lower + num + special;
-                    
-                    let passArray = [
-                        upper[Math.floor(Math.random() * upper.length)],
-                        lower[Math.floor(Math.random() * lower.length)],
-                        num[Math.floor(Math.random() * num.length)],
-                        special[Math.floor(Math.random() * special.length)]
-                    ];
-                    
-                    for (let i = 0; i < 4; i++) {
-                        passArray.push(all[Math.floor(Math.random() * all.length)]);
-                    }
-                    
-                    const tempPassword = passArray.sort(() => Math.random() - 0.5).join('');
-                    const hashedPassword = await bcrypt.hash(tempPassword, 10);
-                    
-                    // 2. Insert Student Account
-                    await db.query(
-                        `INSERT INTO users (username, password, role, first_name, middle_name, last_name, year_level, must_change_password) 
-                         VALUES ($1, $2, 'student', $3, $4, $5, $6, true) 
-                         ON CONFLICT (username) DO NOTHING`,
-                        [student.student_id, hashedPassword, student.first_name, student.middle_name, student.last_name, student.year_level]
-                    );
-
-                    // 3. Enroll Checked Subjects (Splitting by Google Forms comma format)
-                    if (student.term && student.subjects) {
-                        const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
-                        
-                        for (const code of courseCodes) {
-                            await db.query(
-                                `INSERT INTO grades (student_id, course_code, enrolled_term) 
-                                 VALUES ($1, $2, $3)
-                                 ON CONFLICT DO NOTHING`,
-                                [student.student_id, code, student.term]
-                            );
-                        }
-                    }
-                }
-                
-                fs.unlinkSync(req.file.path);
-                req.flash('success', `${students.length} students successfully registered and enrolled via Google Forms CSV!`);
-                res.redirect('/registrar');
-                
-            } catch (err) {
-                console.error("Batch Upload Error:", err);
-                req.flash('error', 'Error processing batch upload. Ensure your CSV format is correct.');
-                res.redirect('/registrar');
-            }
-        });
-});
