@@ -358,6 +358,24 @@ app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
     }
 });
 
+// Admin Delete User Route (Fixed Error)
+app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { username, role } = req.body;
+    try {
+        await pool.query('DELETE FROM users WHERE username = $1', [username]);
+        if (role === 'student') {
+            await pool.query('DELETE FROM students WHERE student_id = $1', [username]);
+            await pool.query('DELETE FROM grades WHERE student_id = $1', [username]);
+        }
+        res.redirect('/admin?msg=User account successfully deleted.');
+    } catch (err) {
+        console.error(err);
+        res.redirect('/admin?err=Failed to delete user account.');
+    }
+});
+
 // Registrar Portal Routes
 app.get('/registrar', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
@@ -365,7 +383,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-    let selectedTerm = req.query.term || '1'; // Default to Term 1 if not specified
+    let selectedTerm = req.query.term || '1';
 
     try {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
@@ -593,7 +611,6 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
     try {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
-        
         const currentAy = systemSettings.current_ay;
 
         await pool.query(`
