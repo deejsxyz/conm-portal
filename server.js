@@ -105,6 +105,7 @@ async function seedDatabase() {
             DO UPDATE SET password_hash = $1, role = 'registrar', must_change_password = FALSE;
         `, [registrarPassword]);
 
+        // EXACT 24 OFFICIAL CONM SUBJECTS CATALOG
         const conmCourses = [
             ['CA 1', 'Course Audit 1', 3, 0, 3, 7],
             ['CA 2', 'Course Audit 2', 3, 0, 3, 8],
@@ -132,6 +133,10 @@ async function seedDatabase() {
             ['NCM 122', 'Intensive Nursing Practicum (Hospital and Community Settings)', 0, 8, 8, 8]
         ];
 
+        // Clear out any non-CONM courses that were previously seeded
+        const validCodes = conmCourses.map(c => c[0]);
+        await pool.query(`DELETE FROM courses WHERE course_code <> ALL($1::text[])`, [validCodes]);
+
         for (let c of conmCourses) {
             await pool.query(`
                 INSERT INTO courses (course_code, descriptive_title, lec_units, rle_units, total_units, term_id) 
@@ -141,7 +146,7 @@ async function seedDatabase() {
             `, c);
         }
 
-        console.log("Database schema and CONM faculty subjects verified successfully.");
+        console.log("Database strictly restricted to the 24 official CONM subjects.");
     } catch (err) {
         console.error("Seeding notice:", err.message);
     }
@@ -268,7 +273,6 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         const allCoursesRaw = allCoursesRes.rows;
         availableCourses = allCoursesRaw; 
 
-        // Fetch all registered faculty members for the Manage Faculty dropdown
         const facultyListRes = await pool.query(`
             SELECT username, first_name, middle_name, last_name 
             FROM users 
@@ -504,7 +508,6 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
     }
 });
 
-// REGISTRAR EDIT FACULTY ROUTE
 app.post('/registrar/edit-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -518,12 +521,10 @@ app.post('/registrar/edit-faculty', isAuthenticated, async (req, res) => {
             WHERE username = $5
         `, [cleanUser, first_name.trim(), middle_name.trim(), last_name.trim(), original_username]);
 
-        // If username changed, update foreign keys
         if (cleanUser !== original_username) {
             await pool.query(`UPDATE faculty_courses SET username = $1 WHERE username = $2`, [cleanUser, original_username]);
         }
 
-        // If new temp password provided, hash and update
         if (temp_password && temp_password.trim() !== '') {
             const hashedPassword = await bcrypt.hash(temp_password.trim(), 10);
             await pool.query(`
@@ -531,7 +532,6 @@ app.post('/registrar/edit-faculty', isAuthenticated, async (req, res) => {
             `, [hashedPassword, cleanUser]);
         }
 
-        // Refresh assigned courses
         await pool.query(`DELETE FROM faculty_courses WHERE username = $1`, [cleanUser]);
         if (course_codes) {
             const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
@@ -553,7 +553,6 @@ app.post('/registrar/edit-faculty', isAuthenticated, async (req, res) => {
     }
 });
 
-// REGISTRAR DELETE FACULTY ROUTE
 app.post('/registrar/delete-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
