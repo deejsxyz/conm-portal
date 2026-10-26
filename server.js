@@ -365,6 +365,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
+    let selectedTerm = req.query.term || '1'; // Default to Term 1 if not specified
 
     try {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
@@ -388,9 +389,9 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
                            c.descriptive_title, c.lec_units, c.rle_units, c.total_units
                     FROM grades g
                     JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1
-                    ORDER BY g.enrolled_term ASC, g.course_code ASC
-                `, [targetStudentId]);
+                    WHERE g.student_id = $1 AND g.enrolled_term = $2
+                    ORDER BY g.course_code ASC
+                `, [targetStudentId, selectedTerm]);
                 grades = gradesRes.rows;
             }
         }
@@ -402,7 +403,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             grades: grades,
             availableCourses: availableCourses,
             allCoursesRaw: allCoursesRaw,
-            currentTerm: '1',
+            currentTerm: selectedTerm,
             message: req.query.msg || null,
             error: req.query.err || null
         });
@@ -535,7 +536,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             }
         }
 
-        res.redirect(`/registrar?student_id=${cleanId}&msg=Student registered and officially enrolled in selected subjects.`);
+        res.redirect(`/registrar?student_id=${cleanId}&term=${term}&msg=Student registered and officially enrolled in selected subjects.`);
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding new student: ${err.message}`);
@@ -585,13 +586,11 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
     }
 });
 
-// Automatically use active system settings for single-subject enrollment
 app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, course_code } = req.body;
+    const { student_id, course_code, term } = req.body;
     try {
-        // Fetch student's year level and global settings
         const studentRes = await pool.query('SELECT year_level FROM students WHERE student_id = $1', [student_id]);
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         
@@ -602,8 +601,7 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
         const yearLevel = studentRes.rows[0].year_level;
         const systemSettings = settingsRes.rows[0];
         
-        // Automatically calculate correct term ID from student's year level and active semester
-        const computedTerm = (parseInt(yearLevel) - 1) * 2 + parseInt(systemSettings.current_semester);
+        const computedTerm = term || ((parseInt(yearLevel) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
         const currentAy = systemSettings.current_ay;
 
         await pool.query(`
@@ -611,9 +609,9 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             VALUES ($1, $2, '', '', '', $3, $4)
             ON CONFLICT (student_id, course_code) 
             DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
-        `, [student_id, course_code, computedTerm.toString(), currentAy]);
+        `, [student_id, course_code, computedTerm, currentAy]);
 
-        res.redirect(`/registrar?student_id=${student_id}&msg=Subject successfully enrolled for A.Y. ${currentAy}.`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${computedTerm}&msg=Subject successfully enrolled for A.Y. ${currentAy}.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
@@ -651,7 +649,7 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
             }
         }
 
-        res.redirect(`/registrar?student_id=${student_id}&msg=Grades and records updated successfully!`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Grades and records updated successfully!`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
@@ -661,14 +659,14 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
 app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, course_code } = req.body;
+    const { student_id, course_code, term } = req.body;
     try {
         await pool.query(`
             DELETE FROM grades 
             WHERE student_id = $1 AND course_code = $2
         `, [student_id, course_code]);
 
-        res.redirect(`/registrar?student_id=${student_id}&msg=Subject removed from student record.`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject removed from student record.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);

@@ -207,6 +207,8 @@
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
                     <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
                 </div>
+                <!-- Retain term filter if already selected -->
+                <input type="hidden" name="term" value="<%= currentTerm %>">
                 <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors">Search Student</button>
             </form>
         </div>
@@ -219,8 +221,9 @@
                         Enroll Extra / Back Subject (Active Period: A.Y. <%= systemSettings.current_ay %> - <%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %>)
                     </h3>
                 </div>
-                <form id="extraSubjectForm" action="/registrar/add-single-course" method="POST" class="space-y-4 text-sm">
+                <form action="/registrar/add-single-course" method="POST" class="space-y-4 text-sm">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                    <input type="hidden" name="term" value="<%= currentTerm %>">
                     
                     <div class="flex flex-col sm:flex-row gap-3 items-end">
                         <div class="flex-grow w-full">
@@ -235,7 +238,6 @@
                             </select>
                         </div>
                         
-                        <!-- Independent Cancel button for this section only resets the catalog dropdown -->
                         <div class="flex gap-2 w-full sm:w-auto">
                             <button type="button" onclick="document.getElementById('extraCourseSelect').value='';" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
                             <button type="submit" class="flex-1 sm:flex-initial py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors whitespace-nowrap">
@@ -247,9 +249,9 @@
             </div>
         <% } %>
 
-        <!-- FULL GRADE MANAGEMENT & EDITING SECTION -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-            <div class="border-b border-slate-100 pb-3 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <!-- FULL GRADE MANAGEMENT & EDITING SECTION WITH YEAR/SEMESTER FILTER BUTTONS -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+            <div class="border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
                     Managing Grades & Enrollments For: 
                     <span class="text-pink-600">
@@ -268,6 +270,26 @@
                 <% } %>
             </div>
 
+            <% if (selectedStudent) { %>
+                <!-- YEAR LEVEL & SEMESTER TERM SELECTOR TOOLBAR -->
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <span class="text-xs font-bold uppercase text-slate-600">Select Term to View/Edit Grades:</span>
+                    <form method="GET" action="/registrar" class="flex flex-wrap gap-2 items-center">
+                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                        <select name="term" onchange="this.form.submit()" class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white font-bold text-indigo-900">
+                            <option value="1" <%= currentTerm === '1' ? 'selected' : '' %>>1st Year - 1st Semester</option>
+                            <option value="2" <%= currentTerm === '2' ? 'selected' : '' %>>1st Year - 2nd Semester</option>
+                            <option value="3" <%= currentTerm === '3' ? 'selected' : '' %>>2nd Year - 1st Semester</option>
+                            <option value="4" <%= currentTerm === '4' ? 'selected' : '' %>>2nd Year - 2nd Semester</option>
+                            <option value="5" <%= currentTerm === '5' ? 'selected' : '' %>>3rd Year - 1st Semester</option>
+                            <option value="6" <%= currentTerm === '6' ? 'selected' : '' %>>3rd Year - 2nd Semester</option>
+                            <option value="7" <%= currentTerm === '7' ? 'selected' : '' %>>4th Year - 1st Semester</option>
+                            <option value="8" <%= currentTerm === '8' ? 'selected' : '' %>>4th Year - 2nd Semester</option>
+                        </select>
+                    </form>
+                </div>
+            <% } %>
+
             <% if (!selectedStudent) { %>
                 <div class="text-center py-12 text-slate-400">
                     <p class="text-sm">Please search a student by ID number above to manage their records.</p>
@@ -275,10 +297,11 @@
             <% } else { %>
                 <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                    <input type="hidden" name="term" value="<%= currentTerm %>">
 
                     <% if (grades.length === 0) { %>
                         <div class="text-center py-8 text-slate-400 text-xs">
-                            No subjects recorded for this student yet. Use the option above to enroll a subject.
+                            No subjects recorded for this student in this specific term. Use the option above to enroll a subject.
                         </div>
                     <% } else { %>
                         <% grades.forEach((g, index) => { %>
@@ -339,7 +362,7 @@
                             </div>
                         <% }) %>
 
-                        <!-- SAVE & CANCEL BUTTONS (This is the global cancel that clears the student and search box) -->
+                        <!-- SAVE & CANCEL BUTTONS -->
                         <div class="pt-4 flex justify-end gap-3">
                             <a href="/registrar" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
                                 Cancel
@@ -356,6 +379,7 @@
                     <form action="/registrar/delete-grade" method="POST" id="delete-<%= g.course_code %>" onsubmit="return confirm('Remove <%= g.course_code %> from student record?');">
                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                         <input type="hidden" name="course_code" value="<%= g.course_code %>">
+                        <input type="hidden" name="term" value="<%= currentTerm %>">
                     </form>
                 <% }) %>
             <% } %>
