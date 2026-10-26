@@ -69,21 +69,21 @@
             </form>
         </div>
 
-        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT -->
-        <div class="flex flex-wrap gap-4">
-            <button type="button" onclick="toggleSection('studentRegSection')" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                👤 Register Single Student
+        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT (FITS ON ONE LINE) -->
+        <div class="flex flex-row flex-nowrap gap-3 overflow-x-auto pb-2">
+            <button type="button" onclick="toggleSection('studentRegSection')" class="flex-1 px-4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
+                👤 Register Student
             </button>
-            <button type="button" onclick="toggleSection('batchUploadSection')" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                📁 Batch Upload (Google Form CSV)
+            <button type="button" onclick="toggleSection('batchUploadSection')" class="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
+                📁 Batch Upload
             </button>
-            <button type="button" onclick="toggleSection('facultyRegSection')" class="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                👨‍🏫 Register New Faculty
+            <button type="button" onclick="toggleSection('facultyRegSection')" class="flex-1 px-4 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
+                👨‍🏫 Register Faculty
             </button>
-            <button type="button" onclick="toggleSection('facultyManageSection')" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+            <button type="button" onclick="toggleSection('facultyManageSection')" class="flex-1 px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
                 👥 Manage Faculty
             </button>
-            <button type="button" onclick="toggleSection('studentManageSection')" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+            <button type="button" onclick="toggleSection('studentManageSection')" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
                 ✏️ Manage Student
             </button>
         </div>
