@@ -219,13 +219,13 @@
                         Enroll Extra / Back Subject (Active Period: A.Y. <%= systemSettings.current_ay %> - <%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %>)
                     </h3>
                 </div>
-                <form action="/registrar/add-single-course" method="POST" class="space-y-4 text-sm">
+                <form id="extraSubjectForm" action="/registrar/add-single-course" method="POST" class="space-y-4 text-sm">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                     
                     <div class="flex flex-col sm:flex-row gap-3 items-end">
                         <div class="flex-grow w-full">
                             <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Select Subject from Catalog</label>
-                            <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                            <select id="extraCourseSelect" name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
                                 <option value="">-- Select Subject --</option>
                                 <% if (availableCourses.length > 0) { %>
                                     <% availableCourses.forEach(c => { %>
@@ -235,9 +235,9 @@
                             </select>
                         </div>
                         
-                        <!-- Cancel button for this specific section points to base /registrar to clear it independently -->
+                        <!-- Independent Cancel button for this section only resets the catalog dropdown -->
                         <div class="flex gap-2 w-full sm:w-auto">
-                            <a href="/registrar" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                            <button type="button" onclick="document.getElementById('extraCourseSelect').value='';" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
                             <button type="submit" class="flex-1 sm:flex-initial py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors whitespace-nowrap">
                                 + Enroll Subject
                             </button>
@@ -339,7 +339,7 @@
                             </div>
                         <% }) %>
 
-                        <!-- SAVE & CANCEL BUTTONS (Clears everything including the ID search box) -->
+                        <!-- SAVE & CANCEL BUTTONS (This is the global cancel that clears the student and search box) -->
                         <div class="pt-4 flex justify-end gap-3">
                             <a href="/registrar" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
                                 Cancel
