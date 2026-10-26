@@ -71,7 +71,7 @@
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
-                        <input type="text" name="temp_password" placeholder="Default provided" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                        <input type="text" id="staffTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-emerald-400 bg-emerald-50 text-xs font-mono font-bold text-emerald-900">
                     </div>
                     <div class="flex gap-2">
                         <button type="reset" class="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
@@ -207,7 +207,7 @@
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
-                        <input type="text" name="temp_password" required value="password123" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                        <input type="text" id="studentTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-emerald-400 bg-emerald-50 text-xs font-mono font-bold text-emerald-900">
                     </div>
                     <div class="flex gap-2">
                         <button type="reset" class="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
@@ -295,7 +295,7 @@
                                                     View/Edit Grades
                                                 </a>
 
-                                                <form action="/admin/reset-user-password" method="POST" class="inline" onsubmit="return confirm('Reset password for student <%= stu.student_id %> to default (password123)?');">
+                                                <form action="/admin/reset-user-password" method="POST" class="inline" onsubmit="return confirm('Reset password for student <%= stu.student_id %>?');">
                                                     <input type="hidden" name="username" value="<%= stu.student_id %>">
                                                     <input type="hidden" name="role" value="student">
                                                     <button type="submit" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold shadow-sm">
@@ -354,5 +354,35 @@
         </div>
 
     </main>
+
+    <script>
+        function generateRandomPassword() {
+            const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const lower = 'abcdefghijklmnopqrstuvwxyz';
+            const num = '0123456789';
+            const special = '!@#$%^&*';
+            const all = upper + lower + num + special;
+            
+            let pass = [
+                upper[Math.floor(Math.random() * upper.length)],
+                lower[Math.floor(Math.random() * lower.length)],
+                num[Math.floor(Math.random() * num.length)],
+                special[Math.floor(Math.random() * special.length)]
+            ];
+            
+            for (let i = 0; i < 4; i++) {
+                pass.push(all[Math.floor(Math.random() * all.length)]);
+            }
+            
+            return pass.sort(() => Math.random() - 0.5).join('');
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const staffPass = document.getElementById('staffTempPassword');
+            const studentPass = document.getElementById('studentTempPassword');
+            if (staffPass && !staffPass.value) staffPass.value = generateRandomPassword();
+            if (studentPass && (!studentPass.value || studentPass.value === 'password123')) studentPass.value = generateRandomPassword();
+        });
+    </script>
 </body>
 </html>
