@@ -211,7 +211,7 @@
                         </select>
                     </div>
                     <div class="flex gap-2">
-                        <a href="/registrar?student_id=<%= selectedStudent.student_id %>&term=<%= currentTerm %>" class="flex items-center justify-center px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                        <a href="/registrar" class="flex items-center justify-center px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
                         <button type="submit" class="py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
                             + Enroll Single Subject
                         </button>
@@ -222,13 +222,24 @@
 
         <!-- FULL GRADE MANAGEMENT & EDITING SECTION -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-            <div class="border-b border-slate-100 pb-3 mb-4 flex justify-between items-center">
+            <div class="border-b border-slate-100 pb-3 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
                     Managing Grades & Enrollments For: 
                     <span class="text-pink-600">
                         <%= selectedStudent ? (selectedStudent.last_name + ', ' + selectedStudent.first_name + ' (' + selectedStudent.student_id + ')') : 'No Student Selected' %>
                     </span>
                 </h3>
+                
+                <% if (selectedStudent) { %>
+                    <!-- Password Reset Button for Currently Searched Student -->
+                    <form action="/registrar/reset-student-password" method="POST" onsubmit="return confirmPasswordReset(this, '<%= selectedStudent.student_id %>')" class="inline-block">
+                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                        <input type="hidden" name="new_password" class="reset-pass-field">
+                        <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-md transition-colors">
+                            🔑 Reset Student Password
+                        </button>
+                    </form>
+                <% } %>
             </div>
 
             <% if (!selectedStudent || !currentTerm) { %>
@@ -305,7 +316,7 @@
 
                         <!-- SAVE & CANCEL BUTTONS -->
                         <div class="pt-4 flex justify-end gap-3">
-                            <a href="/registrar?student_id=<%= selectedStudent.student_id %>&term=<%= currentTerm %>" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
+                            <a href="/registrar" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
                                 Cancel
                             </a>
                             <button type="submit" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors">
@@ -327,7 +338,7 @@
         </div>
     </main>
 
-    <!-- SCRIPT FOR SUBJECT CHECKLIST & GRADES AUTO-MATCHING -->
+    <!-- SCRIPT FOR SUBJECT CHECKLIST, PASSWORD GEN & AUTO-MATCHING -->
     <script id="courses-data" type="application/json">
         <%- JSON.stringify(locals.allCoursesRaw || []) %>
     </script>
@@ -408,6 +419,7 @@
             this.value = '';
         });
 
+        // 8 Character Password Generator (Upper, Lower, Number, Special)
         function generateRandomPassword() {
             const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
             const lower = 'abcdefghijklmnopqrstuvwxyz';
@@ -429,6 +441,18 @@
             return pass.sort(() => Math.random() - 0.5).join('');
         }
         
+        // Confirmation alert for manual password resets
+        function confirmPasswordReset(form, studentId) {
+            const newPass = generateRandomPassword();
+            form.querySelector('.reset-pass-field').value = newPass;
+            
+            const msg = `You are about to reset the password for Student ID: ${studentId}.\n\n` +
+                        `The NEW temporary password is:\n\n${newPass}\n\n` + 
+                        `Please COPY or WRITE DOWN this password before clicking OK, as it will be securely hashed in the database.`;
+            
+            return confirm(msg);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const facPass = document.getElementById('regFacultyTempPassword');
             const stuPass = document.getElementById('regStudentTempPassword');
