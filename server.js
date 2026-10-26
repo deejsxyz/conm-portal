@@ -499,8 +499,6 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             student = studentRes.rows[0] || null;
 
             if (student) {
-                // AUTOMATIC TERM CALCULATION
-                // Formula: (Year Level - 1) * 2 + Active Semester
                 selectedTerm = ((parseInt(student.year_level) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
 
                 const gradesRes = await pool.query(`

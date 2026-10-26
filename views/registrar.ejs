@@ -213,7 +213,7 @@
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
             <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
                 <div class="flex-grow w-full">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
+                    <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Search Student by ID Number:</label>
                     <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors">Search Student</button>
@@ -294,6 +294,7 @@
                         <span class="text-pink-600">
                             <%= selectedStudent.last_name + ', ' + selectedStudent.first_name + ' (' + selectedStudent.student_id + ')' %>
                         </span>
+                        <span class="text-[10px] font-bold bg-indigo-200 text-indigo-800 px-2 py-1 rounded ml-2">A.Y. <%= systemSettings.current_ay %> - <%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %></span>
                     </h3>
                     
                     <form action="/registrar/reset-student-password" method="POST" onsubmit="return confirmPasswordReset(this, '<%= selectedStudent.student_id %>')" class="inline-block">
