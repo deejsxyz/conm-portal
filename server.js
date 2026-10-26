@@ -376,29 +376,11 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Reset User Password Route
-app.post('/admin/reset-user-password', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { username, role } = req.body;
-    try {
-        const defaultPass = role === 'student' ? 'password123' : (role === 'registrar' ? 'registrar2026' : 'conm2026');
-        const hashedPassword = await bcrypt.hash(defaultPass, 10);
-        
-        await pool.query('UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE username = $2', [hashedPassword, username]);
-        
-        res.redirect(`/admin?msg=Password reset successfully for ${username}.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect('/admin?err=Failed to reset password.');
-    }
-});
-
-// Admin Edit Faculty Route
+// Admin Edit Faculty (Includes Password Reset)
 app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { original_username, username, first_name, middle_name, last_name } = req.body;
+    const { original_username, username, first_name, middle_name, last_name, temp_password } = req.body;
     const cleanUser = username.trim();
     
     try {
@@ -408,6 +390,16 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
             WHERE username = $5
         `, [cleanUser, first_name.trim(), middle_name.trim(), last_name.trim(), original_username]);
 
+        // If admin entered a new temporary password, hash and apply it
+        if (temp_password && temp_password.trim() !== '') {
+            const hashedPassword = await bcrypt.hash(temp_password.trim(), 10);
+            await pool.query(`
+                UPDATE users 
+                SET password_hash = $1, must_change_password = TRUE 
+                WHERE username = $2
+            `, [hashedPassword, cleanUser]);
+        }
+
         res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}&msg=Staff profile updated successfully.`);
     } catch (err) {
         console.error(err);
@@ -415,11 +407,11 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Edit Student Route
+// Admin Edit Student (Includes Password Reset)
 app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, first_name, middle_name, last_name, year_level } = req.body;
+    const { student_id, first_name, middle_name, last_name, year_level, temp_password } = req.body;
     
     try {
         await pool.query(`
@@ -433,6 +425,16 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
             SET first_name = $1, middle_name = $2, last_name = $3
             WHERE username = $4
         `, [first_name.trim(), middle_name.trim(), last_name.trim(), student_id]);
+
+        // If admin entered a new temporary password, hash and apply it
+        if (temp_password && temp_password.trim() !== '') {
+            const hashedPassword = await bcrypt.hash(temp_password.trim(), 10);
+            await pool.query(`
+                UPDATE users 
+                SET password_hash = $1, must_change_password = TRUE 
+                WHERE username = $2
+            `, [hashedPassword, student_id]);
+        }
 
         res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&msg=Student profile updated successfully.`);
     } catch (err) {
