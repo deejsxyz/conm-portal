@@ -14,7 +14,7 @@
             </div>
             <div class="flex items-center space-x-3">
                 <span class="text-xs bg-emerald-800 px-3 py-1.5 rounded-full text-emerald-100 font-medium">
-                    <%= currentUser.fullName || currentUser.username %> () %>)
+                    <%= currentUser.fullName || currentUser.username %>
                 </span>
                 <% if (currentUser.role === 'admin') { %>
                     <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
