@@ -69,7 +69,7 @@
             </form>
         </div>
 
-        <!-- TOGGLE BUTTONS FOR ACCOUNT REGISTRATION & MANAGEMENT -->
+        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT -->
         <div class="flex flex-wrap gap-4">
             <button type="button" onclick="toggleSection('studentRegSection')" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
                 👤 Register Single Student
@@ -83,9 +83,12 @@
             <button type="button" onclick="toggleSection('facultyManageSection')" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
                 👥 Manage Faculty
             </button>
+            <button type="button" onclick="toggleSection('studentManageSection')" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                ✏️ Manage Student
+            </button>
         </div>
 
-        <!-- ACCOUNT REGISTRATION & MANAGEMENT FORMS -->
+        <!-- SECTIONS (HIDDEN BY DEFAULT UNLESS ACTIVE OR SEARCHED) -->
         <div class="space-y-4">
             
             <!-- BATCH UPLOAD CSV FORM -->
@@ -178,7 +181,7 @@
                 </form>
             </div>
 
-            <!-- REGISTER FACULTY (5 DEFAULT DROPDOWNS + ADD MORE) -->
+            <!-- REGISTER FACULTY -->
             <div id="facultyRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1">Register New Faculty Account & Assign Subjects</h3>
                 <form action="/registrar/add-faculty" method="POST" class="space-y-4 text-sm">
@@ -304,17 +307,17 @@
                     </div>
                 <% } %>
             </div>
-        </div>
 
-        <!-- SEARCH STUDENT BY ID ONLY -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-            <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
-                <div class="flex-grow w-full">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
-                    <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors">Search Student</button>
-            </form>
+            <!-- MANAGE STUDENT SECTION (SEARCH STUDENT BY ID) -->
+            <div id="studentManageSection" class="<%= selectedStudent ? '' : 'hidden' %> bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
+                    <div class="flex-grow w-full">
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
+                        <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors">Search Student</button>
+                </form>
+            </div>
         </div>
 
         <% if (selectedStudent) { %>
@@ -491,7 +494,7 @@
         const facultyAssignedData = JSON.parse(document.getElementById('faculty-assigned-data').textContent);
         
         function toggleSection(sectionId) {
-            const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection', 'facultyManageSection'];
+            const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection', 'facultyManageSection', 'studentManageSection'];
             sections.forEach(id => {
                 const section = document.getElementById(id);
                 if (id === sectionId) {
@@ -547,7 +550,7 @@
             container.innerHTML = html;
         }
 
-        // DYNAMIC FACULTY SUBJECT DROPDOWNS (5 DEFAULT + ADD MORE) WITH ITALIC PLACEHOLDER
+        // DYNAMIC FACULTY SUBJECT DROPDOWNS WITH ITALICIZED PLACEHOLDER
         function addFacultySubjectDropdown(containerId, selectedValue = '') {
             const container = document.getElementById(containerId);
             if (!container) return;
@@ -620,9 +623,12 @@
             }
         }
 
-        document.getElementById('studentSearchInput').addEventListener('click', function() {
-            this.value = '';
-        });
+        const searchInput = document.getElementById('studentSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('click', function() {
+                this.value = '';
+            });
+        }
 
         function generateRandomPassword() {
             const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
