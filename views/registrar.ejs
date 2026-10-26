@@ -1,889 +1,521 @@
-require('dotenv').config();
-const express = require('express');
-const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
-const session = require('express-session');
-const multer = require('multer');
-const csv = require('csv-parser');
-const fs = require('fs');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CONM Registrar Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+    <header class="bg-indigo-900 text-white shadow-md border-b-4 border-pink-500">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div>
+                <h2 class="text-base font-bold">City University of Pasay - Registrar Portal</h2>
+                <p class="text-xs text-pink-300">College of Nursing and School of Midwifery (CONM)</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
+                    <%= currentUser.fullName || currentUser.username %>
+                </span>
+                <% if (currentUser.role === 'admin') { %>
+                    <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
+                <% } %>
+                <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
+                <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
+            </div>
+        </div>
+    </header>
 
-const app = express();
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-const upload = multer({ dest: 'uploads/' });
-
-app.set('view engine', 'ejs');
-app.use(express.urlencoded({ extended: true }));
-
-app.use(session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false
-}));
-
-function formatFullName(first, middle, last, fallback) {
-    const parts = [first, middle, last].map(p => (p || '').trim()).filter(Boolean);
-    return parts.length > 0 ? parts.join(' ') : fallback;
-}
-
-async function seedDatabase() {
-    try {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS courses (
-                course_code VARCHAR(50) PRIMARY KEY,
-                descriptive_title VARCHAR(255) NOT NULL,
-                lec_units INT DEFAULT 0,
-                rle_units INT DEFAULT 0,
-                total_units INT DEFAULT 0,
-                term_id INT NOT NULL
-            );
-        `);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS grades (
-                id SERIAL PRIMARY KEY,
-                student_id VARCHAR(100),
-                student_number VARCHAR(100),
-                course_code VARCHAR(50),
-                final_grade VARCHAR(50),
-                instructor VARCHAR(100),
-                remarks VARCHAR(50)
-            );
-        `);
-
-        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS course_code VARCHAR(50);`);
-        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS final_grade VARCHAR(50);`);
-        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS instructor VARCHAR(100);`);
-        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
-        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
-        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS enrolled_term VARCHAR(10);`);
-        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-2027';`);
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS settings (
-                id INT PRIMARY KEY,
-                current_ay VARCHAR(20),
-                current_semester INT
-            );
-        `);
-        await pool.query(`
-            INSERT INTO settings (id, current_ay, current_semester) 
-            VALUES (1, '2026-2027', 1) 
-            ON CONFLICT (id) DO NOTHING;
-        `);
-
-        await pool.query(`
-            UPDATE grades g 
-            SET enrolled_term = c.term_id::varchar 
-            FROM courses c 
-            WHERE g.course_code = c.course_code AND g.enrolled_term IS NULL;
-        `);
-
-        await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
-        await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));`);
-
-        const adminPassword = await bcrypt.hash('admin2026', 10);
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, first_name, last_name) 
-            VALUES ('admin', $1, 'admin', 'System', 'Administrator')
-            ON CONFLICT (username) DO NOTHING;
-        `, [adminPassword]);
-
-        const registrarPassword = await bcrypt.hash('registrar2026', 10);
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, first_name, last_name, must_change_password) 
-            VALUES ('registrar', $1, 'registrar', 'CONM', 'Registrar', FALSE)
-            ON CONFLICT (username) 
-            DO UPDATE SET password_hash = $1, role = 'registrar', must_change_password = FALSE;
-        `, [registrarPassword]);
-
-        const allCourses = [
-            ['GEC 101', 'Understanding the Self', 3, 0, 3, 1],
-            ['GEC 104', 'Mathematics in the Modern World', 3, 0, 3, 1],
-            ['GEC 206', 'Art Appreciation', 3, 0, 3, 1],
-            ['COR 101', 'Contemporary English', 3, 0, 3, 1],
-            ['NCM 100', 'Theoretical Foundation of Nursing', 3, 0, 3, 1],
-            ['MC 1', 'Anatomy and Physiology', 3, 2, 5, 1],
-            ['MC 2', 'Biochemistry', 3, 2, 5, 1],
-            ['PHE 101', 'Wellness and Fitness', 2, 0, 2, 1],
-            ['GEC 105', 'Purposive Communication', 3, 0, 3, 2],
-            ['GEC 108', 'Ethics', 3, 0, 3, 2],
-            ['COR 102', 'Contemporary Mathematics', 3, 0, 3, 2],
-            ['NCM 101', 'Health Assessment', 3, 2, 5, 2],
-            ['NCM 102', 'Health Education', 3, 0, 3, 2],
-            ['NCM 103', 'Fundamentals of Nursing Practice', 3, 2, 5, 2],
-            ['MC 3', 'Microbiology and Parasitology', 3, 1, 4, 2],
-            ['PE 2', 'Self Defense', 2, 0, 2, 2],
-            ['NCM 104', 'Community Health Nursing 1', 3, 1, 4, 3],
-            ['NCM 105', 'Nutrition and Diet Therapy', 3, 0, 3, 3],
-            ['NCM 106', 'Pharmacology', 3, 0, 3, 3],
-            ['NCM 107', 'Care of Mother, Child Adolescent (Well Clients)', 5, 4, 9, 3],
-            ['NCM 108', 'Health Care Ethics (Bioethics)', 3, 0, 3, 3],
-            ['NSTP 101', 'NSTP', 3, 0, 3, 3],
-            ['PHE 3', 'Swimming', 2, 0, 2, 3],
-            ['GEC 102', 'Readings in Philippine History', 3, 0, 3, 4],
-            ['GEC 107', 'Science, Technology, & Society', 3, 0, 3, 4],
-            ['GEC E1', 'The Entrepreneurial Mind (Nursing Entrepreneurial)', 3, 0, 3, 4],
-            ['NCM 110', 'Care of Mother, Child Adolescent (Acute and Chronic)', 6, 6, 12, 4],
-            ['NSTP 102', 'NSTP', 3, 0, 3, 4],
-            ['PHE 4', 'Sports', 2, 0, 2, 4],
-            ['NCM 111', 'Nursing Research 1', 3, 0, 3, 5],
-            ['NCM 112', 'Care of Clients with Problems in Oxygenation, Fluid & Electrolytes, Infectious, Inflammatory, & Immunologic Response, Cellular Aberrations; Acute and Chronic', 8, 6, 14, 5],
-            ['NCM 113', 'Community Health Nursing 2 (Population Group and Community Guide Clients)', 2, 1, 3, 5],
-            ['NCM 114', 'Care of Older Adult', 2, 1, 3, 5],
-            ['COR 104', 'Great Books and Philippine Popular Culture', 3, 0, 3, 5],
-            ['NCM 115', 'Nursing Research 2', 3, 0, 3, 6],
-            ['NCM 116', 'Care of Clients with Problems in Nutrition & Gastro-Intestinal, Metabolism and Endocrine Perception & Coordination (Acute & Chronic)', 5, 4, 9, 6],
-            ['NCM 117', 'Care of Clients with Maladaptive Patterns of Behavior (Acute & Chronic)', 4, 4, 8, 6],
-            ['GEC E3', 'Elective 3-Nursing Personality Enhancement Program (NPEP)', 3, 0, 3, 6],
-            ['GEC 109', 'Life, Works, and Writings of Rizal', 3, 0, 3, 7],
-            ['NCM 118', 'Nursing Care of Clients with Life Threatening Conditions, Acutely III/Multi-organs Problems, High Acuity & Emergency Situation, Acute & Chronic', 5, 4, 9, 7],
-            ['NCM 119', 'Nursing Leadership & Management', 4, 3, 7, 7],
-            ['CA 1', 'Course Audit 1', 3, 0, 3, 7],
-            ['GEC 103', 'The Contemporary World', 3, 0, 3, 8],
-            ['NCM 121', 'Disaster Nursing', 2, 1, 3, 8],
-            ['NCM 122', 'Intensive Nursing Practicum (Hospital and Community Settings)', 0, 8, 8, 8],
-            ['CA 2', 'Course Audit 2', 3, 0, 3, 8]
-        ];
-
-        for (let c of allCourses) {
-            await pool.query(`
-                INSERT INTO courses (course_code, descriptive_title, lec_units, rle_units, total_units, term_id) 
-                VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (course_code) DO NOTHING;
-            `, c);
-        }
-
-        console.log("Database schema and seed data verified successfully.");
-    } catch (err) {
-        console.error("Seeding notice:", err.message);
-    }
-}
-
-function isAuthenticated(req, res, next) {
-    if (req.session.user) return next();
-    res.redirect('/');
-}
-
-app.get('/', (req, res) => {
-    if (req.session.user) return res.redirect('/portal');
-    res.render('login', { error: null });
-});
-
-app.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-    try {
-        const userQuery = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-        if (userQuery.rows.length === 0) {
-            return res.render('login', { error: 'Invalid username or password.' });
-        }
-
-        const user = userQuery.rows[0];
-        const match = await bcrypt.compare(password, user.password_hash);
-        if (!match) {
-            return res.render('login', { error: 'Invalid username or password.' });
-        }
-
-        let fullName = formatFullName(user.first_name, user.middle_name, user.last_name, null);
-        if (!fullName && user.role === 'student') {
-            const stuRes = await pool.query('SELECT first_name, middle_name, last_name FROM students WHERE student_id = $1', [user.username]);
-            if (stuRes.rows.length > 0) {
-                const s = stuRes.rows[0];
-                fullName = formatFullName(s.first_name, s.middle_name, s.last_name, user.username);
-            }
-        }
-        if (!fullName) fullName = user.username;
-
-        req.session.user = { 
-            username: user.username, 
-            role: user.role, 
-            fullName: fullName,
-            mustChangePassword: user.must_change_password 
-        };
-
-        if (user.must_change_password) {
-            return res.redirect('/change-password');
-        }
-
-        if (user.role === 'admin') {
-            return res.redirect('/admin');
-        } else if (user.role === 'registrar') {
-            return res.redirect('/registrar');
-        } else if (user.role === 'faculty') {
-            return res.redirect('/faculty/edit-grades');
-        } else {
-            return res.redirect('/portal');
-        }
-    } catch (err) {
-        console.error(err);
-        res.render('login', { error: 'Database error occurred.' });
-    }
-});
-
-app.get('/change-password', isAuthenticated, (req, res) => {
-    res.render('change_password', { error: null });
-});
-
-app.post('/change-password', isAuthenticated, async (req, res) => {
-    const { new_password } = req.body;
-    
-    const isValid = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(new_password);
-    if (!isValid) {
-        return res.render('change_password', { 
-            error: 'Password must be at least 8 characters long and include uppercase letters, lowercase letters, numbers, and special characters.' 
-        });
-    }
-
-    try {
-        const hashedNewPassword = await bcrypt.hash(new_password, 10);
-        await pool.query(`
-            UPDATE users 
-            SET password_hash = $1, must_change_password = FALSE 
-            WHERE username = $2
-        `, [hashedNewPassword, req.session.user.username]);
-
-        req.session.user.mustChangePassword = false;
-
-        if (req.session.user.role === 'admin') {
-            res.redirect('/admin');
-        } else if (req.session.user.role === 'registrar') {
-            res.redirect('/registrar');
-        } else if (req.session.user.role === 'faculty') {
-            res.redirect('/faculty/edit-grades');
-        } else {
-            res.redirect('/portal');
-        }
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error updating password');
-    }
-});
-
-// Admin Routes
-app.get('/admin', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'admin') return res.redirect('/portal');
-
-    const selectedStaffUsername = req.query.staff_user ? req.query.staff_user.trim() : '';
-    const searchStudentId = req.query.search_student_id ? req.query.search_student_id.trim() : '';
-
-    try {
-        const staffRes = await pool.query(`
-            SELECT username, role, must_change_password, first_name, middle_name, last_name 
-            FROM users 
-            WHERE role IN ('faculty', 'registrar') 
-            ORDER BY role DESC, last_name ASC, username ASC
-        `);
-
-        let selectedStaff = null;
-        if (selectedStaffUsername) {
-            selectedStaff = staffRes.rows.find(f => f.username === selectedStaffUsername) || null;
-        }
-
-        const countsRes = await pool.query(`
-            SELECT year_level, COUNT(*) AS total 
-            FROM students 
-            GROUP BY year_level
-        `);
-        const yearCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
-        countsRes.rows.forEach(r => {
-            yearCounts[r.year_level] = parseInt(r.total, 10);
-        });
-
-        let searchedStudents = [];
-        if (searchStudentId) {
-            const stuSearchRes = await pool.query(`
-                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level,
-                       u.must_change_password
-                FROM students s
-                LEFT JOIN users u ON s.student_id = u.username
-                WHERE s.student_id ILIKE $1
-                ORDER BY s.student_id ASC
-            `, [`%${searchStudentId}%`]);
-            searchedStudents = stuSearchRes.rows;
-        }
-
-        res.render('admin', {
-            currentUser: req.session.user,
-            staffList: staffRes.rows,
-            selectedStaff: selectedStaff,
-            yearCounts: yearCounts,
-            searchStudentId: searchStudentId,
-            searchedStudents: searchedStudents,
-            message: req.query.msg || null,
-            error: req.query.err || null
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error loading admin dashboard');
-    }
-});
-
-app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { username, role, first_name, middle_name, last_name, temp_password } = req.body;
-    const cleanUser = username ? username.trim() : '';
-    const staffRole = role === 'registrar' ? 'registrar' : 'faculty';
-    const fName = first_name ? first_name.trim() : '';
-    const mName = middle_name ? middle_name.trim() : '';
-    const lName = last_name ? last_name.trim() : '';
-    const pass = temp_password ? temp_password.trim() : (staffRole === 'registrar' ? 'registrar2026' : 'conm2026');
-
-    if (!cleanUser || !fName || !lName) {
-        return res.redirect('/admin?err=Username, First Name, and Last Name are required.');
-    }
-
-    try {
-        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanUser]);
-        if (existing.rows.length > 0) {
-            return res.redirect('/admin?err=Username already exists.');
-        }
-
-        const hashedPassword = await bcrypt.hash(pass, 10);
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
-            VALUES ($1, $2, $3, TRUE, $4, $5, $6)
-        `, [cleanUser, hashedPassword, staffRole, fName, mName, lName]);
-
-        res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}&msg=Staff account created successfully.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect('/admin?err=Database error while creating staff account.');
-    }
-});
-
-// Admin Delete User Route
-app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { username, role } = req.body;
-    try {
-        await pool.query('DELETE FROM users WHERE username = $1', [username]);
-        if (role === 'student') {
-            await pool.query('DELETE FROM students WHERE student_id = $1', [username]);
-            await pool.query('DELETE FROM grades WHERE student_id = $1', [username]);
-        }
-        res.redirect('/admin?msg=User account successfully deleted.');
-    } catch (err) {
-        console.error(err);
-        res.redirect('/admin?err=Failed to delete user account.');
-    }
-});
-
-// Admin Reset User Password Route
-app.post('/admin/reset-user-password', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { username, role } = req.body;
-    try {
-        const defaultPass = role === 'student' ? 'password123' : (role === 'registrar' ? 'registrar2026' : 'conm2026');
-        const hashedPassword = await bcrypt.hash(defaultPass, 10);
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
         
-        await pool.query('UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE username = $2', [hashedPassword, username]);
-        
-        res.redirect(`/admin?msg=Password reset successfully for ${username}.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect('/admin?err=Failed to reset password.');
-    }
-});
+        <% if (locals.message) { %>
+            <div style="background: #d4edda; color: #155724; padding: 12px 20px; border-radius: 6px; border: 1px solid #c3e6cb; font-weight: 500; text-align: center; margin-bottom: 1rem;">
+                <%= message %>
+            </div>
+        <% } %>
 
-// Admin Edit Faculty Route
-app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+        <% if (locals.error) { %>
+            <div style="background: #f8d7da; color: #721c24; padding: 12px 20px; border-radius: 6px; border: 1px solid #f5c6cb; font-weight: 500; text-align: center; margin-bottom: 1rem;">
+                <%= error %>
+            </div>
+        <% } %>
 
-    const { original_username, username, first_name, middle_name, last_name } = req.body;
-    const cleanUser = username.trim();
-    
-    try {
-        await pool.query(`
-            UPDATE users 
-            SET username = $1, first_name = $2, middle_name = $3, last_name = $4
-            WHERE username = $5
-        `, [cleanUser, first_name.trim(), middle_name.trim(), last_name.trim(), original_username]);
+        <!-- GLOBAL SYSTEM SETTINGS -->
+        <div class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+                <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
+                <p class="text-xs text-indigo-700 mt-1">Set the active Academic Year and Semester. This locks the Faculty Portal so instructors can only view and edit grades for this exact period.</p>
+            </div>
+            <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center w-full sm:w-auto">
+                <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
+                    <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                    <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                    <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                    <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                </select>
+                <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
+                    <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
+                    <option value="2" <%= systemSettings.current_semester === 2 ? 'selected' : '' %>>2nd Semester</option>
+                </select>
+                <button type="submit" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors">Apply System-Wide</button>
+            </form>
+        </div>
 
-        res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}&msg=Staff profile updated successfully.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/admin?staff_user=${encodeURIComponent(original_username)}&err=Failed to update staff profile.`);
-    }
-});
+        <!-- TOGGLE BUTTONS FOR ACCOUNT REGISTRATION -->
+        <div class="flex flex-wrap gap-4">
+            <button type="button" onclick="toggleSection('studentRegSection')" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                👤 Register Single Student
+            </button>
+            <button type="button" onclick="toggleSection('batchUploadSection')" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                📁 Batch Upload (Google Form CSV)
+            </button>
+            <button type="button" onclick="toggleSection('facultyRegSection')" class="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                👨‍🏫 Register New Faculty
+            </button>
+        </div>
 
-// Admin Edit Student Route
-app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+        <!-- ACCOUNT REGISTRATION FORMS -->
+        <div class="space-y-4">
+            
+            <!-- BATCH UPLOAD CSV FORM -->
+            <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-2">Batch Upload & Enroll Students</h3>
+                <p class="text-xs text-slate-500 mb-4">Export your Google Form responses as a <strong>.csv</strong> file. The system will auto-generate secure passwords and enroll all selected subjects based on the student's Year, Semester, and Academic Year.</p>
+                
+                <div class="mb-5 p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
+                    <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
+                    <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, semester, academic_year, subjects</code>
+                </div>
 
-    const { student_id, first_name, middle_name, last_name, year_level } = req.body;
-    
-    try {
-        await pool.query(`
-            UPDATE students 
-            SET first_name = $1, middle_name = $2, last_name = $3, year_level = $4
-            WHERE student_id = $5
-        `, [first_name.trim(), middle_name.trim(), last_name.trim(), year_level, student_id]);
-
-        await pool.query(`
-            UPDATE users 
-            SET first_name = $1, middle_name = $2, last_name = $3
-            WHERE username = $4
-        `, [first_name.trim(), middle_name.trim(), last_name.trim(), student_id]);
-
-        res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&msg=Student profile updated successfully.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&err=Failed to update student profile.`);
-    }
-});
-
-// Registrar Portal Routes
-app.get('/registrar', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
-        return res.redirect('/portal');
-    }
-
-    const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-    let selectedTerm = req.query.term || '1';
-
-    try {
-        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
-        const systemSettings = settingsRes.rows[0];
-
-        let student = null;
-        let grades = [];
-        let availableCourses = [];
-
-        const allCoursesRes = await pool.query('SELECT * FROM courses ORDER BY term_id, course_code');
-        const allCoursesRaw = allCoursesRes.rows;
-        availableCourses = allCoursesRaw; 
-
-        if (targetStudentId) {
-            const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
-            student = studentRes.rows[0] || null;
-
-            if (student) {
-                const gradesRes = await pool.query(`
-                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
-                           c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-                    FROM grades g
-                    JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1 AND g.enrolled_term = $2
-                    ORDER BY g.course_code ASC
-                `, [targetStudentId, selectedTerm]);
-                grades = gradesRes.rows;
-            }
-        }
-
-        res.render('registrar', {
-            currentUser: req.session.user,
-            systemSettings: systemSettings,
-            selectedStudent: student,
-            grades: grades,
-            availableCourses: availableCourses,
-            allCoursesRaw: allCoursesRaw,
-            currentTerm: selectedTerm,
-            message: req.query.msg || null,
-            error: req.query.err || null
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send(`Error loading registrar dashboard: ${err.message}`);
-    }
-});
-
-app.post('/registrar/update-settings', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-    const { current_ay, current_semester } = req.body;
-    try {
-        await pool.query('UPDATE settings SET current_ay = $1, current_semester = $2 WHERE id = 1', [current_ay, current_semester]);
-        res.redirect(`/registrar?msg=${encodeURIComponent('Active Academic Year and Semester updated successfully.')}`);
-    } catch (err) {
-        console.error(err);
-        res.redirect('/registrar?err=Failed to update settings.');
-    }
-});
-
-app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const students = [];
-    
-    fs.createReadStream(req.file.path)
-        .pipe(csv())
-        .on('data', (row) => {
-            students.push(row);
-        })
-        .on('end', async () => {
-            try {
-                for (const student of students) {
-                    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                    const lower = 'abcdefghijklmnopqrstuvwxyz';
-                    const num = '0123456789';
-                    const special = '!@#$%^&*';
-                    const all = upper + lower + num + special;
+                <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
+                    <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
                     
-                    let passArray = [
-                        upper[Math.floor(Math.random() * upper.length)],
-                        lower[Math.floor(Math.random() * lower.length)],
-                        num[Math.floor(Math.random() * num.length)],
-                        special[Math.floor(Math.random() * special.length)]
-                    ];
-                    
-                    for (let i = 0; i < 4; i++) {
-                        passArray.push(all[Math.floor(Math.random() * all.length)]);
-                    }
-                    
-                    const tempPassword = passArray.sort(() => Math.random() - 0.5).join('');
-                    const hashedPassword = await bcrypt.hash(tempPassword, 10);
-                    
-                    await pool.query(
-                        `INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password) 
-                         VALUES ($1, $2, 'student', $3, $4, $5, TRUE) 
-                         ON CONFLICT (username) DO NOTHING`,
-                        [student.student_id, hashedPassword, student.first_name, student.middle_name, student.last_name]
-                    );
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-bold shadow-md transition-colors">
+                        Upload & Process CSV
+                    </button>
+                </form>
+            </div>
 
-                    await pool.query(
-                        `INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
-                         VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
-                         ON CONFLICT (student_id) DO NOTHING`,
-                        [student.student_id, student.first_name, student.middle_name, student.last_name, student.year_level || 1]
-                    );
+            <!-- Single Student Form -->
+            <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Single Student</h3>
+                <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
+                            <input type="text" name="student_id" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
+                            <input type="text" name="first_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
+                            <input type="text" name="middle_name" <%= selectedStudent ? 'disabled' : '' %> placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
+                            <input type="text" name="last_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
+                            <input type="text" id="regStudentTempPassword" name="temp_password" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
+                        </div>
+                    </div>
 
-                    if (student.year_level && student.semester && student.subjects && student.academic_year) {
-                        const termId = (parseInt(student.year_level) - 1) * 2 + parseInt(student.semester);
-                        const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Enrollment Academic Year</label>
+                            <select name="academic_year" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                                <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                                <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                                <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                                <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Year Level</label>
+                            <select name="year_level" id="reg_year_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                                <option value="1">1st Year</option>
+                                <option value="2" selected>2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester (Triggers Subjects)</label>
+                            <select id="reg_sem_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800">
+                                <option value="1">1st Semester</option>
+                                <option value="2">2nd Semester</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="term" id="reg_term_hidden" value="" <%= selectedStudent ? 'disabled' : '' %>>
+                    
+                    <div class="pt-2">
+                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects to Enroll</label>
+                        <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200"></div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="button" onclick="toggleSection('studentRegSection')" class="w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors <%= selectedStudent ? 'pointer-events-none opacity-50' : '' %>">Cancel</button>
+                        <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors">
+                            + Register Account & Enroll Student in Checked Subjects
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Register Faculty -->
+            <div id="facultyRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-3">Register New Faculty Account</h3>
+                <form action="/registrar/add-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end text-sm">
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
+                        <input type="text" name="username" required placeholder="e.g. prof.dizon" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
+                        <input type="text" id="regFacultyTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
+                        <input type="text" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
+                        <input type="text" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
+                        <input type="text" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="toggleSection('facultyRegSection')" class="flex-1 flex justify-center items-center py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
+                        <button type="submit" class="flex-[2] py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                            + Register
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- SEARCH STUDENT BY ID ONLY -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
+                <div class="flex-grow w-full">
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
+                    <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <input type="hidden" name="term" value="<%= currentTerm %>">
+                <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors">Search Student</button>
+            </form>
+        </div>
+
+        <% if (selectedStudent) { %>
+            <!-- EDIT SUBJECT ENROLLED SECTION WITH TERM FILTER -->
+            <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-indigo-200 pb-3">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
+                        Edit Subject Enrolled (Active Period: A.Y. <%= systemSettings.current_ay %> - <%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %>)
+                    </h3>
+
+                    <!-- TERM SELECTOR FOR EDITING SUBJECTS -->
+                    <form method="GET" action="/registrar" class="flex items-center gap-2">
+                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                        <select name="term" onchange="this.form.submit()" class="px-3 py-1.5 rounded-lg border border-indigo-300 text-xs bg-white font-bold text-indigo-900">
+                            <option value="1" <%= currentTerm === '1' ? 'selected' : '' %>>1st Year - 1st Semester</option>
+                            <option value="2" <%= currentTerm === '2' ? 'selected' : '' %>>1st Year - 2nd Semester</option>
+                            <option value="3" <%= currentTerm === '3' ? 'selected' : '' %>>2nd Year - 1st Semester</option>
+                            <option value="4" <%= currentTerm === '4' ? 'selected' : '' %>>2nd Year - 2nd Semester</option>
+                            <option value="5" <%= currentTerm === '5' ? 'selected' : '' %>>3rd Year - 1st Semester</option>
+                            <option value="6" <%= currentTerm === '6' ? 'selected' : '' %>>3rd Year - 2nd Semester</option>
+                            <option value="7" <%= currentTerm === '7' ? 'selected' : '' %>>4th Year - 1st Semester</option>
+                            <option value="8" <%= currentTerm === '8' ? 'selected' : '' %>>4th Year - 2nd Semester</option>
+                        </select>
+                    </form>
+                </div>
+
+                <!-- LIST OF CURRENTLY ENROLLED SUBJECTS WITH INDEPENDENT DELETE BUTTONS -->
+                <div class="space-y-2">
+                    <label class="block text-[10px] uppercase font-bold text-indigo-800">Currently Enrolled Subjects in Selected Term:</label>
+                    <% if (grades.length === 0) { %>
+                        <p class="text-xs text-slate-500 italic">No subjects enrolled in this term.</p>
+                    <% } else { %>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <% grades.forEach(g => { %>
+                                <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-indigo-200 text-xs">
+                                    <span class="font-mono font-bold text-indigo-950">[<%= g.course_code %>] <span class="font-normal text-slate-700"><%= g.descriptive_title %></span></span>
+                                    <form action="/registrar/delete-grade" method="POST" onsubmit="return confirm('Remove <%= g.course_code %> from student record?');" class="inline">
+                                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                        <input type="hidden" name="course_code" value="<%= g.course_code %>">
+                                        <input type="hidden" name="term" value="<%= currentTerm %>">
+                                        <button type="submit" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow">Delete</button>
+                                    </form>
+                                </div>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                </div>
+
+                <!-- ENROLL ANOTHER SUBJECT FORM -->
+                <div class="pt-3 border-t border-indigo-200">
+                    <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Add / Enroll Another Subject to this Term</label>
+                    <form action="/registrar/add-single-course" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
+                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                        <input type="hidden" name="term" value="<%= currentTerm %>">
                         
-                        for (const code of courseCodes) {
-                            await pool.query(
-                                `INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term, academic_year) 
-                                 VALUES ($1, $2, '', '', '', $3, $4)
-                                 ON CONFLICT (student_id, course_code) 
-                                 DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';`,
-                                [student.student_id, code, termId.toString(), student.academic_year]
-                            );
-                        }
-                    }
-                }
-                
-                fs.unlinkSync(req.file.path);
-                res.redirect(`/registrar?msg=${encodeURIComponent(students.length + ' students successfully registered and enrolled via Google Forms CSV!')}`);
-                
-            } catch (err) {
-                console.error("Batch Upload Error:", err);
-                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-                res.redirect('/registrar?err=Error processing batch upload. Ensure your CSV format is correct.');
-            }
-        });
-});
+                        <div class="flex-grow w-full">
+                            <select id="extraCourseSelect" name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                                <option value="">-- Select Subject from Catalog --</option>
+                                <% if (availableCourses.length > 0) { %>
+                                    <% availableCourses.forEach(c => { %>
+                                        <option value="<%= c.course_code %>">[<%= c.course_code %>] <%= c.descriptive_title %></option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+                        </div>
+                        
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <button type="button" onclick="document.getElementById('extraCourseSelect').value='';" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
+                            <button type="submit" class="flex-1 sm:flex-initial py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors whitespace-nowrap">
+                                + Enroll Subject
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
-app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+            <!-- FULL GRADE MANAGEMENT & EDITING SECTION -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+                <div class="border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
+                        Managing Grades For: 
+                        <span class="text-pink-600">
+                            <%= selectedStudent.last_name + ', ' + selectedStudent.first_name + ' (' + selectedStudent.student_id + ')' %>
+                        </span>
+                    </h3>
+                    
+                    <form action="/registrar/reset-student-password" method="POST" onsubmit="return confirmPasswordReset(this, '<%= selectedStudent.student_id %>')" class="inline-block">
+                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                        <input type="hidden" name="new_password" class="reset-pass-field">
+                        <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-md transition-colors">
+                            🔑 Reset Student Password
+                        </button>
+                    </form>
+                </div>
 
-    const { student_id, first_name, middle_name, last_name, year_level, term, academic_year, course_codes, temp_password } = req.body;
-    const cleanId = student_id ? student_id.trim() : '';
-    const fName = first_name ? first_name.trim() : '';
-    const mName = middle_name ? middle_name.trim() : '';
-    const lName = last_name ? last_name.trim() : '';
-    const pass = temp_password ? temp_password.trim() : 'password123';
+                <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
+                    <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                    <input type="hidden" name="term" value="<%= currentTerm %>">
 
-    try {
-        const hashedPassword = await bcrypt.hash(pass, 10);
+                    <% if (grades.length === 0) { %>
+                        <div class="text-center py-8 text-slate-400 text-xs">
+                            No subjects recorded for this student in this term.
+                        </div>
+                    <% } else { %>
+                        <% grades.forEach((g, index) => { %>
+                            <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-center bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm">
+                                <input type="hidden" name="course_codes" value="<%= g.course_code %>">
 
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
-            VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
-            ON CONFLICT (username) DO NOTHING;
-        `, [cleanId, hashedPassword, fName, mName, lName]);
+                                <div>
+                                    <span class="text-[10px] uppercase text-slate-400 block font-bold">Code (<%= g.academic_year %>)</span>
+                                    <span class="font-mono font-bold text-indigo-900"><%= g.course_code %></span>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <span class="text-[10px] uppercase text-slate-400 block font-bold">Title</span>
+                                    <span class="text-slate-700 text-xs"><%= g.descriptive_title %></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] uppercase text-slate-400 block font-bold">Final Grade</span>
+                                    <select name="final_grades" onchange="autoMatchRemark(this, this.getAttribute('data-index'))" data-index="<%= index %>" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-indigo-700 bg-white text-xs">
+                                        <option value="" <%= !g.final_grade ? 'selected' : '' %>>-- Select --</option>
+                                        <option value="1.00" <%= g.final_grade === '1.00' ? 'selected' : '' %>>1.00</option>
+                                        <option value="1.25" <%= g.final_grade === '1.25' ? 'selected' : '' %>>1.25</option>
+                                        <option value="1.50" <%= g.final_grade === '1.50' ? 'selected' : '' %>>1.50</option>
+                                        <option value="1.75" <%= g.final_grade === '1.75' ? 'selected' : '' %>>1.75</option>
+                                        <option value="2.00" <%= g.final_grade === '2.00' ? 'selected' : '' %>>2.00</option>
+                                        <option value="2.25" <%= g.final_grade === '2.25' ? 'selected' : '' %>>2.25</option>
+                                        <option value="2.50" <%= g.final_grade === '2.50' ? 'selected' : '' %>>2.50</option>
+                                        <option value="2.75" <%= g.final_grade === '2.75' ? 'selected' : '' %>>2.75</option>
+                                        <option value="3.00" <%= g.final_grade === '3.00' ? 'selected' : '' %>>3.00</option>
+                                        <option value="4.00" <%= g.final_grade === '4.00' ? 'selected' : '' %>>4.00</option>
+                                        <option value="5.00" <%= g.final_grade === '5.00' ? 'selected' : '' %>>5.00</option>
+                                        <option value="X" <%= g.final_grade === 'X' ? 'selected' : '' %>>X</option>
+                                        <option value="INC" <%= g.final_grade === 'INC' ? 'selected' : '' %>>INC</option>
+                                        <option value="W" <%= g.final_grade === 'W' ? 'selected' : '' %>>W</option>
+                                        <option value="NG" <%= g.final_grade === 'NG' ? 'selected' : '' %>>NG</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] uppercase text-slate-400 block font-bold">Instructor</span>
+                                    <input type="text" name="instructors" value="<%= g.instructor || '' %>" placeholder="e.g. Prof. Dizon" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white">
+                                </div>
+                                <div class="flex items-end gap-2">
+                                    <div class="flex-grow">
+                                        <span class="text-[10px] uppercase text-slate-400 block font-bold">Remarks</span>
+                                        <select name="remarks_list" id="remark_<%= index %>" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium">
+                                            <option value="" <%= !g.remarks ? 'selected' : '' %>>-- Select --</option>
+                                            <option value="PASSED" <%= g.remarks === 'PASSED' ? 'selected' : '' %>>PASSED</option>
+                                            <option value="FAILED" <%= g.remarks === 'FAILED' ? 'selected' : '' %>>FAILED</option>
+                                            <option value="INCOMPLETE" <%= g.remarks === 'INCOMPLETE' ? 'selected' : '' %>>INCOMPLETE</option>
+                                            <option value="CONDITIONAL" <%= g.remarks === 'CONDITIONAL' ? 'selected' : '' %>>CONDITIONAL</option>
+                                            <option value="DROPPED" <%= g.remarks === 'DROPPED' ? 'selected' : '' %>>DROPPED</option>
+                                            <option value="ABSENT FROM EXAMINATION" <%= g.remarks === 'ABSENT FROM EXAMINATION' ? 'selected' : '' %>>ABSENT FROM EXAMINATION</option>
+                                            <option value="NO GRADE" <%= g.remarks === 'NO GRADE' ? 'selected' : '' %>>NO GRADE</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
 
-        await pool.query(`
-            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
-            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
-            ON CONFLICT (student_id) DO NOTHING;
-        `, [cleanId, fName, mName, lName, year_level || 1]);
+                        <!-- SAVE & CANCEL BUTTONS (This is the global cancel that clears the student and search box) -->
+                        <div class="pt-4 flex justify-end gap-3">
+                            <a href="/registrar" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
+                                Cancel
+                            </a>
+                            <button type="submit" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors">
+                                💾 Save All Changes
+                            </button>
+                        </div>
+                    <% } %>
+                </form>
+            </div>
+        <% } %>
 
-        if (term && course_codes && academic_year) {
-            const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
-            for (let code of codes) {
-                await pool.query(`
-                    INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term, academic_year)
-                    VALUES ($1, $2, '', '', '', $3, $4)
-                    ON CONFLICT (student_id, course_code) 
-                    DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
-                `, [cleanId, code, term, academic_year]);
-            }
-        }
+    </main>
 
-        res.redirect(`/registrar?student_id=${cleanId}&term=${term}&msg=Student registered and officially enrolled in selected subjects.`);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send(`Error adding new student: ${err.message}`);
-    }
-});
-
-app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { username, first_name, middle_name, last_name, temp_password } = req.body;
-    const cleanUser = username ? username.trim() : '';
-    const fName = first_name ? first_name.trim() : '';
-    const mName = middle_name ? middle_name.trim() : '';
-    const lName = last_name ? last_name.trim() : '';
-    const pass = temp_password ? temp_password.trim() : 'conm2026';
-
-    try {
-        const hashedPassword = await bcrypt.hash(pass, 10);
-        await pool.query(`
-            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
-            VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5)
-            ON CONFLICT (username) DO NOTHING;
-        `, [cleanUser, hashedPassword, fName, mName, lName]);
-
-        res.redirect(`/registrar?msg=Faculty account created successfully.`);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send(`Error adding faculty: ${err.message}`);
-    }
-});
-
-app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, new_password } = req.body;
-    try {
-        const hashedPassword = await bcrypt.hash(new_password, 10);
-        await pool.query(`
-            UPDATE users SET password_hash = $1, must_change_password = TRUE 
-            WHERE username = $2 AND role = 'student'
-        `, [hashedPassword, student_id]);
-
-        res.redirect(`/registrar?student_id=${student_id}&msg=Password successfully reset for ${student_id}.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&err=Failed to reset password.`);
-    }
-});
-
-app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, course_code, term } = req.body;
-    try {
-        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
-        const systemSettings = settingsRes.rows[0];
-        const currentAy = systemSettings.current_ay;
-
-        await pool.query(`
-            INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term, academic_year)
-            VALUES ($1, $2, '', '', '', $3, $4)
-            ON CONFLICT (student_id, course_code) 
-            DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
-        `, [student_id, course_code, term, currentAy]);
-
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject successfully enrolled for A.Y. ${currentAy}.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
-    }
-});
-
-app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, term, course_codes, final_grades, instructors, remarks_list } = req.body;
-    
-    try {
-        const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
-        let grades = Array.isArray(final_grades) ? final_grades : [final_grades];
-        const insts = Array.isArray(instructors) ? instructors : [instructors];
-        const remarks = Array.isArray(remarks_list) ? remarks_list : [remarks_list];
-
-        for (let i = 0; i < codes.length; i++) {
-            const code = codes[i];
-            let grade = grades[i] ? grades[i].trim() : '';
-            
-            if (/^\d+$/.test(grade)) {
-                grade = `${grade}.00`;
-            }
-
-            const inst = insts[i] || '';
-            const rem = remarks[i] || '';
-
-            if (code) {
-                await pool.query(`
-                    UPDATE grades 
-                    SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $4 AND course_code = $5
-                `, [grade, inst, rem, student_id, code]);
-            }
-        }
-
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Grades and records updated successfully!`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
-    }
-});
-
-app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, course_code, term } = req.body;
-    try {
-        await pool.query(`
-            DELETE FROM grades 
-            WHERE student_id = $1 AND course_code = $2
-        `, [student_id, course_code]);
-
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject removed from student record.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
-    }
-});
-
-// Faculty Portal Routes
-app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') {
-        return res.redirect('/portal');
-    }
-    
-    const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-
-    try {
-        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
-        const systemSettings = settingsRes.rows[0];
-
-        let student = null;
-        let grades = [];
-
-        if (targetStudentId) {
-            const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
-            student = studentRes.rows[0] || null;
-
-            if (student) {
-                const validTerms = systemSettings.current_semester === 1 ? [1, 3, 5, 7] : [2, 4, 6, 8];
-
-                const gradesRes = await pool.query(`
-                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
-                           c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-                    FROM grades g
-                    JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1 
-                      AND g.academic_year = $2 
-                      AND CAST(g.enrolled_term AS INTEGER) = ANY($3)
-                `, [targetStudentId, systemSettings.current_ay, validTerms]);
-                
-                grades = gradesRes.rows;
-            }
-        }
-
-        res.render('faculty_edit', {
-            currentUser: req.session.user,
-            systemSettings: systemSettings,
-            selectedStudent: student,
-            grades: grades,
-            message: req.query.msg || null,
-            error: req.query.err || null
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send(`Error loading faculty editor: ${err.message}`);
-    }
-});
-
-app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, academic_year, course_codes, final_grades, instructors, remarks_list } = req.body;
-    
-    try {
-        const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
-        let grades = Array.isArray(final_grades) ? final_grades : [final_grades];
-        const insts = Array.isArray(instructors) ? instructors : [instructors];
-        const remarks = Array.isArray(remarks_list) ? remarks_list : [remarks_list];
-
-        for (let i = 0; i < codes.length; i++) {
-            const code = codes[i];
-            let grade = grades[i] ? grades[i].trim() : '';
-            
-            if (/^\d+$/.test(grade)) {
-                grade = `${grade}.00`;
-            }
-
-            const inst = insts[i] || '';
-            const rem = remarks[i] || '';
-
-            if (code) {
-                await pool.query(`
-                    UPDATE grades 
-                    SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $4 AND course_code = $5 AND academic_year = $6
-                `, [grade, inst, rem, student_id, code, academic_year]);
-            }
-        }
-
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&msg=All grade changes saved securely for the current Academic Year.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
-    }
-});
-
-// Portal Routes
-app.get('/portal', isAuthenticated, async (req, res) => {
-    const user = req.session.user;
-    
-    if (user.role === 'admin') return res.redirect('/admin');
-    if (user.role === 'faculty') return res.redirect('/faculty/edit-grades');
-    if (user.role === 'registrar') return res.redirect('/registrar');
-
-    const selectedTerm = req.query.term || '4';
-
-    try {
-        const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [user.username]);
-        const student = studentRes.rows[0];
-
-        const gradesRes = await pool.query(`
-            SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term,
-                   c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-            FROM grades g
-            JOIN courses c ON g.course_code = c.course_code
-            WHERE g.student_id = $1 AND g.enrolled_term = $2
-        `, [user.username, selectedTerm]);
-
-        res.render('portal', {
-            currentUser: user,
-            studentRecord: student,
-            grades: gradesRes.rows,
-            currentTerm: selectedTerm
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server Error');
-    }
-});
-
-app.get('/logout', (req, res) => {
-    req.session.destroy(() => res.redirect('/'));
-});
-
-async function startServer() {
-    try {
-        await seedDatabase();
+    <!-- SCRIPT LOGIC -->
+    <script id="courses-data" type="application/json">
+        <%- JSON.stringify(locals.allCoursesRaw || []) %>
+    </script>
+    <script>
+        const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
         
-        const PORT = process.env.PORT || 10000;
-        app.listen(PORT, () => {
-            console.log(`Server running at http://localhost:${PORT}`);
-        });
-    } catch (err) {
-        console.error("Failed to start server:", err);
-    }
-}
+        function toggleSection(sectionId) {
+            const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection'];
+            sections.forEach(id => {
+                const section = document.getElementById(id);
+                if (id === sectionId) {
+                    section.classList.toggle('hidden');
+                } else {
+                    section.classList.add('hidden');
+                }
+            });
+        }
 
-startServer();
+        function updateSubjectChecklist() {
+            const yearSelect = document.getElementById('reg_year_select');
+            const semSelect = document.getElementById('reg_sem_select');
+            const container = document.getElementById('subjectChecklist');
+            const hiddenTerm = document.getElementById('reg_term_hidden');
+            
+            if (!yearSelect || !semSelect || !yearSelect.value || !semSelect.value) return;
+
+            const year = parseInt(yearSelect.value);
+            const sem = parseInt(semSelect.value);
+            const selectedTerm = (year - 1) * 2 + sem;
+            
+            if (hiddenTerm) hiddenTerm.value = selectedTerm;
+
+            const termNames = {
+                "1": "1st Year - 1st Sem", "2": "1st Year - 2nd Sem", "3": "2nd Year - 1st Sem",
+                "4": "2nd Year - 2nd Sem", "5": "3rd Year - 1st Sem", "6": "3rd Year - 2nd Sem",
+                "7": "4th Year - 1st Sem", "8": "4th Year - 2nd Sem"
+            };
+
+            let html = '<div class="max-h-[350px] overflow-y-auto pr-2 space-y-4">';
+            for (let i = 1; i <= 8; i++) {
+                const termCourses = allCoursesData.filter(c => String(c.term_id) === String(i));
+                if (termCourses.length === 0) continue;
+
+                const isCurrentTermGroup = String(i) === String(selectedTerm);
+                html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'} shadow-sm">`;
+                html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${termNames[i]} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
+                html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">`;
+                
+                termCourses.forEach(c => {
+                    const isAutoChecked = isCurrentTermGroup ? 'checked' : '';
+                    html += `
+                        <label class="flex items-center space-x-2 p-1.5 rounded cursor-pointer hover:bg-slate-100 transition-colors">
+                            <input type="checkbox" name="course_codes" value="${c.course_code}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                            <span class="text-[11px] font-semibold text-slate-700">[${c.course_code}] <span class="font-normal truncate block w-full">${c.descriptive_title}</span></span>
+                        </label>
+                    `;
+                });
+                html += `</div></div>`;
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function autoMatchRemark(selectElement, index) {
+            const grade = selectElement.value;
+            const remarkSelect = document.getElementById('remark_' + index);
+            if (!remarkSelect) return;
+
+            const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
+
+            if (passedGrades.includes(grade)) {
+                remarkSelect.value = 'PASSED';
+            } else if (grade === '4.00') {
+                remarkSelect.value = 'CONDITIONAL';
+            } else if (grade === '5.00') {
+                remarkSelect.value = 'FAILED';
+            } else if (grade === 'X') {
+                remarkSelect.value = 'DROPPED';
+            } else if (grade === 'INC') {
+                remarkSelect.value = 'INCOMPLETE';
+            } else if (grade === 'W') {
+                remarkSelect.value = 'ABSENT FROM EXAMINATION';
+            } else if (grade === 'NG') {
+                remarkSelect.value = 'NO GRADE';
+            } else {
+                remarkSelect.value = '';
+            }
+        }
+
+        document.getElementById('studentSearchInput').addEventListener('click', function() {
+            this.value = '';
+        });
+
+        function generateRandomPassword() {
+            const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const lower = 'abcdefghijklmnopqrstuvwxyz';
+            const num = '0123456789';
+            const special = '!@#$%^&*';
+            const all = upper + lower + num + special;
+            
+            let pass = [
+                upper[Math.floor(Math.random() * upper.length)],
+                lower[Math.floor(Math.random() * lower.length)],
+                num[Math.floor(Math.random() * num.length)],
+                special[Math.floor(Math.random() * special.length)]
+            ];
+            
+            for (let i = 0; i < 4; i++) {
+                pass.push(all[Math.floor(Math.random() * all.length)]);
+            }
+            return pass.sort(() => Math.random() - 0.5).join('');
+        }
+        
+        function confirmPasswordReset(form, studentId) {
+            const newPass = generateRandomPassword();
+            form.querySelector('.reset-pass-field').value = newPass;
+            
+            const msg = `You are about to reset the password for Student ID: ${studentId}.\n\n` +
+                        `The NEW temporary password is:\n\n${newPass}\n\n` + 
+                        `Please COPY or WRITE DOWN this password before clicking OK, as it will be securely hashed in the database.`;
+            return confirm(msg);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const facPass = document.getElementById('regFacultyTempPassword');
+            const stuPass = document.getElementById('regStudentTempPassword');
+            if (facPass && !facPass.value) facPass.value = generateRandomPassword();
+            if (stuPass && !stuPass.disabled && !stuPass.value) stuPass.value = generateRandomPassword();
+            updateSubjectChecklist();
+        });
+    </script>
+</body>
+</html>
