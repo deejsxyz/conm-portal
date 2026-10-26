@@ -101,7 +101,7 @@ async function seedDatabase() {
             ['NCM 101', 'Health Assessment', 3, 2, 5, 2],
             ['NCM 102', 'Health Education', 3, 0, 3, 2],
             ['NCM 103', 'Fundamentals of Nursing Practice', 3, 2, 5, 2],
-            ['MC3', 'Microbiology and Parasitology', 3, 1, 4, 2],
+            ['MC 3', 'Microbiology and Parasitology', 3, 1, 4, 2],
             ['PE 2', 'Self Defense', 2, 0, 2, 2],
             ['NCM 104', 'Community Health Nursing 1', 3, 1, 4, 3],
             ['NCM 105', 'Nutrition and Diet Therapy', 3, 0, 3, 3],
