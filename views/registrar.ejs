@@ -259,39 +259,64 @@
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">Enroll Extra / Back Subject</h3>
                 </div>
-                <form action="/registrar/add-single-course" method="POST" class="flex gap-3 items-end text-sm">
+                <form action="/registrar/add-single-course" method="POST" class="space-y-4 text-sm">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                    <input type="hidden" name="term" value="<%= currentTerm %>">
+                    <input type="hidden" name="term" id="extra_term_hidden" value="<%= currentTerm %>">
                     
-                    <div>
-                        <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Academic Year</label>
-                        <select name="academic_year" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
-                            <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                            <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                            <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                            <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                        </select>
-                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                        
+                        <!-- Cleaned up Select Subject Dropdown -->
+                        <div class="sm:col-span-5">
+                            <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Select Subject from Catalog</label>
+                            <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                                <option value="">-- Select Subject --</option>
+                                <% if (availableCourses.length > 0) { %>
+                                    <% availableCourses.forEach(c => { %>
+                                        <option value="<%= c.course_code %>">[<%= c.course_code %>] <%= c.descriptive_title %></option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+                        </div>
+                        
+                        <div class="sm:col-span-3">
+                            <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Academic Year</label>
+                            <select name="academic_year" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                                <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                                <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                                <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                                <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                            </select>
+                        </div>
 
-                    <div class="flex-grow">
-                        <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Select Subject from Curriculum Catalog</label>
-                        <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
-                            <% if (availableCourses.length === 0) { %>
-                                <option value="">No courses available</option>
-                            <% } else { %>
-                                <% 
-                                   const tNames = {
-                                      1: '1Y-1S', 2: '1Y-2S', 3: '2Y-1S', 4: '2Y-2S',
-                                      5: '3Y-1S', 6: '3Y-2S', 7: '4Y-1S', 8: '4Y-2S'
-                                   };
-                                %>
-                                <% availableCourses.forEach(c => { %>
-                                    <option value="<%= c.course_code %>">[<%= tNames[c.term_id] %>] [<%= c.course_code %>] <%= c.descriptive_title %></option>
-                                <% }) %>
-                            <% } %>
-                        </select>
+                        <% 
+                            let extYear = '2'; 
+                            let extSem = '1';
+                            if (currentTerm) {
+                                extYear = Math.ceil(parseInt(currentTerm) / 2).toString();
+                                extSem = (parseInt(currentTerm) % 2 === 0 ? 2 : 1).toString();
+                            }
+                        %>
+
+                        <div class="sm:col-span-2">
+                            <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Target Year</label>
+                            <select id="extra_year_select" onchange="updateExtraTerm()" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                                <option value="1" <%= extYear === '1' ? 'selected' : '' %>>1st Year</option>
+                                <option value="2" <%= extYear === '2' ? 'selected' : '' %>>2nd Year</option>
+                                <option value="3" <%= extYear === '3' ? 'selected' : '' %>>3rd Year</option>
+                                <option value="4" <%= extYear === '4' ? 'selected' : '' %>>4th Year</option>
+                            </select>
+                        </div>
+
+                        <div class="sm:col-span-2">
+                            <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Target Sem</label>
+                            <select id="extra_sem_select" onchange="updateExtraTerm()" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                                <option value="1" <%= extSem === '1' ? 'selected' : '' %>>1st Sem</option>
+                                <option value="2" <%= extSem === '2' ? 'selected' : '' %>>2nd Sem</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="flex gap-2">
+                    
+                    <div class="flex justify-end gap-2 mt-2">
                         <a href="/registrar" class="flex items-center justify-center px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
                         <button type="submit" class="py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
                             + Enroll Single Subject
@@ -442,6 +467,16 @@
             const s = parseInt(document.getElementById('search_sem_select').value);
             document.getElementById('search_term_hidden').value = (y - 1) * 2 + s;
             document.getElementById('searchToolbarForm').submit();
+        }
+
+        // Dynamically compute the Target Term for the Single Subject Enrollment form
+        function updateExtraTerm() {
+            const y = parseInt(document.getElementById('extra_year_select').value);
+            const s = parseInt(document.getElementById('extra_sem_select').value);
+            const hidden = document.getElementById('extra_term_hidden');
+            if (hidden) {
+                hidden.value = (y - 1) * 2 + s;
+            }
         }
 
         function updateSubjectChecklist() {
