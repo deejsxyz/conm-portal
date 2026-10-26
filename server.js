@@ -585,19 +585,35 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
     }
 });
 
+// Automatically use active system settings for single-subject enrollment
 app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, course_code, term, academic_year } = req.body;
+    const { student_id, course_code } = req.body;
     try {
+        // Fetch student's year level and global settings
+        const studentRes = await pool.query('SELECT year_level FROM students WHERE student_id = $1', [student_id]);
+        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
+        
+        if (studentRes.rows.length === 0) {
+            return res.redirect(`/registrar?student_id=${student_id}&err=Student not found.`);
+        }
+
+        const yearLevel = studentRes.rows[0].year_level;
+        const systemSettings = settingsRes.rows[0];
+        
+        // Automatically calculate correct term ID from student's year level and active semester
+        const computedTerm = (parseInt(yearLevel) - 1) * 2 + parseInt(systemSettings.current_semester);
+        const currentAy = systemSettings.current_ay;
+
         await pool.query(`
             INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term, academic_year)
             VALUES ($1, $2, '', '', '', $3, $4)
             ON CONFLICT (student_id, course_code) 
             DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
-        `, [student_id, course_code, term, academic_year]);
+        `, [student_id, course_code, computedTerm.toString(), currentAy]);
 
-        res.redirect(`/registrar?student_id=${student_id}&msg=Subject successfully enrolled.`);
+        res.redirect(`/registrar?student_id=${student_id}&msg=Subject successfully enrolled for A.Y. ${currentAy}.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
