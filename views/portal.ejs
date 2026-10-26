@@ -2,33 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CONM Student Portal - Certificate of Grades</title>
+    <title>CONM Student Portal - Grades Viewer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Styles applied only when printing */
-        @media print {
-            body { background-color: white !important; }
-            .no-print { display: none !important; }
-            .print-border { border: 1px solid #000 !important; }
-            .print-text-black { color: #000 !important; }
-            
-            /* Force the browser to print the green text colors and background graphics */
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-        }
-        
-        /* Official dark green color matching the reference */
-        .text-official-green {
-            color: #1b5e20 !important; /* Forest Green */
-        }
-    </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
     
-    <!-- HEADER (Hidden during Print) -->
-    <header class="bg-pink-700 text-white shadow-md border-b-4 border-emerald-500 no-print">
+    <!-- HEADER -->
+    <header class="bg-pink-700 text-white shadow-md border-b-4 border-emerald-500">
         <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
             <div>
                 <h2 class="text-base font-bold">City University of Pasay - Student Portal</h2>
@@ -46,8 +26,8 @@
 
     <main class="flex-grow max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
 
-        <!-- TERM SELECTOR & PRINT BUTTON (Hidden during Print) -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 no-print">
+        <!-- TERM SELECTOR -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex justify-center items-center">
             <form method="GET" action="/portal" class="flex items-center gap-3">
                 <label class="text-xs font-bold uppercase text-slate-500">View Grades for Term:</label>
                 <select name="term" onchange="this.form.submit()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
@@ -63,61 +43,54 @@
             </form>
         </div>
 
-        <!-- COG OFFICIAL DOCUMENT AREA -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 print:shadow-none print:border-none print:p-0">
+        <!-- GRADES VIEW AREA -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
             
-            <!-- OFFICIAL LETTERHEAD -->
-            <div class="flex justify-between items-center mb-6 pb-4">
-                
-            <!-- Student Information Block -->
-            <div class="grid grid-cols-2 gap-4 mb-6 text-sm print-text-black">
-                <div>
-                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Student Name:</span> <br> 
-                       <span class="font-bold text-base uppercase"><%= studentRecord.last_name %>, <%= studentRecord.first_name %> <%= studentRecord.middle_name %></span>
-                    </p>
-                </div>
-                <div class="text-right">
-                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Student Number:</span> <br> 
-                       <span class="font-mono font-bold text-base"><%= studentRecord.student_id %></span>
-                    </p>
-                </div>
-                <div>
-                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Program:</span> <br> 
-                       <span class="font-medium"><%= studentRecord.program %></span>
-                    </p>
-                </div>
-                <div class="text-right">
-                    <p><span class="font-bold uppercase text-[10px] text-slate-500 print:text-black">Year Level:</span> <br> 
-                       <span class="font-medium">Level <%= studentRecord.year_level %></span>
-                    </p>
-                </div>
+            <!-- Student Information Block (Centered) -->
+            <div class="flex flex-col items-center mb-8 text-center text-sm">
+                <p class="mb-2">
+                   <span class="font-bold uppercase text-[10px] text-slate-500">Student Name:</span> <br> 
+                   <span class="font-bold text-base uppercase"><%= studentRecord.last_name %>, <%= studentRecord.first_name %> <%= studentRecord.middle_name %></span>
+                </p>
+                <p class="mb-2">
+                   <span class="font-bold uppercase text-[10px] text-slate-500">Student Number:</span> <br> 
+                   <span class="font-mono font-bold text-base"><%= studentRecord.student_id %></span>
+                </p>
+                <p class="mb-2">
+                   <span class="font-bold uppercase text-[10px] text-slate-500">Program:</span> <br> 
+                   <span class="font-medium"><%= studentRecord.program %></span>
+                </p>
+                <p>
+                   <span class="font-bold uppercase text-[10px] text-slate-500">Year Level:</span> <br> 
+                   <span class="font-medium">Level <%= studentRecord.year_level %></span>
+                </p>
             </div>
 
             <!-- Grades Table -->
             <% if (grades.length === 0) { %>
-                <div class="text-center py-12 text-slate-400 border-t border-slate-200 print:border-black">
+                <div class="text-center py-12 text-slate-400 border-t border-slate-200">
                     <p class="text-sm">No subjects enrolled or grades recorded for this term.</p>
                 </div>
             <% } else { %>
-                <div class="overflow-hidden border border-slate-400 print:border-black rounded-lg print:rounded-none">
-                    <table class="w-full text-left border-collapse text-sm print-text-black">
+                <div class="overflow-hidden border border-slate-400 rounded-lg">
+                    <table class="w-full text-left border-collapse text-sm">
                         <thead>
-                            <tr class="bg-slate-100 print:bg-transparent border-b border-slate-400 print:border-black">
-                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black">Course Code</th>
-                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black">Descriptive Title</th>
-                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black text-center">Units</th>
-                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 print:border-black text-center">Final Grade</th>
+                            <tr class="bg-slate-100 border-b border-slate-400">
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400">Course Code</th>
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400">Descriptive Title</th>
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 text-center">Units</th>
+                                <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider border-r border-slate-400 text-center">Final Grade</th>
                                 <th class="p-2 sm:p-3 font-bold uppercase text-[10px] tracking-wider text-center">Remarks</th>
                             </tr>
                         </thead>
                         <tbody>
                             <% grades.forEach(g => { %>
-                                <tr class="border-b border-slate-300 print:border-black last:border-0">
-                                    <td class="p-2 sm:p-3 font-mono font-bold border-r border-slate-400 print:border-black whitespace-nowrap"><%= g.course_code %></td>
-                                    <td class="p-2 sm:p-3 font-medium border-r border-slate-400 print:border-black"><%= g.descriptive_title %></td>
-                                    <td class="p-2 sm:p-3 text-center border-r border-slate-400 print:border-black"><%= g.total_units %></td>
-                                    <td class="p-2 sm:p-3 text-center font-bold border-r border-slate-400 print:border-black"><%= g.final_grade || '---' %></td>
-                                    <td class="p-2 sm:p-3 text-center text-xs font-bold uppercase <%= g.remarks === 'PASSED' ? 'text-emerald-600 print:text-black' : (g.remarks === 'FAILED' ? 'text-red-600 print:text-black' : '') %>">
+                                <tr class="border-b border-slate-300 last:border-0">
+                                    <td class="p-2 sm:p-3 font-mono font-bold border-r border-slate-400 whitespace-nowrap"><%= g.course_code %></td>
+                                    <td class="p-2 sm:p-3 font-medium border-r border-slate-400"><%= g.descriptive_title %></td>
+                                    <td class="p-2 sm:p-3 text-center border-r border-slate-400"><%= g.total_units %></td>
+                                    <td class="p-2 sm:p-3 text-center font-bold border-r border-slate-400"><%= g.final_grade || '---' %></td>
+                                    <td class="p-2 sm:p-3 text-center text-xs font-bold uppercase <%= g.remarks === 'PASSED' ? 'text-emerald-600' : (g.remarks === 'FAILED' ? 'text-red-600' : '') %>">
                                         <%= g.remarks || '---' %>
                                     </td>
                                 </tr>
@@ -126,18 +99,6 @@
                     </table>
                 </div>
             <% } %>
-
-            <!-- AUTHENTICATION NOTE (Automatically included in Print) -->
-            <div class="mt-12 p-4 sm:p-5 border border-slate-300 print:border-solid print:border-black bg-slate-50 print:bg-transparent rounded-lg print:rounded-none text-center">
-                <p class="text-[11px] sm:text-xs font-medium leading-relaxed text-slate-700 print-text-black">
-                    <strong class="uppercase tracking-wider font-bold">Note:</strong> This document does not require a signature. To verify the authenticity of this Certification, you may contact the College of Nursing and School of Midwifery (CONM) directly at the 4th Floor Tramo Wing, Pasay City General Hospital, P. Burgos St, Pasay City, Metro Manila.
-                </p>
-            </div>
-            
-            <!-- Timestamp (Visible only on the printed page) -->
-            <div class="mt-6 text-right text-[10px] text-slate-400 print:text-black print:block hidden font-mono">
-                System Generated: <script>document.write(new Date().toLocaleString());</script>
-            </div>
 
         </div>
     </main>
