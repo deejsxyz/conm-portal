@@ -358,7 +358,7 @@ app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Delete User Route (Fixed Error)
+// Admin Delete User Route
 app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -373,6 +373,71 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.redirect('/admin?err=Failed to delete user account.');
+    }
+});
+
+// Admin Reset User Password Route
+app.post('/admin/reset-user-password', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { username, role } = req.body;
+    try {
+        const defaultPass = role === 'student' ? 'password123' : (role === 'registrar' ? 'registrar2026' : 'conm2026');
+        const hashedPassword = await bcrypt.hash(defaultPass, 10);
+        
+        await pool.query('UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE username = $2', [hashedPassword, username]);
+        
+        res.redirect(`/admin?msg=Password reset successfully for ${username}.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect('/admin?err=Failed to reset password.');
+    }
+});
+
+// Admin Edit Faculty Route
+app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { original_username, username, first_name, middle_name, last_name } = req.body;
+    const cleanUser = username.trim();
+    
+    try {
+        await pool.query(`
+            UPDATE users 
+            SET username = $1, first_name = $2, middle_name = $3, last_name = $4
+            WHERE username = $5
+        `, [cleanUser, first_name.trim(), middle_name.trim(), last_name.trim(), original_username]);
+
+        res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}&msg=Staff profile updated successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/admin?staff_user=${encodeURIComponent(original_username)}&err=Failed to update staff profile.`);
+    }
+});
+
+// Admin Edit Student Route
+app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, first_name, middle_name, last_name, year_level } = req.body;
+    
+    try {
+        await pool.query(`
+            UPDATE students 
+            SET first_name = $1, middle_name = $2, last_name = $3, year_level = $4
+            WHERE student_id = $5
+        `, [first_name.trim(), middle_name.trim(), last_name.trim(), year_level, student_id]);
+
+        await pool.query(`
+            UPDATE users 
+            SET first_name = $1, middle_name = $2, last_name = $3
+            WHERE username = $4
+        `, [first_name.trim(), middle_name.trim(), last_name.trim(), student_id]);
+
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&msg=Student profile updated successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&err=Failed to update student profile.`);
     }
 });
 
