@@ -591,17 +591,9 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
 
     const { student_id, course_code, term } = req.body;
     try {
-        const studentRes = await pool.query('SELECT year_level FROM students WHERE student_id = $1', [student_id]);
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
-        
-        if (studentRes.rows.length === 0) {
-            return res.redirect(`/registrar?student_id=${student_id}&err=Student not found.`);
-        }
-
-        const yearLevel = studentRes.rows[0].year_level;
         const systemSettings = settingsRes.rows[0];
         
-        const computedTerm = term || ((parseInt(yearLevel) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
         const currentAy = systemSettings.current_ay;
 
         await pool.query(`
@@ -609,9 +601,9 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             VALUES ($1, $2, '', '', '', $3, $4)
             ON CONFLICT (student_id, course_code) 
             DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
-        `, [student_id, course_code, computedTerm, currentAy]);
+        `, [student_id, course_code, term, currentAy]);
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${computedTerm}&msg=Subject successfully enrolled for A.Y. ${currentAy}.`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject successfully enrolled for A.Y. ${currentAy}.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
@@ -669,7 +661,7 @@ app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
         res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject removed from student record.`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
