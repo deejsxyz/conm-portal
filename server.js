@@ -669,7 +669,7 @@ app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
         res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject removed from student record.`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
