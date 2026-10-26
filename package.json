@@ -8,10 +8,12 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "csv-parser": "^3.2.1",
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
+    "multer": "^2.5.0",
     "pg": "^8.11.3"
   }
 }

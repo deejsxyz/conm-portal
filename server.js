@@ -803,3 +803,75 @@ async function startServer() {
 }
 
 startServer();
+const multer = require('multer');
+const csv = require('csv-parser');
+const fs = require('fs');
+const bcrypt = require('bcrypt'); // Ensure bcrypt is required
+const upload = multer({ dest: 'uploads/' });
+
+app.post('/registrar/batch-upload', upload.single('file'), (req, res) => {
+    const students = [];
+    
+    fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (row) => {
+            students.push(row);
+        })
+        .on('end', async () => {
+            try {
+                for (const student of students) {
+                    // 1. Generate 8-character password (Upper, Lower, Number, Special)
+                    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                    const lower = 'abcdefghijklmnopqrstuvwxyz';
+                    const num = '0123456789';
+                    const special = '!@#$%^&*';
+                    const all = upper + lower + num + special;
+                    
+                    let passArray = [
+                        upper[Math.floor(Math.random() * upper.length)],
+                        lower[Math.floor(Math.random() * lower.length)],
+                        num[Math.floor(Math.random() * num.length)],
+                        special[Math.floor(Math.random() * special.length)]
+                    ];
+                    
+                    for (let i = 0; i < 4; i++) {
+                        passArray.push(all[Math.floor(Math.random() * all.length)]);
+                    }
+                    
+                    const tempPassword = passArray.sort(() => Math.random() - 0.5).join('');
+                    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+                    
+                    // 2. Insert Student Account
+                    await db.query(
+                        `INSERT INTO users (username, password, role, first_name, middle_name, last_name, year_level, must_change_password) 
+                         VALUES ($1, $2, 'student', $3, $4, $5, $6, true) 
+                         ON CONFLICT (username) DO NOTHING`,
+                        [student.student_id, hashedPassword, student.first_name, student.middle_name, student.last_name, student.year_level]
+                    );
+
+                    // 3. Enroll Checked Subjects (Splitting by Google Forms comma format)
+                    if (student.term && student.subjects) {
+                        const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
+                        
+                        for (const code of courseCodes) {
+                            await db.query(
+                                `INSERT INTO grades (student_id, course_code, enrolled_term) 
+                                 VALUES ($1, $2, $3)
+                                 ON CONFLICT DO NOTHING`,
+                                [student.student_id, code, student.term]
+                            );
+                        }
+                    }
+                }
+                
+                fs.unlinkSync(req.file.path);
+                req.flash('success', `${students.length} students successfully registered and enrolled via Google Forms CSV!`);
+                res.redirect('/registrar');
+                
+            } catch (err) {
+                console.error("Batch Upload Error:", err);
+                req.flash('error', 'Error processing batch upload. Ensure your CSV format is correct.');
+                res.redirect('/registrar');
+            }
+        });
+});

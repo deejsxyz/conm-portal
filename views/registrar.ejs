@@ -42,21 +42,50 @@
         <!-- TOGGLE BUTTONS FOR ACCOUNT REGISTRATION -->
         <div class="flex flex-wrap gap-4">
             <button type="button" onclick="toggleSection('studentRegSection')" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                👤 Register & Enroll New Student
+                👤 Register Single Student
+            </button>
+            <button type="button" onclick="toggleSection('batchUploadSection')" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                📁 Batch Upload (Google Form CSV)
             </button>
             <button type="button" onclick="toggleSection('facultyRegSection')" class="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
-                👨‍🏫 Register New Faculty Account
+                👨‍🏫 Register New Faculty
             </button>
         </div>
 
         <!-- ACCOUNT REGISTRATION FORMS (HIDDEN BY DEFAULT) -->
         <div class="space-y-4">
             
+            <!-- BATCH UPLOAD CSV FORM -->
+            <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-2">Batch Upload & Enroll Students</h3>
+                <p class="text-xs text-slate-500 mb-4">Export your Google Form responses as a <strong>.csv</strong> file. The system will auto-generate secure passwords and enroll all selected subjects.</p>
+                
+                <div class="mb-5 p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
+                    <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
+                    <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, term, subjects</code>
+                    
+                    <div class="mt-3 text-[11px] text-slate-500">
+                        <strong>Formatting Rules:</strong>
+                        <ul class="list-disc pl-4 mt-1 space-y-1">
+                            <li>Ensure the Google Form questions match the exact header names above (rename columns in Google Sheets before exporting if necessary).</li>
+                            <li><strong>subjects:</strong> Google Forms automatically separates checkbox answers with a comma. The system will parse these commas automatically.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
+                    <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
+                    
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-bold shadow-md transition-colors">
+                        Upload & Process CSV
+                    </button>
+                </form>
+            </div>
+
             <!-- Dynamic Register & Enroll Student Form -->
             <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
+                <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Single Student</h3>
                 <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
-                    <!-- Row 1: Personal Info -->
                     <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
@@ -80,7 +109,6 @@
                         </div>
                     </div>
 
-                    <!-- Row 2: Level, Term, and Subject Selection -->
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year Level</label>
@@ -107,7 +135,6 @@
                         </div>
                     </div>
                     
-                    <!-- Dynamic Subjects Checklist Container -->
                     <div class="pt-2">
                         <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects to Enroll (Available for Irregular / Back Subjects)</label>
                         <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200">
@@ -116,7 +143,7 @@
                     </div>
 
                     <div class="flex gap-3">
-                        <a href="/registrar" class="w-1/4 flex items-center justify-center py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors <%= selectedStudent ? 'pointer-events-none opacity-50' : '' %>">Cancel</a>
+                        <button type="button" onclick="toggleSection('studentRegSection')" class="w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors <%= selectedStudent ? 'pointer-events-none opacity-50' : '' %>">Cancel</button>
                         <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors">
                             + Register Account & Enroll Student in Checked Subjects
                         </button>
@@ -357,11 +384,16 @@
         
         // Form Visibility Toggle Function
         function toggleSection(sectionId) {
-            const section = document.getElementById(sectionId);
-            const otherSection = sectionId === 'studentRegSection' ? document.getElementById('facultyRegSection') : document.getElementById('studentRegSection');
+            const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection'];
             
-            section.classList.toggle('hidden');
-            otherSection.classList.add('hidden'); // Automatically hide the other section
+            sections.forEach(id => {
+                const section = document.getElementById(id);
+                if (id === sectionId) {
+                    section.classList.toggle('hidden');
+                } else {
+                    section.classList.add('hidden');
+                }
+            });
         }
         
         function updateSubjectChecklist() {
@@ -438,7 +470,6 @@
             this.value = '';
         });
 
-        // 8 Character Password Generator (Upper, Lower, Number, Special)
         function generateRandomPassword() {
             const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
             const lower = 'abcdefghijklmnopqrstuvwxyz';
@@ -460,7 +491,6 @@
             return pass.sort(() => Math.random() - 0.5).join('');
         }
         
-        // Confirmation alert for manual password resets
         function confirmPasswordReset(form, studentId) {
             const newPass = generateRandomPassword();
             form.querySelector('.reset-pass-field').value = newPass;
