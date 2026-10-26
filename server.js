@@ -16,7 +16,6 @@ const pool = new Pool({
   }
 });
 
-// Configure Multer for temporary CSV uploads
 const upload = multer({ dest: 'uploads/' });
 
 app.set('view engine', 'ejs');
@@ -28,13 +27,11 @@ app.use(session({
     saveUninitialized: false
 }));
 
-// Helper to build a clean Full Name string
 function formatFullName(first, middle, last, fallback) {
     const parts = [first, middle, last].map(p => (p || '').trim()).filter(Boolean);
     return parts.length > 0 ? parts.join(' ') : fallback;
 }
 
-// Database seed and initialization function
 async function seedDatabase() {
     try {
         await pool.query(`
@@ -370,7 +367,6 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             student = studentRes.rows[0] || null;
 
             if (student) {
-                // AUTO-DETECT TERM IF NONE SELECTED
                 if (!selectedTerm) {
                     const termRes = await pool.query(`
                         SELECT enrolled_term 
@@ -464,8 +460,9 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                         [student.student_id, student.first_name, student.middle_name, student.last_name, student.year_level || 1]
                     );
 
-                    // Enroll Checked Subjects
-                    if (student.term && student.subjects) {
+                    // Dynamically calculate Term ID from Year Level and Semester
+                    if (student.year_level && student.semester && student.subjects) {
+                        const termId = (parseInt(student.year_level) - 1) * 2 + parseInt(student.semester);
                         const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
                         
                         for (const code of courseCodes) {
@@ -474,7 +471,7 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                                  VALUES ($1, $2, '', '', '', $3)
                                  ON CONFLICT (student_id, course_code) 
                                  DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';`,
-                                [student.student_id, code, student.term]
+                                [student.student_id, code, termId.toString()]
                             );
                         }
                     }
@@ -674,7 +671,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             student = studentRes.rows[0] || null;
 
             if (student) {
-                // AUTO-DETECT TERM IF NONE SELECTED
                 if (!selectedTerm) {
                     const termRes = await pool.query(`
                         SELECT enrolled_term 
