@@ -26,20 +26,36 @@
 
     <main class="flex-grow max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-6">
 
-        <!-- TERM SELECTOR -->
+        <!-- YEAR AND SEMESTER SELECTOR -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex justify-center items-center">
-            <form method="GET" action="/portal" class="flex items-center gap-3">
-                <label class="text-xs font-bold uppercase text-slate-500">View Grades for Term:</label>
-                <select name="term" onchange="this.form.submit()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
-                    <option value="1" <%= currentTerm === '1' ? 'selected' : '' %>>1st Year - 1st Sem</option>
-                    <option value="2" <%= currentTerm === '2' ? 'selected' : '' %>>1st Year - 2nd Sem</option>
-                    <option value="3" <%= currentTerm === '3' ? 'selected' : '' %>>2nd Year - 1st Sem</option>
-                    <option value="4" <%= currentTerm === '4' ? 'selected' : '' %>>2nd Year - 2nd Sem</option>
-                    <option value="5" <%= currentTerm === '5' ? 'selected' : '' %>>3rd Year - 1st Sem</option>
-                    <option value="6" <%= currentTerm === '6' ? 'selected' : '' %>>3rd Year - 2nd Sem</option>
-                    <option value="7" <%= currentTerm === '7' ? 'selected' : '' %>>4th Year - 1st Sem</option>
-                    <option value="8" <%= currentTerm === '8' ? 'selected' : '' %>>4th Year - 2nd Sem</option>
-                </select>
+            <form id="semesterFilterForm" method="GET" action="/portal" class="flex flex-col sm:flex-row items-center gap-3">
+                <label class="text-xs font-bold uppercase text-slate-500">View Grades For:</label>
+                
+                <% 
+                    let viewYear = '2';
+                    let viewSem = '1';
+                    if (currentTerm) {
+                        viewYear = Math.ceil(parseInt(currentTerm) / 2).toString();
+                        viewSem = (parseInt(currentTerm) % 2 === 0 ? 2 : 1).toString();
+                    }
+                %>
+                
+                <div class="flex gap-2">
+                    <select id="portal_year_select" onchange="submitPortalFilter()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
+                        <option value="1" <%= viewYear === '1' ? 'selected' : '' %>>1st Year</option>
+                        <option value="2" <%= viewYear === '2' ? 'selected' : '' %>>2nd Year</option>
+                        <option value="3" <%= viewYear === '3' ? 'selected' : '' %>>3rd Year</option>
+                        <option value="4" <%= viewYear === '4' ? 'selected' : '' %>>4th Year</option>
+                    </select>
+
+                    <select id="portal_sem_select" onchange="submitPortalFilter()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
+                        <option value="1" <%= viewSem === '1' ? 'selected' : '' %>>1st Semester</option>
+                        <option value="2" <%= viewSem === '2' ? 'selected' : '' %>>2nd Semester</option>
+                    </select>
+                </div>
+                
+                <!-- Hidden input passes the calculated term_id (1-8) to the backend -->
+                <input type="hidden" name="term" id="portal_term_hidden" value="<%= currentTerm %>">
             </form>
         </div>
 
@@ -55,7 +71,6 @@
                 else if (String(studentRecord.year_level) === '4') yearString = "Fourth Year";
             %>
             <div class="grid grid-cols-2 gap-4 mb-8 text-sm">
-                <!-- Left Side: Name and Number -->
                 <div class="text-left space-y-4">
                     <p>
                        <span class="font-bold uppercase text-[10px] text-slate-500">Student Name:</span> <br> 
@@ -67,7 +82,6 @@
                     </p>
                 </div>
                 
-                <!-- Right Side: Program and Year Level -->
                 <div class="text-right space-y-4">
                     <p>
                        <span class="font-bold uppercase text-[10px] text-slate-500">Program:</span> <br> 
@@ -83,7 +97,7 @@
             <!-- Grades Table -->
             <% if (grades.length === 0) { %>
                 <div class="text-center py-12 text-slate-400 border-t border-slate-200">
-                    <p class="text-sm">No subjects enrolled or grades recorded for this term.</p>
+                    <p class="text-sm">No subjects enrolled or grades recorded for this semester.</p>
                 </div>
             <% } else { %>
                 <div class="overflow-hidden border border-slate-400 rounded-lg">
@@ -116,5 +130,14 @@
 
         </div>
     </main>
+
+    <script>
+        function submitPortalFilter() {
+            const y = parseInt(document.getElementById('portal_year_select').value);
+            const s = parseInt(document.getElementById('portal_sem_select').value);
+            document.getElementById('portal_term_hidden').value = (y - 1) * 2 + s;
+            document.getElementById('semesterFilterForm').submit();
+        }
+    </script>
 </body>
 </html>
