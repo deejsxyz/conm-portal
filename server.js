@@ -133,7 +133,6 @@ async function seedDatabase() {
             ['NCM 122', 'Intensive Nursing Practicum (Hospital and Community Settings)', 0, 8, 8, 8]
         ];
 
-        // Clear out any non-CONM courses that were previously seeded
         const validCodes = conmCourses.map(c => c[0]);
         await pool.query(`DELETE FROM courses WHERE course_code <> ALL($1::text[])`, [validCodes]);
 
@@ -324,6 +323,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             facultyList: facultyList,
             selectedFaculty: selectedFaculty,
             facultyAssignedCourses: facultyAssignedCourses,
+            hasBatchCredentials: !!req.session.lastBatchCredentials,
             message: req.query.msg || null,
             error: req.query.err || null
         });
@@ -349,6 +349,7 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
     const students = [];
+    const generatedCredentials = [];
     
     fs.createReadStream(req.file.path)
         .pipe(csv())
@@ -406,9 +407,16 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                             );
                         }
                     }
+
+                    generatedCredentials.push({
+                        student_id: student.student_id,
+                        name: `${student.last_name}, ${student.first_name} ${student.middle_name || ''}`.trim(),
+                        temp_password: tempPassword
+                    });
                 }
                 
                 fs.unlinkSync(req.file.path);
+                req.session.lastBatchCredentials = generatedCredentials;
                 res.redirect(`/registrar?msg=${encodeURIComponent(students.length + ' students successfully registered and enrolled via Google Forms CSV!')}`);
                 
             } catch (err) {
@@ -417,6 +425,23 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                 res.redirect('/registrar?err=Error processing batch upload. Ensure your CSV format is correct.');
             }
         });
+});
+
+app.get('/registrar/export-batch-credentials', isAuthenticated, (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+    
+    const credentials = req.session.lastBatchCredentials;
+    if (!credentials || credentials.length === 0) {
+        return res.status(400).send('No recent batch upload credentials found in session.');
+    }
+
+    let csvHeader = 'Student ID,Student Name,Temporary Password\n';
+    let csvRows = credentials.map(c => `"${c.student_id}","${c.name}","${c.temp_password}"`).join('\n');
+    let csvContent = csvHeader + csvRows;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="batch_temporary_passwords.csv"');
+    res.status(200).send(csvContent);
 });
 
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {

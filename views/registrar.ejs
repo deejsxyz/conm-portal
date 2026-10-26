@@ -92,11 +92,11 @@
         <div class="space-y-4">
             
             <!-- BATCH UPLOAD CSV FORM -->
-            <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-2">Batch Upload & Enroll Students</h3>
-                <p class="text-xs text-slate-500 mb-4">Export your Google Form responses as a <strong>.csv</strong> file. The system will auto-generate secure passwords and enroll all selected subjects based on the student's Year, Semester, and Academic Year.</p>
+            <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6 space-y-4">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Batch Upload & Enroll Students</h3>
+                <p class="text-xs text-slate-500 mb-2">Export your Google Form responses as a <strong>.csv</strong> file. The system will auto-generate secure passwords and enroll all selected subjects based on the student's Year, Semester, and Academic Year.</p>
                 
-                <div class="mb-5 p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
                     <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
                     <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, semester, academic_year, subjects</code>
                 </div>
@@ -108,6 +108,15 @@
                         Upload & Process CSV
                     </button>
                 </form>
+
+                <% if (locals.hasBatchCredentials) { %>
+                    <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <span class="text-xs font-bold text-emerald-900">✅ Recent batch passwords are generated and ready to print!</span>
+                        <a href="/registrar/export-batch-credentials" class="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap">
+                            📥 Download Passwords CSV
+                        </a>
+                    </div>
+                <% } %>
             </div>
 
             <!-- Single Student Form -->
