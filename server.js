@@ -34,7 +34,6 @@ function formatFullName(first, middle, last, fallback) {
 
 async function seedDatabase() {
     try {
-        // Core Tables
         await pool.query(`
             CREATE TABLE IF NOT EXISTS courses (
                 course_code VARCHAR(50) PRIMARY KEY,
@@ -58,7 +57,6 @@ async function seedDatabase() {
             );
         `);
 
-        // Apply Schema Updates (Adding academic_year)
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS course_code VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS final_grade VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS instructor VARCHAR(100);`);
@@ -67,7 +65,6 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS enrolled_term VARCHAR(10);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-2027';`);
 
-        // Global System Settings Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS settings (
                 id INT PRIMARY KEY,
@@ -106,7 +103,6 @@ async function seedDatabase() {
             DO UPDATE SET password_hash = $1, role = 'registrar', must_change_password = FALSE;
         `, [registrarPassword]);
 
-        // Seed Courses...
         const allCourses = [
             ['GEC 101', 'Understanding the Self', 3, 0, 3, 1],
             ['GEC 104', 'Mathematics in the Modern World', 3, 0, 3, 1],
@@ -369,10 +365,8 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-    let selectedTerm = req.query.term || '';
 
     try {
-        // Fetch Global System Settings
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
 
@@ -389,29 +383,15 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             student = studentRes.rows[0] || null;
 
             if (student) {
-                if (!selectedTerm) {
-                    const termRes = await pool.query(`
-                        SELECT enrolled_term 
-                        FROM grades 
-                        WHERE student_id = $1 AND enrolled_term IS NOT NULL AND enrolled_term != ''
-                        ORDER BY enrolled_term DESC 
-                        LIMIT 1
-                    `, [targetStudentId]);
-                    if (termRes.rows.length > 0) {
-                        selectedTerm = termRes.rows[0].enrolled_term;
-                    }
-                }
-
-                if (selectedTerm) {
-                    const gradesRes = await pool.query(`
-                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
-                               c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-                        FROM grades g
-                        JOIN courses c ON g.course_code = c.course_code
-                        WHERE g.student_id = $1 AND g.enrolled_term = $2
-                    `, [targetStudentId, selectedTerm]);
-                    grades = gradesRes.rows;
-                }
+                const gradesRes = await pool.query(`
+                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
+                           c.descriptive_title, c.lec_units, c.rle_units, c.total_units
+                    FROM grades g
+                    JOIN courses c ON g.course_code = c.course_code
+                    WHERE g.student_id = $1
+                    ORDER BY g.enrolled_term ASC, g.course_code ASC
+                `, [targetStudentId]);
+                grades = gradesRes.rows;
             }
         }
 
@@ -422,7 +402,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             grades: grades,
             availableCourses: availableCourses,
             allCoursesRaw: allCoursesRaw,
-            currentTerm: selectedTerm,
+            currentTerm: '1',
             message: req.query.msg || null,
             error: req.query.err || null
         });
@@ -432,20 +412,18 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     }
 });
 
-// Update Global Setting Route
 app.post('/registrar/update-settings', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
     const { current_ay, current_semester } = req.body;
     try {
         await pool.query('UPDATE settings SET current_ay = $1, current_semester = $2 WHERE id = 1', [current_ay, current_semester]);
-        res.redirect(`/registrar?msg=${encodeURIComponent('Active Academic Year and Semester updated successfully. This applies instantly to the Faculty Portal.')}`);
+        res.redirect(`/registrar?msg=${encodeURIComponent('Active Academic Year and Semester updated successfully.')}`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/registrar?err=Failed to update settings.`);
+        res.redirect('/registrar?err=Failed to update settings.');
     }
 });
 
-// CSV Batch Upload Route
 app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -557,7 +535,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             }
         }
 
-        res.redirect(`/registrar?student_id=${cleanId}&term=${term || ''}&msg=Student registered and officially enrolled in selected subjects.`);
+        res.redirect(`/registrar?student_id=${cleanId}&msg=Student registered and officially enrolled in selected subjects.`);
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding new student: ${err.message}`);
@@ -619,10 +597,10 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
         `, [student_id, course_code, term, academic_year]);
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject successfully enrolled.`);
+        res.redirect(`/registrar?student_id=${student_id}&msg=Subject successfully enrolled.`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -652,32 +630,32 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
                 await pool.query(`
                     UPDATE grades 
                     SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $4 AND course_code = $5 AND enrolled_term = $6
-                `, [grade, inst, rem, student_id, code, term]);
+                    WHERE student_id = $4 AND course_code = $5
+                `, [grade, inst, rem, student_id, code]);
             }
         }
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Grades and records updated successfully!`);
+        res.redirect(`/registrar?student_id=${student_id}&msg=Grades and records updated successfully!`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
 app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, course_code, term } = req.body;
+    const { student_id, course_code } = req.body;
     try {
         await pool.query(`
             DELETE FROM grades 
             WHERE student_id = $1 AND course_code = $2
         `, [student_id, course_code]);
 
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject removed from student record.`);
+        res.redirect(`/registrar?student_id=${student_id}&msg=Subject removed from student record.`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/registrar?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -690,7 +668,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
 
     try {
-        // Enforce the Global Setup
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
 
@@ -702,7 +679,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             student = studentRes.rows[0] || null;
 
             if (student) {
-                // If global semester is 1st Sem, fetch terms 1,3,5,7. If 2nd Sem, fetch terms 2,4,6,8.
                 const validTerms = systemSettings.current_semester === 1 ? [1, 3, 5, 7] : [2, 4, 6, 8];
 
                 const gradesRes = await pool.query(`

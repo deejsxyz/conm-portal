@@ -39,7 +39,7 @@
             </div>
         <% } %>
 
-        <!-- GLOBAL SYSTEM SETTINGS (Controls Faculty View) -->
+        <!-- GLOBAL SYSTEM SETTINGS -->
         <div class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div>
                 <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
@@ -73,7 +73,7 @@
             </button>
         </div>
 
-        <!-- ACCOUNT REGISTRATION FORMS (HIDDEN BY DEFAULT) -->
+        <!-- ACCOUNT REGISTRATION FORMS -->
         <div class="space-y-4">
             
             <!-- BATCH UPLOAD CSV FORM -->
@@ -84,15 +84,6 @@
                 <div class="mb-5 p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
                     <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
                     <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, semester, academic_year, subjects</code>
-                    
-                    <div class="mt-3 text-[11px] text-slate-500">
-                        <strong>Formatting Rules:</strong>
-                        <ul class="list-disc pl-4 mt-1 space-y-1">
-                            <li><strong>academic_year:</strong> Must be formatted like <code class="bg-slate-200 px-1 rounded">2026-2027</code>.</li>
-                            <li><strong>year_level:</strong> Use 1, 2, 3, or 4.</li>
-                            <li><strong>semester:</strong> Use 1 (for 1st Sem) or 2 (for 2nd Sem).</li>
-                        </ul>
-                    </div>
                 </div>
 
                 <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
@@ -104,7 +95,7 @@
                 </form>
             </div>
 
-            <!-- Dynamic Register & Enroll Student Form -->
+            <!-- Single Student Form -->
             <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Single Student</h3>
                 <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
@@ -131,7 +122,6 @@
                         </div>
                     </div>
 
-                    <!-- Row 2: Year, Semester, and Academic Year Selection -->
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Enrollment Academic Year</label>
@@ -162,12 +152,9 @@
                     
                     <input type="hidden" name="term" id="reg_term_hidden" value="" <%= selectedStudent ? 'disabled' : '' %>>
                     
-                    <!-- Dynamic Subjects Checklist Container -->
                     <div class="pt-2">
-                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects to Enroll (Available for Irregular / Back Subjects)</label>
-                        <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                            <!-- Populated by JS -->
-                        </div>
+                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects to Enroll</label>
+                        <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200"></div>
                     </div>
 
                     <div class="flex gap-3">
@@ -213,47 +200,18 @@
             </div>
         </div>
 
-        <!-- SEARCH STUDENT & TERM TOOLBAR -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
-            <form id="searchToolbarForm" method="GET" action="/registrar" class="flex flex-col sm:flex-row items-center gap-3 w-full">
-                <!-- Search ID -->
-                <div class="flex-grow w-full sm:w-auto">
+        <!-- SEARCH STUDENT BY ID ONLY -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
+                <div class="flex-grow w-full">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
                     <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
                 </div>
-
-                <!-- Year and Semester Filters -->
-                <div class="flex-grow w-full sm:w-auto">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Filter by Year & Semester:</label>
-                    <div class="flex gap-2">
-                        <% 
-                            let searchYear = '2'; 
-                            let searchSem = '1';
-                            if (currentTerm) {
-                                searchYear = Math.ceil(parseInt(currentTerm) / 2).toString();
-                                searchSem = (parseInt(currentTerm) % 2 === 0 ? 2 : 1).toString();
-                            }
-                        %>
-                        <select id="search_year_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
-                            <option value="1" <%= searchYear === '1' ? 'selected' : '' %>>1st Year</option>
-                            <option value="2" <%= searchYear === '2' ? 'selected' : '' %>>2nd Year</option>
-                            <option value="3" <%= searchYear === '3' ? 'selected' : '' %>>3rd Year</option>
-                            <option value="4" <%= searchYear === '4' ? 'selected' : '' %>>4th Year</option>
-                        </select>
-
-                        <select id="search_sem_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
-                            <option value="1" <%= searchSem === '1' ? 'selected' : '' %>>1st Semester</option>
-                            <option value="2" <%= searchSem === '2' ? 'selected' : '' %>>2nd Semester</option>
-                        </select>
-                        
-                        <input type="hidden" name="term" id="search_term_hidden" value="<%= currentTerm %>">
-                        <button type="button" onclick="submitSearchFilter()" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
-                    </div>
-                </div>
+                <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors">Search Student</button>
             </form>
         </div>
 
-        <% if (selectedStudent && currentTerm) { %>
+        <% if (selectedStudent) { %>
             <!-- MANUAL ENROLL SINGLE SUBJECT -->
             <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5">
                 <div class="flex justify-between items-center mb-3">
@@ -261,11 +219,9 @@
                 </div>
                 <form action="/registrar/add-single-course" method="POST" class="space-y-4 text-sm">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                    <input type="hidden" name="term" id="extra_term_hidden" value="<%= currentTerm %>">
+                    <input type="hidden" name="term" id="extra_term_hidden" value="1">
                     
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                        
-                        <!-- Cleaned up Select Subject Dropdown -->
                         <div class="sm:col-span-5">
                             <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Select Subject from Catalog</label>
                             <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
@@ -288,36 +244,27 @@
                             </select>
                         </div>
 
-                        <% 
-                            let extYear = '2'; 
-                            let extSem = '1';
-                            if (currentTerm) {
-                                extYear = Math.ceil(parseInt(currentTerm) / 2).toString();
-                                extSem = (parseInt(currentTerm) % 2 === 0 ? 2 : 1).toString();
-                            }
-                        %>
-
                         <div class="sm:col-span-2">
                             <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Target Year</label>
                             <select id="extra_year_select" onchange="updateExtraTerm()" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
-                                <option value="1" <%= extYear === '1' ? 'selected' : '' %>>1st Year</option>
-                                <option value="2" <%= extYear === '2' ? 'selected' : '' %>>2nd Year</option>
-                                <option value="3" <%= extYear === '3' ? 'selected' : '' %>>3rd Year</option>
-                                <option value="4" <%= extYear === '4' ? 'selected' : '' %>>4th Year</option>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
                             </select>
                         </div>
 
                         <div class="sm:col-span-2">
                             <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Target Sem</label>
                             <select id="extra_sem_select" onchange="updateExtraTerm()" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
-                                <option value="1" <%= extSem === '1' ? 'selected' : '' %>>1st Sem</option>
-                                <option value="2" <%= extSem === '2' ? 'selected' : '' %>>2nd Sem</option>
+                                <option value="1">1st Sem</option>
+                                <option value="2">2nd Sem</option>
                             </select>
                         </div>
                     </div>
                     
                     <div class="flex justify-end gap-2 mt-2">
-                        <a href="/registrar" class="flex items-center justify-center px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                        <a href="/registrar?student_id=<%= selectedStudent.student_id %>" class="flex items-center justify-center px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
                         <button type="submit" class="py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
                             + Enroll Single Subject
                         </button>
@@ -347,9 +294,9 @@
                 <% } %>
             </div>
 
-            <% if (!selectedStudent || !currentTerm) { %>
+            <% if (!selectedStudent) { %>
                 <div class="text-center py-12 text-slate-400">
-                    <p class="text-sm">Please search a student and select Year & Semester above to manage grades.</p>
+                    <p class="text-sm">Please search a student by ID number above to manage their records.</p>
                 </div>
             <% } else { %>
                 <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
@@ -358,7 +305,7 @@
 
                     <% if (grades.length === 0) { %>
                         <div class="text-center py-8 text-slate-400 text-xs">
-                            No subjects enrolled for this student in this term yet. Use the option above to enroll a back subject.
+                            No subjects recorded for this student yet. Use the option above to enroll a subject.
                         </div>
                     <% } else { %>
                         <% grades.forEach((g, index) => { %>
@@ -421,7 +368,7 @@
 
                         <!-- SAVE & CANCEL BUTTONS -->
                         <div class="pt-4 flex justify-end gap-3">
-                            <a href="/registrar" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
+                            <a href="/registrar?student_id=<%= selectedStudent.student_id %>" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
                                 Cancel
                             </a>
                             <button type="submit" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors">
@@ -436,7 +383,6 @@
                     <form action="/registrar/delete-grade" method="POST" id="delete-<%= g.course_code %>" onsubmit="return confirm('Remove <%= g.course_code %> from student record?');">
                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                         <input type="hidden" name="course_code" value="<%= g.course_code %>">
-                        <input type="hidden" name="term" value="<%= currentTerm %>">
                     </form>
                 <% }) %>
             <% } %>
@@ -461,15 +407,7 @@
                 }
             });
         }
-        
-        function submitSearchFilter() {
-            const y = parseInt(document.getElementById('search_year_select').value);
-            const s = parseInt(document.getElementById('search_sem_select').value);
-            document.getElementById('search_term_hidden').value = (y - 1) * 2 + s;
-            document.getElementById('searchToolbarForm').submit();
-        }
 
-        // Dynamically compute the Target Term for the Single Subject Enrollment form
         function updateExtraTerm() {
             const y = parseInt(document.getElementById('extra_year_select').value);
             const s = parseInt(document.getElementById('extra_sem_select').value);
@@ -590,6 +528,7 @@
             if (facPass && !facPass.value) facPass.value = generateRandomPassword();
             if (stuPass && !stuPass.disabled && !stuPass.value) stuPass.value = generateRandomPassword();
             updateSubjectChecklist();
+            updateExtraTerm();
         });
     </script>
 </body>
