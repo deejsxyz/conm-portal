@@ -46,24 +46,38 @@
         <!-- GRADES VIEW AREA -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
             
-            <!-- Student Information Block (Centered) -->
-            <div class="flex flex-col items-center mb-8 text-center text-sm">
-                <p class="mb-2">
-                   <span class="font-bold uppercase text-[10px] text-slate-500">Student Name:</span> <br> 
-                   <span class="font-bold text-base uppercase"><%= studentRecord.last_name %>, <%= studentRecord.first_name %> <%= studentRecord.middle_name %></span>
-                </p>
-                <p class="mb-2">
-                   <span class="font-bold uppercase text-[10px] text-slate-500">Student Number:</span> <br> 
-                   <span class="font-mono font-bold text-base"><%= studentRecord.student_id %></span>
-                </p>
-                <p class="mb-2">
-                   <span class="font-bold uppercase text-[10px] text-slate-500">Program:</span> <br> 
-                   <span class="font-medium"><%= studentRecord.program %></span>
-                </p>
-                <p>
-                   <span class="font-bold uppercase text-[10px] text-slate-500">Year Level:</span> <br> 
-                   <span class="font-medium">Level <%= studentRecord.year_level %></span>
-                </p>
+            <!-- Student Information Block -->
+            <% 
+                let yearString = "Unknown";
+                if (String(studentRecord.year_level) === '1') yearString = "First Year";
+                else if (String(studentRecord.year_level) === '2') yearString = "Second Year";
+                else if (String(studentRecord.year_level) === '3') yearString = "Third Year";
+                else if (String(studentRecord.year_level) === '4') yearString = "Fourth Year";
+            %>
+            <div class="grid grid-cols-2 gap-4 mb-8 text-sm">
+                <!-- Left Side: Name and Number -->
+                <div class="text-left space-y-4">
+                    <p>
+                       <span class="font-bold uppercase text-[10px] text-slate-500">Student Name:</span> <br> 
+                       <span class="font-bold text-base uppercase"><%= studentRecord.last_name %>, <%= studentRecord.first_name %> <%= studentRecord.middle_name %></span>
+                    </p>
+                    <p>
+                       <span class="font-bold uppercase text-[10px] text-slate-500">Student Number:</span> <br> 
+                       <span class="font-mono font-bold text-base"><%= studentRecord.student_id %></span>
+                    </p>
+                </div>
+                
+                <!-- Right Side: Program and Year Level -->
+                <div class="text-right space-y-4">
+                    <p>
+                       <span class="font-bold uppercase text-[10px] text-slate-500">Program:</span> <br> 
+                       <span class="font-medium"><%= studentRecord.program %></span>
+                    </p>
+                    <p>
+                       <span class="font-bold uppercase text-[10px] text-slate-500">Year Level:</span> <br> 
+                       <span class="font-medium"><%= yearString %></span>
+                    </p>
+                </div>
             </div>
 
             <!-- Grades Table -->
