@@ -212,7 +212,7 @@
         </div>
 
         <% if (selectedStudent) { %>
-            <!-- MANUAL ENROLL SINGLE SUBJECT (AUTOMATED TO ACTIVE GLOBAL SETTINGS) -->
+            <!-- MANUAL ENROLL SINGLE SUBJECT -->
             <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
@@ -235,8 +235,9 @@
                             </select>
                         </div>
                         
+                        <!-- Cancel button for this specific section points to base /registrar to clear it independently -->
                         <div class="flex gap-2 w-full sm:w-auto">
-                            <a href="/registrar?student_id=<%= selectedStudent.student_id %>" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                            <a href="/registrar" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
                             <button type="submit" class="flex-1 sm:flex-initial py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors whitespace-nowrap">
                                 + Enroll Subject
                             </button>
@@ -338,9 +339,9 @@
                             </div>
                         <% }) %>
 
-                        <!-- SAVE & CANCEL BUTTONS -->
+                        <!-- SAVE & CANCEL BUTTONS (Clears everything including the ID search box) -->
                         <div class="pt-4 flex justify-end gap-3">
-                            <a href="/registrar?student_id=<%= selectedStudent.student_id %>" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
+                            <a href="/registrar" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
                                 Cancel
                             </a>
                             <button type="submit" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors">
