@@ -9,11 +9,11 @@
     <header class="bg-indigo-900 text-white shadow-md border-b-4 border-pink-500">
         <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
             <div>
-                <h2 class="text-base font-bold">City University of Pasay - Registrar Portal</h2>
-                <p class="text-xs text-pink-300">College of Nursing and School of Midwifery (CONM)</p>
+                <h2 class="text-base font-bold">College of Nursing and School of Midwifery</h2>
+                <p class="text-xs text-pink-300">Registrar Portal</p>
             </div>
             <div class="flex items-center space-x-3">
-                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
+                <span class="text-xs bg-emerald-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
                     <%= currentUser.fullName || currentUser.username %>
                 </span>
                 <% if (currentUser.role === 'admin') { %>
@@ -69,7 +69,7 @@
             </form>
         </div>
 
-        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT (FITS ON ONE LINE) -->
+        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT (SINGLE LINE) -->
         <div class="flex flex-row flex-nowrap gap-3 overflow-x-auto pb-2">
             <button type="button" onclick="toggleSection('studentRegSection')" class="flex-1 px-4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
                 👤 Register Student
@@ -88,7 +88,7 @@
             </button>
         </div>
 
-        <!-- SECTIONS (HIDDEN BY DEFAULT UNLESS ACTIVE OR SEARCHED) -->
+        <!-- SECTIONS -->
         <div class="space-y-4">
             
             <!-- BATCH UPLOAD CSV FORM -->
@@ -237,10 +237,10 @@
                         <select name="faculty_user" onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500">
                             <option value="">-- Select Faculty Member --</option>
                             <% facultyList.forEach(fac => { 
-                                const fullName = [fac.first_name, fac.middle_name, fac.last_name].filter(Boolean).join(' ');
+                                const formalName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
                             %>
                                 <option value="<%= fac.username %>" <%= (locals.selectedFaculty && selectedFaculty.username === fac.username) ? 'selected' : '' %>>
-                                    <%= fullName %> (<%= fac.username %>)
+                                    <%= formalName %>
                                 </option>
                             <% }) %>
                         </select>
@@ -248,14 +248,17 @@
                 </div>
 
                 <% if (locals.selectedFaculty) { %>
+                    <% 
+                        const editingFormalName = [selectedFaculty.last_name, selectedFaculty.first_name, selectedFaculty.middle_name].filter(Boolean).join(', ');
+                    %>
                     <div class="bg-indigo-50/70 rounded-xl border border-indigo-200 p-5 space-y-4">
                         <div class="flex flex-wrap justify-between items-center gap-2">
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-bold uppercase text-indigo-900">Editing Faculty:</span>
-                                <span class="font-mono text-xs font-bold bg-indigo-900 text-white px-2.5 py-0.5 rounded"><%= selectedFaculty.username %></span>
+                                <span class="font-bold text-xs bg-indigo-900 text-white px-2.5 py-0.5 rounded"><%= editingFormalName %></span>
                             </div>
 
-                            <form action="/registrar/delete-faculty" method="POST" class="inline" onsubmit="return confirm('Permanently delete faculty account <%= selectedFaculty.username %>?');">
+                            <form action="/registrar/delete-faculty" method="POST" class="inline" onsubmit="return confirm('Permanently delete faculty account <%= editingFormalName %>?');">
                                 <input type="hidden" name="username" value="<%= selectedFaculty.username %>">
                                 <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm">
                                     Delete Faculty
@@ -364,7 +367,7 @@
                         
                         <div class="flex-grow w-full">
                             <select id="extraCourseSelect" name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
-                                <option value="">-- Select Subject from Catalog --</option>
+                                <option value="" style="font-style: italic;">-- *Select CONM Subject* --</option>
                                 <% if (availableCourses.length > 0) { %>
                                     <% availableCourses.forEach(c => { %>
                                         <option value="<%= c.course_code %>">[<%= c.course_code %>] <%= c.descriptive_title %></option>
