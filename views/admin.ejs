@@ -87,7 +87,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
                         <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Registered Staff Members (<%= locals.staffList ? staffList.length : 0 %>)</h4>
-                        <p class="text-xs text-slate-500">Select a staff member from the dropdown list to view, edit, reset password, or delete.</p>
+                        <p class="text-xs text-slate-500">Select a staff member from the dropdown list to view, edit, or delete.</p>
                     </div>
 
                     <form method="GET" action="/admin" class="w-full sm:w-80">
@@ -121,14 +121,6 @@
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <form action="/admin/reset-user-password" method="POST" class="inline" onsubmit="return confirm('Reset password for <%= selectedStaff.username %>?');">
-                                    <input type="hidden" name="username" value="<%= selectedStaff.username %>">
-                                    <input type="hidden" name="role" value="<%= selectedStaff.role %>">
-                                    <button type="submit" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-sm">
-                                        Reset Password
-                                    </button>
-                                </form>
-
                                 <form action="/admin/delete-user" method="POST" class="inline" onsubmit="return confirm('Permanently delete account <%= selectedStaff.username %>?');">
                                     <input type="hidden" name="username" value="<%= selectedStaff.username %>">
                                     <input type="hidden" name="role" value="<%= selectedStaff.role %>">
@@ -139,27 +131,34 @@
                             </div>
                         </div>
 
-                        <form action="/admin/edit-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end pt-2 border-t border-emerald-200/60">
+                        <form action="/admin/edit-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end pt-2 border-t border-emerald-200/60">
                             <input type="hidden" name="original_username" value="<%= selectedStaff.username %>">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Username / ID</label>
-                                <input type="text" name="username" required value="<%= selectedStaff.username %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs font-mono font-bold text-emerald-950">
+                                <input type="text" name="username" required value="<%= selectedStaff.username %>" class="w-full px-2.5 py-1.5 rounded border border-emerald-300 bg-white text-xs font-mono font-bold text-emerald-950">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">First Name</label>
-                                <input type="text" name="first_name" required value="<%= selectedStaff.first_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
+                                <input type="text" name="first_name" required value="<%= selectedStaff.first_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-emerald-300 bg-white text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Middle Name</label>
-                                <input type="text" name="middle_name" value="<%= selectedStaff.middle_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
+                                <input type="text" name="middle_name" value="<%= selectedStaff.middle_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-emerald-300 bg-white text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Last Name</label>
-                                <input type="text" name="last_name" required value="<%= selectedStaff.last_name || '' %>" class="w-full px-3 py-2 rounded-lg border border-emerald-300 bg-white text-xs">
+                                <input type="text" name="last_name" required value="<%= selectedStaff.last_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-emerald-300 bg-white text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
+                                <div class="flex">
+                                    <input type="text" name="temp_password" id="temp_pass_staff_<%= selectedStaff.username %>" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded-l border border-amber-300 bg-amber-50 text-[11px] font-mono focus:ring-1 focus:ring-amber-500">
+                                    <button type="button" onclick="document.getElementById('temp_pass_staff_<%= selectedStaff.username %>').value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
+                                </div>
                             </div>
                             <div class="flex gap-2">
-                                <button type="button" onclick="window.location.href='/admin<%= locals.searchStudentId ? `?search_student_id=${searchStudentId}` : `` %>'" class="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
-                                <button type="submit" class="flex-[2] py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                                <button type="button" onclick="window.location.href='/admin<%= locals.searchStudentId ? `?search_student_id=${searchStudentId}` : `` %>'" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-sm">Cancel</button>
+                                <button type="submit" class="flex-[2] py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow-sm">
                                     💾 Save
                                 </button>
                             </div>
@@ -294,26 +293,18 @@
                                                     View/Edit Grades
                                                 </a>
 
-                                                <form action="/admin/reset-user-password" method="POST" class="inline" onsubmit="return confirm('Reset password for student <%= stu.student_id %>?');">
-                                                    <input type="hidden" name="username" value="<%= stu.student_id %>">
-                                                    <input type="hidden" name="role" value="student">
-                                                    <button type="submit" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold shadow-sm">
-                                                        Reset Password
-                                                    </button>
-                                                </form>
-
                                                 <form action="/admin/delete-user" method="POST" class="inline" onsubmit="return confirm('Permanently delete student <%= stu.student_id %> and all their grades?');">
                                                     <input type="hidden" name="username" value="<%= stu.student_id %>">
                                                     <input type="hidden" name="role" value="student">
                                                     <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold shadow-sm">
-                                                        Delete
+                                                        Delete Student
                                                     </button>
                                                 </form>
                                             </div>
                                         </div>
 
-                                        <!-- Quick Edit Student Form -->
-                                        <form action="/admin/edit-student" method="POST" class="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end pt-2 border-t border-slate-200">
+                                        <!-- Quick Edit Student Form (With integrated password reset) -->
+                                        <form action="/admin/edit-student" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end pt-2 border-t border-slate-200">
                                             <input type="hidden" name="student_id" value="<%= stu.student_id %>">
                                             <div>
                                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
@@ -335,6 +326,13 @@
                                                     <option value="3" <%= Number(stu.year_level) === 3 ? 'selected' : '' %>>3rd Year</option>
                                                     <option value="4" <%= Number(stu.year_level) === 4 ? 'selected' : '' %>>4th Year</option>
                                                 </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
+                                                <div class="flex">
+                                                    <input type="text" name="temp_password" id="temp_pass_<%= stu.student_id %>" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded-l border border-amber-300 bg-amber-50 text-[11px] font-mono focus:ring-1 focus:ring-amber-500">
+                                                    <button type="button" onclick="document.getElementById('temp_pass_<%= stu.student_id %>').value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
+                                                </div>
                                             </div>
                                             <div class="flex gap-2">
                                                 <button type="reset" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm">Cancel</button>
