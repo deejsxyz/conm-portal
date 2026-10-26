@@ -93,7 +93,7 @@ async function seedDatabase() {
             ['COR 101', 'Contemporary English', 3, 0, 3, 1],
             ['NCM 100', 'Theoretical Foundation of Nursing', 3, 0, 3, 1],
             ['MC 1', 'Anatomy and Physiology', 3, 2, 5, 1],
-            ['MC2', 'Biochemistry', 3, 2, 5, 1],
+            ['MC 2', 'Biochemistry', 3, 2, 5, 1],
             ['PHE 101', 'Wellness and Fitness', 2, 0, 2, 1],
             ['GEC 105', 'Purposive Communication', 3, 0, 3, 2],
             ['GEC 108', 'Ethics', 3, 0, 3, 2],
