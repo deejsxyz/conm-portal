@@ -69,7 +69,7 @@
             </form>
         </div>
 
-        <!-- TOGGLE BUTTONS FOR ACCOUNT REGISTRATION -->
+        <!-- TOGGLE BUTTONS FOR ACCOUNT REGISTRATION & MANAGEMENT -->
         <div class="flex flex-wrap gap-4">
             <button type="button" onclick="toggleSection('studentRegSection')" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
                 👤 Register Single Student
@@ -80,9 +80,12 @@
             <button type="button" onclick="toggleSection('facultyRegSection')" class="px-6 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
                 👨‍🏫 Register New Faculty
             </button>
+            <button type="button" onclick="toggleSection('facultyManageSection')" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+                👥 Manage Faculty
+            </button>
         </div>
 
-        <!-- ACCOUNT REGISTRATION FORMS -->
+        <!-- ACCOUNT REGISTRATION & MANAGEMENT FORMS -->
         <div class="space-y-4">
             
             <!-- BATCH UPLOAD CSV FORM -->
@@ -175,7 +178,7 @@
                 </form>
             </div>
 
-            <!-- REGISTER FACULTY (WITH 5 DEFAULT SUBJECT DROPDOWNS & ADD BUTTON) -->
+            <!-- REGISTER FACULTY (5 DEFAULT DROPDOWNS + ADD MORE) -->
             <div id="facultyRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1">Register New Faculty Account & Assign Subjects</h3>
                 <form action="/registrar/add-faculty" method="POST" class="space-y-4 text-sm">
@@ -204,10 +207,8 @@
 
                     <div class="pt-2 border-t border-slate-100">
                         <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Assign Subjects Taught (Up to 5 Default + Add More)</label>
-                        <div id="facultySubjectDropdownsContainer" class="space-y-2">
-                            <!-- Dynamically generated via JS -->
-                        </div>
-                        <button type="button" onclick="addFacultySubjectDropdown()" class="mt-3 px-4 py-2 bg-pink-100 hover:bg-pink-200 text-pink-700 rounded-lg text-xs font-bold transition-colors">
+                        <div id="facultySubjectDropdownsContainer" class="space-y-2"></div>
+                        <button type="button" onclick="addFacultySubjectDropdown('facultySubjectDropdownsContainer')" class="mt-3 px-4 py-2 bg-pink-100 hover:bg-pink-200 text-pink-700 rounded-lg text-xs font-bold transition-colors">
                             + Add Subject Slot
                         </button>
                     </div>
@@ -219,6 +220,89 @@
                         </button>
                     </div>
                 </form>
+            </div>
+
+            <!-- MANAGE FACULTY SECTION -->
+            <div id="facultyManageSection" class="<%= locals.selectedFaculty ? '' : 'hidden' %> bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h4 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Manage Registered Faculty Members (<%= facultyList.length %>)</h4>
+                        <p class="text-xs text-slate-500">Select a faculty member to edit their profile, reset their password, delete their account, or update their assigned subjects.</p>
+                    </div>
+
+                    <form method="GET" action="/registrar" class="w-full sm:w-80">
+                        <select name="faculty_user" onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500">
+                            <option value="">-- Select Faculty Member --</option>
+                            <% facultyList.forEach(fac => { 
+                                const fullName = [fac.first_name, fac.middle_name, fac.last_name].filter(Boolean).join(' ');
+                            %>
+                                <option value="<%= fac.username %>" <%= (locals.selectedFaculty && selectedFaculty.username === fac.username) ? 'selected' : '' %>>
+                                    <%= fullName %> (<%= fac.username %>)
+                                </option>
+                            <% }) %>
+                        </select>
+                    </form>
+                </div>
+
+                <% if (locals.selectedFaculty) { %>
+                    <div class="bg-indigo-50/70 rounded-xl border border-indigo-200 p-5 space-y-4">
+                        <div class="flex flex-wrap justify-between items-center gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold uppercase text-indigo-900">Editing Faculty:</span>
+                                <span class="font-mono text-xs font-bold bg-indigo-900 text-white px-2.5 py-0.5 rounded"><%= selectedFaculty.username %></span>
+                            </div>
+
+                            <form action="/registrar/delete-faculty" method="POST" class="inline" onsubmit="return confirm('Permanently delete faculty account <%= selectedFaculty.username %>?');">
+                                <input type="hidden" name="username" value="<%= selectedFaculty.username %>">
+                                <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm">
+                                    Delete Faculty
+                                </button>
+                            </form>
+                        </div>
+
+                        <form action="/registrar/edit-faculty" method="POST" class="space-y-4 pt-2 border-t border-indigo-200/60">
+                            <input type="hidden" name="original_username" value="<%= selectedFaculty.username %>">
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Username / ID</label>
+                                    <input type="text" name="username" required value="<%= selectedFaculty.username %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs font-mono font-bold text-indigo-950">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">First Name</label>
+                                    <input type="text" name="first_name" required value="<%= selectedFaculty.first_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Middle Name</label>
+                                    <input type="text" name="middle_name" value="<%= selectedFaculty.middle_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Last Name</label>
+                                    <input type="text" name="last_name" required value="<%= selectedFaculty.last_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
+                                    <input type="text" name="temp_password" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded border border-amber-300 bg-amber-50 text-[11px] font-mono">
+                                </div>
+                            </div>
+
+                            <div class="pt-2">
+                                <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Assigned Subjects Taught</label>
+                                <div id="editFacultyDropdownsContainer" class="space-y-2"></div>
+                                <button type="button" onclick="addFacultySubjectDropdown('editFacultyDropdownsContainer')" class="mt-3 px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg text-xs font-bold transition-colors">
+                                    + Add Subject Slot
+                                </button>
+                            </div>
+
+                            <div class="flex justify-end gap-2 pt-2 border-t border-indigo-200/60">
+                                <a href="/registrar" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm flex items-center">Cancel</a>
+                                <button type="submit" class="px-6 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded font-bold text-xs shadow-sm">
+                                    💾 Save Faculty Profile
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                <% } %>
             </div>
         </div>
 
@@ -399,11 +483,15 @@
     <script id="courses-data" type="application/json">
         <%- JSON.stringify(locals.allCoursesRaw || []) %>
     </script>
+    <script id="faculty-assigned-data" type="application/json">
+        <%- JSON.stringify(locals.facultyAssignedCourses || []) %>
+    </script>
     <script>
         const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
+        const facultyAssignedData = JSON.parse(document.getElementById('faculty-assigned-data').textContent);
         
         function toggleSection(sectionId) {
-            const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection'];
+            const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection', 'facultyManageSection'];
             sections.forEach(id => {
                 const section = document.getElementById(id);
                 if (id === sectionId) {
@@ -459,9 +547,9 @@
             container.innerHTML = html;
         }
 
-        // DYNAMIC FACULTY SUBJECT DROPDOWNS (5 DEFAULT + ADD BUTTON)
-        function addFacultySubjectDropdown(selectedValue = '') {
-            const container = document.getElementById('facultySubjectDropdownsContainer');
+        // DYNAMIC FACULTY SUBJECT DROPDOWNS (5 DEFAULT + ADD MORE)
+        function addFacultySubjectDropdown(containerId, selectedValue = '') {
+            const container = document.getElementById(containerId);
             if (!container) return;
 
             const div = document.createElement('div');
@@ -474,7 +562,7 @@
             });
 
             div.innerHTML = `
-                <select name="course_codes" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-pink-500">
+                <select name="course_codes" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-indigo-500">
                     ${optionsHtml}
                 </select>
                 <button type="button" onclick="this.parentElement.remove()" class="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-bold transition-colors">X</button>
@@ -483,11 +571,26 @@
         }
 
         function initFacultySubjectDropdowns() {
-            const container = document.getElementById('facultySubjectDropdownsContainer');
-            if (!container) return;
-            container.innerHTML = '';
-            for (let i = 0; i < 5; i++) {
-                addFacultySubjectDropdown();
+            const regContainer = document.getElementById('facultySubjectDropdownsContainer');
+            if (regContainer) {
+                regContainer.innerHTML = '';
+                for (let i = 0; i < 5; i++) {
+                    addFacultySubjectDropdown('facultySubjectDropdownsContainer');
+                }
+            }
+
+            const editContainer = document.getElementById('editFacultyDropdownsContainer');
+            if (editContainer && facultyAssignedData) {
+                editContainer.innerHTML = '';
+                if (facultyAssignedData.length > 0) {
+                    facultyAssignedData.forEach(code => {
+                        addFacultySubjectDropdown('editFacultyDropdownsContainer', code);
+                    });
+                } else {
+                    for (let i = 0; i < 5; i++) {
+                        addFacultySubjectDropdown('editFacultyDropdownsContainer');
+                    }
+                }
             }
         }
 
