@@ -46,6 +46,15 @@ async function seedDatabase() {
         `);
 
         await pool.query(`
+            CREATE TABLE IF NOT EXISTS faculty_courses (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) NOT NULL,
+                course_code VARCHAR(50) NOT NULL,
+                CONSTRAINT unique_faculty_course UNIQUE (username, course_code)
+            );
+        `);
+
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS grades (
                 id SERIAL PRIMARY KEY,
                 student_id VARCHAR(100),
@@ -78,13 +87,6 @@ async function seedDatabase() {
             ON CONFLICT (id) DO NOTHING;
         `);
 
-        await pool.query(`
-            UPDATE grades g 
-            SET enrolled_term = c.term_id::varchar 
-            FROM courses c 
-            WHERE g.course_code = c.course_code AND g.enrolled_term IS NULL;
-        `);
-
         await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
         await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));`);
 
@@ -103,64 +105,44 @@ async function seedDatabase() {
             DO UPDATE SET password_hash = $1, role = 'registrar', must_change_password = FALSE;
         `, [registrarPassword]);
 
-        const allCourses = [
-            ['GEC 101', 'Understanding the Self', 3, 0, 3, 1],
-            ['GEC 104', 'Mathematics in the Modern World', 3, 0, 3, 1],
-            ['GEC 206', 'Art Appreciation', 3, 0, 3, 1],
-            ['COR 101', 'Contemporary English', 3, 0, 3, 1],
+        // Specific CONM Faculty Teaching Subjects Catalog
+        const conmCourses = [
+            ['CA 1', 'Course Audit 1', 3, 0, 3, 7],
+            ['CA 2', 'Course Audit 2', 3, 0, 3, 8],
+            ['GEC E3', 'Elective 3 - Nursing Personality Enhancement Program (NPEP)', 3, 0, 3, 6],
             ['NCM 100', 'Theoretical Foundation of Nursing', 3, 0, 3, 1],
-            ['MC 1', 'Anatomy and Physiology', 3, 2, 5, 1],
-            ['MC 2', 'Biochemistry', 3, 2, 5, 1],
-            ['PHE 101', 'Wellness and Fitness', 2, 0, 2, 1],
-            ['GEC 105', 'Purposive Communication', 3, 0, 3, 2],
-            ['GEC 108', 'Ethics', 3, 0, 3, 2],
-            ['COR 102', 'Contemporary Mathematics', 3, 0, 3, 2],
             ['NCM 101', 'Health Assessment', 3, 2, 5, 2],
             ['NCM 102', 'Health Education', 3, 0, 3, 2],
             ['NCM 103', 'Fundamentals of Nursing Practice', 3, 2, 5, 2],
-            ['MC 3', 'Microbiology and Parasitology', 3, 1, 4, 2],
-            ['PE 2', 'Self Defense', 2, 0, 2, 2],
             ['NCM 104', 'Community Health Nursing 1', 3, 1, 4, 3],
             ['NCM 105', 'Nutrition and Diet Therapy', 3, 0, 3, 3],
             ['NCM 106', 'Pharmacology', 3, 0, 3, 3],
             ['NCM 107', 'Care of Mother, Child Adolescent (Well Clients)', 5, 4, 9, 3],
             ['NCM 108', 'Health Care Ethics (Bioethics)', 3, 0, 3, 3],
-            ['NSTP 101', 'NSTP', 3, 0, 3, 3],
-            ['PHE 3', 'Swimming', 2, 0, 2, 3],
-            ['GEC 102', 'Readings in Philippine History', 3, 0, 3, 4],
-            ['GEC 107', 'Science, Technology, & Society', 3, 0, 3, 4],
-            ['GEC E1', 'The Entrepreneurial Mind (Nursing Entrepreneurial)', 3, 0, 3, 4],
             ['NCM 110', 'Care of Mother, Child Adolescent (Acute and Chronic)', 6, 6, 12, 4],
-            ['NSTP 102', 'NSTP', 3, 0, 3, 4],
-            ['PHE 4', 'Sports', 2, 0, 2, 4],
             ['NCM 111', 'Nursing Research 1', 3, 0, 3, 5],
             ['NCM 112', 'Care of Clients with Problems in Oxygenation, Fluid & Electrolytes, Infectious, Inflammatory, & Immunologic Response, Cellular Aberrations; Acute and Chronic', 8, 6, 14, 5],
             ['NCM 113', 'Community Health Nursing 2 (Population Group and Community Guide Clients)', 2, 1, 3, 5],
             ['NCM 114', 'Care of Older Adult', 2, 1, 3, 5],
-            ['COR 104', 'Great Books and Philippine Popular Culture', 3, 0, 3, 5],
             ['NCM 115', 'Nursing Research 2', 3, 0, 3, 6],
             ['NCM 116', 'Care of Clients with Problems in Nutrition & Gastro-Intestinal, Metabolism and Endocrine Perception & Coordination (Acute & Chronic)', 5, 4, 9, 6],
             ['NCM 117', 'Care of Clients with Maladaptive Patterns of Behavior (Acute & Chronic)', 4, 4, 8, 6],
-            ['GEC E3', 'Elective 3-Nursing Personality Enhancement Program (NPEP)', 3, 0, 3, 6],
-            ['GEC 109', 'Life, Works, and Writings of Rizal', 3, 0, 3, 7],
             ['NCM 118', 'Nursing Care of Clients with Life Threatening Conditions, Acutely III/Multi-organs Problems, High Acuity & Emergency Situation, Acute & Chronic', 5, 4, 9, 7],
             ['NCM 119', 'Nursing Leadership & Management', 4, 3, 7, 7],
-            ['CA 1', 'Course Audit 1', 3, 0, 3, 7],
-            ['GEC 103', 'The Contemporary World', 3, 0, 3, 8],
             ['NCM 121', 'Disaster Nursing', 2, 1, 3, 8],
-            ['NCM 122', 'Intensive Nursing Practicum (Hospital and Community Settings)', 0, 8, 8, 8],
-            ['CA 2', 'Course Audit 2', 3, 0, 3, 8]
+            ['NCM 122', 'Intensive Nursing Practicum (Hospital and Community Settings)', 0, 8, 8, 8]
         ];
 
-        for (let c of allCourses) {
+        for (let c of conmCourses) {
             await pool.query(`
                 INSERT INTO courses (course_code, descriptive_title, lec_units, rle_units, total_units, term_id) 
                 VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (course_code) DO NOTHING;
+                ON CONFLICT (course_code) 
+                DO UPDATE SET descriptive_title = $2, lec_units = $3, rle_units = $4, total_units = $5, term_id = $6;
             `, c);
         }
 
-        console.log("Database schema and seed data verified successfully.");
+        console.log("Database schema and CONM faculty subjects verified successfully.");
     } catch (err) {
         console.error("Seeding notice:", err.message);
     }
@@ -402,6 +384,9 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
         if (role === 'student') {
             await pool.query('DELETE FROM students WHERE student_id = $1', [username]);
             await pool.query('DELETE FROM grades WHERE student_id = $1', [username]);
+        }
+        if (role === 'faculty') {
+            await pool.query('DELETE FROM faculty_courses WHERE username = $1', [username]);
         }
         res.redirect('/admin?msg=User account successfully deleted.');
     } catch (err) {
@@ -663,10 +648,11 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
+// REGISTRAR ADD FACULTY (HANDLES SUBJECT DROP-DOWN LISTS WITH DYNAMIC ADD BUTTON)
 app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { username, first_name, middle_name, last_name, temp_password } = req.body;
+    const { username, first_name, middle_name, last_name, temp_password, course_codes } = req.body;
     const cleanUser = username ? username.trim() : '';
     const fName = first_name ? first_name.trim() : '';
     const mName = middle_name ? middle_name.trim() : '';
@@ -685,10 +671,23 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
             VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5)
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
-        res.redirect(`/registrar?msg=Faculty account created successfully.`);
+        if (course_codes) {
+            const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
+            for (let code of codes) {
+                if (code && code.trim() !== '') {
+                    await pool.query(`
+                        INSERT INTO faculty_courses (username, course_code) 
+                        VALUES ($1, $2) 
+                        ON CONFLICT DO NOTHING;
+                    `, [cleanUser, code.trim()]);
+                }
+            }
+        }
+
+        res.redirect(`/registrar?msg=Faculty account created and assigned subjects saved successfully.`);
     } catch (err) {
         console.error(err);
-        res.status(500).send(`Error adding faculty: ${err.message}`);
+        res.redirect(`/registrar?err=Error adding faculty: ${err.message}`);
     }
 });
 
@@ -794,41 +793,83 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         return res.redirect('/portal');
     }
     
-    const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
+    const facultyUsername = req.session.user.username;
+    const selectedCourse = req.query.course_code ? req.query.course_code.trim() : '';
+    const searchLastName = req.query.last_name ? req.query.last_name.trim() : '';
+    const searchFirstName = req.query.first_name ? req.query.first_name.trim() : '';
+    const searchMiddleName = req.query.middle_name ? req.query.middle_name.trim() : '';
 
     try {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
 
-        let student = null;
-        let grades = [];
+        let assignedCourses = [];
+        if (req.session.user.role === 'admin') {
+            const allC = await pool.query('SELECT course_code, descriptive_title FROM courses ORDER BY course_code');
+            assignedCourses = allC.rows;
+        } else {
+            const facC = await pool.query(`
+                SELECT c.course_code, c.descriptive_title 
+                FROM faculty_courses fc
+                JOIN courses c ON fc.course_code = c.course_code
+                WHERE fc.username = $1
+                ORDER BY c.course_code
+            `, [facultyUsername]);
+            assignedCourses = facC.rows;
+        }
 
-        if (targetStudentId) {
-            const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
-            student = studentRes.rows[0] || null;
+        let matchingStudent = null;
+        let gradeRecord = null;
 
-            if (student) {
+        if (selectedCourse && searchLastName) {
+            let queryStr = `
+                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level
+                FROM students s
+                WHERE s.last_name ILIKE $1
+            `;
+            let queryParams = [`%${searchLastName}%`];
+
+            if (searchFirstName) {
+                queryParams.push(`%${searchFirstName}%`);
+                queryStr += ` AND s.first_name ILIKE $${queryParams.length}`;
+            }
+            if (searchMiddleName) {
+                queryParams.push(`%${searchMiddleName}%`);
+                queryStr += ` AND s.middle_name ILIKE $${queryParams.length}`;
+            }
+
+            const studentRes = await pool.query(queryStr, queryParams);
+            if (studentRes.rows.length > 0) {
+                matchingStudent = studentRes.rows[0];
+
                 const validTerms = systemSettings.current_semester === 1 ? [1, 3, 5, 7] : [2, 4, 6, 8];
-
-                const gradesRes = await pool.query(`
+                const gradeRes = await pool.query(`
                     SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
-                           c.descriptive_title, c.lec_units, c.rle_units, c.total_units
+                           c.descriptive_title
                     FROM grades g
                     JOIN courses c ON g.course_code = c.course_code
                     WHERE g.student_id = $1 
-                      AND g.academic_year = $2 
-                      AND CAST(g.enrolled_term AS INTEGER) = ANY($3)
-                `, [targetStudentId, systemSettings.current_ay, validTerms]);
-                
-                grades = gradesRes.rows;
+                      AND g.course_code = $2
+                      AND g.academic_year = $3 
+                      AND CAST(g.enrolled_term AS INTEGER) = ANY($4)
+                `, [matchingStudent.student_id, selectedCourse, systemSettings.current_ay, validTerms]);
+
+                if (gradeRes.rows.length > 0) {
+                    gradeRecord = gradeRes.rows[0];
+                }
             }
         }
 
         res.render('faculty_edit', {
             currentUser: req.session.user,
             systemSettings: systemSettings,
-            selectedStudent: student,
-            grades: grades,
+            assignedCourses: assignedCourses,
+            selectedCourse: selectedCourse,
+            searchLastName: searchLastName,
+            searchFirstName: searchFirstName,
+            searchMiddleName: searchMiddleName,
+            matchingStudent: matchingStudent,
+            gradeRecord: gradeRecord,
             message: req.query.msg || null,
             error: req.query.err || null
         });
@@ -838,41 +879,27 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
 });
 
-app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
+app.post('/faculty/update-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, academic_year, course_codes, final_grades, instructors, remarks_list } = req.body;
+    const { student_id, course_code, academic_year, final_grade, instructor, remarks } = req.body;
     
     try {
-        const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
-        let grades = Array.isArray(final_grades) ? final_grades : [final_grades];
-        const insts = Array.isArray(instructors) ? instructors : [instructors];
-        const remarks = Array.isArray(remarks_list) ? remarks_list : [remarks_list];
-
-        for (let i = 0; i < codes.length; i++) {
-            const code = codes[i];
-            let grade = grades[i] ? grades[i].trim() : '';
-            
-            if (/^\d+$/.test(grade)) {
-                grade = `${grade}.00`;
-            }
-
-            const inst = insts[i] || '';
-            const rem = remarks[i] || '';
-
-            if (code) {
-                await pool.query(`
-                    UPDATE grades 
-                    SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $4 AND course_code = $5 AND academic_year = $6
-                `, [grade, inst, rem, student_id, code, academic_year]);
-            }
+        let cleanGrade = final_grade ? final_grade.trim() : '';
+        if (/^\d+$/.test(cleanGrade)) {
+            cleanGrade = `${cleanGrade}.00`;
         }
 
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&msg=All grade changes saved securely for the current Academic Year.`);
+        await pool.query(`
+            UPDATE grades 
+            SET final_grade = $1, instructor = $2, remarks = $3 
+            WHERE student_id = $4 AND course_code = $5 AND academic_year = $6
+        `, [cleanGrade, instructor || '', remarks || '', student_id, course_code, academic_year]);
+
+        res.redirect(`/faculty/edit-grades?course_code=${encodeURIComponent(course_code)}&msg=Grade updated successfully!`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/faculty/edit-grades?err=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -880,7 +907,7 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
 app.get('/portal', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     
-    if (user.role === 'admin') return res.redirect('/admin');
+    if (user.role === 'admin') return res.redirect('/portal');
     if (user.role === 'faculty') return res.redirect('/faculty/edit-grades');
     if (user.role === 'registrar') return res.redirect('/registrar');
 
