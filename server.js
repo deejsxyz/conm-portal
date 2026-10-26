@@ -324,6 +324,7 @@ app.get('/admin', isAuthenticated, async (req, res) => {
     }
 });
 
+// ADDS DUPLICATE USERNAME VALIDATION FOR ADMIN CREATING STAFF
 app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -342,7 +343,7 @@ app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
     try {
         const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanUser]);
         if (existing.rows.length > 0) {
-            return res.redirect('/admin?err=Username already exists.');
+            return res.redirect(`/admin?err=Error: The username '${cleanUser}' is already registered in the system.`);
         }
 
         const hashedPassword = await bcrypt.hash(pass, 10);
@@ -358,7 +359,42 @@ app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Delete User Route
+// ADDS DUPLICATE ID VALIDATION FOR ADMIN CREATING STUDENT
+app.post('/admin/add-student', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, first_name, middle_name, last_name, year_level, temp_password } = req.body;
+    const cleanId = student_id ? student_id.trim() : '';
+    const fName = first_name ? first_name.trim() : '';
+    const mName = middle_name ? middle_name.trim() : '';
+    const lName = last_name ? last_name.trim() : '';
+    const pass = temp_password ? temp_password.trim() : 'password123';
+
+    try {
+        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanId]);
+        if (existing.rows.length > 0) {
+            return res.redirect(`/admin?err=Error: The Student ID '${cleanId}' is already registered in the system.`);
+        }
+
+        const hashedPassword = await bcrypt.hash(pass, 10);
+
+        await pool.query(`
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
+            VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
+        `, [cleanId, hashedPassword, fName, mName, lName]);
+
+        await pool.query(`
+            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
+            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
+        `, [cleanId, fName, mName, lName, year_level || 1]);
+
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student account successfully created.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/admin?err=Error adding new student: ${err.message}`);
+    }
+});
+
 app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -376,7 +412,6 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Edit Faculty (Includes Password Reset)
 app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -390,7 +425,6 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
             WHERE username = $5
         `, [cleanUser, first_name.trim(), middle_name.trim(), last_name.trim(), original_username]);
 
-        // If admin entered a new temporary password, hash and apply it
         if (temp_password && temp_password.trim() !== '') {
             const hashedPassword = await bcrypt.hash(temp_password.trim(), 10);
             await pool.query(`
@@ -407,7 +441,6 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
     }
 });
 
-// Admin Edit Student (Includes Password Reset)
 app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -426,7 +459,6 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
             WHERE username = $4
         `, [first_name.trim(), middle_name.trim(), last_name.trim(), student_id]);
 
-        // If admin entered a new temporary password, hash and apply it
         if (temp_password && temp_password.trim() !== '') {
             const hashedPassword = await bcrypt.hash(temp_password.trim(), 10);
             await pool.query(`
@@ -584,6 +616,7 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
         });
 });
 
+// ADDS DUPLICATE ID VALIDATION FOR REGISTRAR CREATING STUDENT
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -595,18 +628,21 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     const pass = temp_password ? temp_password.trim() : 'password123';
 
     try {
+        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanId]);
+        if (existing.rows.length > 0) {
+            return res.redirect(`/registrar?err=Error: The Student ID '${cleanId}' is already registered in the system.`);
+        }
+
         const hashedPassword = await bcrypt.hash(pass, 10);
 
         await pool.query(`
             INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
             VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
-            ON CONFLICT (username) DO NOTHING;
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await pool.query(`
             INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
             VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
-            ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
         if (term && course_codes && academic_year) {
@@ -628,6 +664,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
+// ADDS DUPLICATE USERNAME VALIDATION FOR REGISTRAR CREATING FACULTY
 app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -639,11 +676,15 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
     const pass = temp_password ? temp_password.trim() : 'conm2026';
 
     try {
+        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanUser]);
+        if (existing.rows.length > 0) {
+            return res.redirect(`/registrar?err=Error: The username '${cleanUser}' is already registered in the system.`);
+        }
+
         const hashedPassword = await bcrypt.hash(pass, 10);
         await pool.query(`
             INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
             VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5)
-            ON CONFLICT (username) DO NOTHING;
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
         res.redirect(`/registrar?msg=Faculty account created successfully.`);
