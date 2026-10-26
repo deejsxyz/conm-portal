@@ -34,6 +34,7 @@ function formatFullName(first, middle, last, fallback) {
 
 async function seedDatabase() {
     try {
+        // Core Tables
         await pool.query(`
             CREATE TABLE IF NOT EXISTS courses (
                 course_code VARCHAR(50) PRIMARY KEY,
@@ -57,13 +58,29 @@ async function seedDatabase() {
             );
         `);
 
+        // Apply Schema Updates (Adding academic_year)
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS course_code VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS final_grade VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS instructor VARCHAR(100);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS remarks VARCHAR(50);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_id VARCHAR(100);`);
-        
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS enrolled_term VARCHAR(10);`);
+        await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-2027';`);
+
+        // Global System Settings Table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS settings (
+                id INT PRIMARY KEY,
+                current_ay VARCHAR(20),
+                current_semester INT
+            );
+        `);
+        await pool.query(`
+            INSERT INTO settings (id, current_ay, current_semester) 
+            VALUES (1, '2026-2027', 1) 
+            ON CONFLICT (id) DO NOTHING;
+        `);
+
         await pool.query(`
             UPDATE grades g 
             SET enrolled_term = c.term_id::varchar 
@@ -89,6 +106,7 @@ async function seedDatabase() {
             DO UPDATE SET password_hash = $1, role = 'registrar', must_change_password = FALSE;
         `, [registrarPassword]);
 
+        // Seed Courses...
         const allCourses = [
             ['GEC 101', 'Understanding the Self', 3, 0, 3, 1],
             ['GEC 104', 'Mathematics in the Modern World', 3, 0, 3, 1],
@@ -354,6 +372,10 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     let selectedTerm = req.query.term || '';
 
     try {
+        // Fetch Global System Settings
+        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
+        const systemSettings = settingsRes.rows[0];
+
         let student = null;
         let grades = [];
         let availableCourses = [];
@@ -382,7 +404,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
 
                 if (selectedTerm) {
                     const gradesRes = await pool.query(`
-                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term,
+                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
                                c.descriptive_title, c.lec_units, c.rle_units, c.total_units
                         FROM grades g
                         JOIN courses c ON g.course_code = c.course_code
@@ -395,6 +417,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
 
         res.render('registrar', {
             currentUser: req.session.user,
+            systemSettings: systemSettings,
             selectedStudent: student,
             grades: grades,
             availableCourses: availableCourses,
@@ -406,6 +429,19 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error loading registrar dashboard: ${err.message}`);
+    }
+});
+
+// Update Global Setting Route
+app.post('/registrar/update-settings', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+    const { current_ay, current_semester } = req.body;
+    try {
+        await pool.query('UPDATE settings SET current_ay = $1, current_semester = $2 WHERE id = 1', [current_ay, current_semester]);
+        res.redirect(`/registrar?msg=${encodeURIComponent('Active Academic Year and Semester updated successfully. This applies instantly to the Faculty Portal.')}`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/registrar?err=Failed to update settings.`);
     }
 });
 
@@ -423,7 +459,6 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
         .on('end', async () => {
             try {
                 for (const student of students) {
-                    // Generate 8-character password
                     const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
                     const lower = 'abcdefghijklmnopqrstuvwxyz';
                     const num = '0123456789';
@@ -444,7 +479,6 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                     const tempPassword = passArray.sort(() => Math.random() - 0.5).join('');
                     const hashedPassword = await bcrypt.hash(tempPassword, 10);
                     
-                    // Insert into users table
                     await pool.query(
                         `INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password) 
                          VALUES ($1, $2, 'student', $3, $4, $5, TRUE) 
@@ -452,7 +486,6 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                         [student.student_id, hashedPassword, student.first_name, student.middle_name, student.last_name]
                     );
 
-                    // Insert into students profile table
                     await pool.query(
                         `INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
                          VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
@@ -460,18 +493,17 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                         [student.student_id, student.first_name, student.middle_name, student.last_name, student.year_level || 1]
                     );
 
-                    // Dynamically calculate Term ID from Year Level and Semester
-                    if (student.year_level && student.semester && student.subjects) {
+                    if (student.year_level && student.semester && student.subjects && student.academic_year) {
                         const termId = (parseInt(student.year_level) - 1) * 2 + parseInt(student.semester);
                         const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
                         
                         for (const code of courseCodes) {
                             await pool.query(
-                                `INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term) 
-                                 VALUES ($1, $2, '', '', '', $3)
+                                `INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term, academic_year) 
+                                 VALUES ($1, $2, '', '', '', $3, $4)
                                  ON CONFLICT (student_id, course_code) 
-                                 DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';`,
-                                [student.student_id, code, termId.toString()]
+                                 DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';`,
+                                [student.student_id, code, termId.toString(), student.academic_year]
                             );
                         }
                     }
@@ -491,7 +523,7 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, first_name, middle_name, last_name, year_level, term, course_codes, temp_password } = req.body;
+    const { student_id, first_name, middle_name, last_name, year_level, term, academic_year, course_codes, temp_password } = req.body;
     const cleanId = student_id ? student_id.trim() : '';
     const fName = first_name ? first_name.trim() : '';
     const mName = middle_name ? middle_name.trim() : '';
@@ -513,15 +545,15 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             ON CONFLICT (student_id) DO NOTHING;
         `, [cleanId, fName, mName, lName, year_level || 1]);
 
-        if (term && course_codes) {
+        if (term && course_codes && academic_year) {
             const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
             for (let code of codes) {
                 await pool.query(`
-                    INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
-                    VALUES ($1, $2, '', '', '', $3)
+                    INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term, academic_year)
+                    VALUES ($1, $2, '', '', '', $3, $4)
                     ON CONFLICT (student_id, course_code) 
-                    DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
-                `, [cleanId, code, term]);
+                    DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
+                `, [cleanId, code, term, academic_year]);
             }
         }
 
@@ -578,14 +610,14 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
 app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, course_code, term } = req.body;
+    const { student_id, course_code, term, academic_year } = req.body;
     try {
         await pool.query(`
-            INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
-            VALUES ($1, $2, '', '', '', $3)
+            INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term, academic_year)
+            VALUES ($1, $2, '', '', '', $3, $4)
             ON CONFLICT (student_id, course_code) 
-            DO UPDATE SET enrolled_term = $3, final_grade = '', instructor = '', remarks = '';
-        `, [student_id, course_code, term]);
+            DO UPDATE SET enrolled_term = $3, academic_year = $4, final_grade = '', instructor = '', remarks = '';
+        `, [student_id, course_code, term, academic_year]);
 
         res.redirect(`/registrar?student_id=${student_id}&term=${term}&msg=Subject successfully enrolled.`);
     } catch (err) {
@@ -620,8 +652,8 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
                 await pool.query(`
                     UPDATE grades 
                     SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $4 AND course_code = $5
-                `, [grade, inst, rem, student_id, code]);
+                    WHERE student_id = $4 AND course_code = $5 AND enrolled_term = $6
+                `, [grade, inst, rem, student_id, code, term]);
             }
         }
 
@@ -656,53 +688,42 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
     
     const targetStudentId = req.query.student_id ? req.query.student_id.trim() : '';
-    let selectedTerm = req.query.term || '';
 
     try {
+        // Enforce the Global Setup
+        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
+        const systemSettings = settingsRes.rows[0];
+
         let student = null;
         let grades = [];
-        let availableCourses = [];
-
-        const allCoursesRes = await pool.query('SELECT * FROM courses ORDER BY term_id, course_code');
-        availableCourses = allCoursesRes.rows;
 
         if (targetStudentId) {
             const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [targetStudentId]);
             student = studentRes.rows[0] || null;
 
             if (student) {
-                if (!selectedTerm) {
-                    const termRes = await pool.query(`
-                        SELECT enrolled_term 
-                        FROM grades 
-                        WHERE student_id = $1 AND enrolled_term IS NOT NULL AND enrolled_term != ''
-                        ORDER BY enrolled_term DESC 
-                        LIMIT 1
-                    `, [targetStudentId]);
-                    if (termRes.rows.length > 0) {
-                        selectedTerm = termRes.rows[0].enrolled_term;
-                    }
-                }
+                // If global semester is 1st Sem, fetch terms 1,3,5,7. If 2nd Sem, fetch terms 2,4,6,8.
+                const validTerms = systemSettings.current_semester === 1 ? [1, 3, 5, 7] : [2, 4, 6, 8];
 
-                if (selectedTerm) {
-                    const gradesRes = await pool.query(`
-                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, 
-                               c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-                        FROM grades g
-                        JOIN courses c ON g.course_code = c.course_code
-                        WHERE g.student_id = $1 AND g.enrolled_term = $2
-                    `, [targetStudentId, selectedTerm]);
-                    grades = gradesRes.rows;
-                }
+                const gradesRes = await pool.query(`
+                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
+                           c.descriptive_title, c.lec_units, c.rle_units, c.total_units
+                    FROM grades g
+                    JOIN courses c ON g.course_code = c.course_code
+                    WHERE g.student_id = $1 
+                      AND g.academic_year = $2 
+                      AND CAST(g.enrolled_term AS INTEGER) = ANY($3)
+                `, [targetStudentId, systemSettings.current_ay, validTerms]);
+                
+                grades = gradesRes.rows;
             }
         }
 
         res.render('faculty_edit', {
             currentUser: req.session.user,
+            systemSettings: systemSettings,
             selectedStudent: student,
             grades: grades,
-            availableCourses: availableCourses,
-            currentTerm: selectedTerm,
             message: req.query.msg || null,
             error: req.query.err || null
         });
@@ -712,47 +733,10 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
 });
 
-app.post('/faculty/add-single-grade', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    let { student_id, course_code, final_grade, instructor, term } = req.body;
-    
-    final_grade = final_grade ? final_grade.trim() : '';
-    if (/^\d+$/.test(final_grade)) {
-        final_grade = `${final_grade}.00`;
-    }
-
-    try {
-        const numGrade = parseFloat(final_grade);
-        let remarks = '';
-        const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
-
-        if (passedGrades.includes(final_grade)) remarks = 'PASSED';
-        else if (final_grade === '4.00') remarks = 'CONDITIONAL';
-        else if (final_grade === '5.00') remarks = 'FAILED';
-        else if (final_grade === 'X') remarks = 'DROPPED';
-        else if (final_grade === 'INC') remarks = 'INCOMPLETE';
-        else if (final_grade === 'W') remarks = 'ABSENT FROM EXAMINATION';
-        else if (final_grade === 'NG') remarks = 'NO GRADE';
-
-        await pool.query(`
-            INSERT INTO grades (student_id, course_code, final_grade, instructor, remarks, enrolled_term)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (student_id, course_code) 
-            DO UPDATE SET final_grade = $3, instructor = $4, remarks = $5, enrolled_term = $6;
-        `, [student_id, course_code, final_grade, instructor || '', remarks, term]);
-
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Grade saved successfully.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
-    }
-});
-
 app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, term, course_codes, final_grades, instructors, remarks_list } = req.body;
+    const { student_id, academic_year, course_codes, final_grades, instructors, remarks_list } = req.body;
     
     try {
         const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
@@ -775,32 +759,15 @@ app.post('/faculty/update-grades-batch', isAuthenticated, async (req, res) => {
                 await pool.query(`
                     UPDATE grades 
                     SET final_grade = $1, instructor = $2, remarks = $3 
-                    WHERE student_id = $4 AND course_code = $5
-                `, [grade, inst, rem, student_id, code]);
+                    WHERE student_id = $4 AND course_code = $5 AND academic_year = $6
+                `, [grade, inst, rem, student_id, code, academic_year]);
             }
         }
 
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=All grade changes saved successfully!`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&msg=All grade changes saved securely for the current Academic Year.`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
-    }
-});
-
-app.post('/faculty/delete-grade', isAuthenticated, async (req, res) => {
-    if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-
-    const { student_id, course_code, term } = req.body;
-    try {
-        await pool.query(`
-            DELETE FROM grades 
-            WHERE student_id = $1 AND course_code = $2
-        `, [student_id, course_code]);
-
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&msg=Grade record deleted.`);
-    } catch (err) {
-        console.error(err);
-        res.redirect(`/faculty/edit-grades?student_id=${student_id}&term=${term}&err=${encodeURIComponent(err.message)}`);
+        res.redirect(`/faculty/edit-grades?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
     }
 });
 

@@ -39,59 +39,28 @@
             </div>
         <% } %>
 
-        <!-- SEARCH STUDENT BY ID & SEMESTER TOOLBAR -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
-            <form id="facultyFilterForm" method="GET" action="/faculty/edit-grades" class="flex flex-col sm:flex-row items-center gap-3 w-full">
-                <!-- Search ID -->
-                <div class="flex-grow w-full sm:w-auto">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
+        <!-- ACTIVE SYSTEM PERIOD BANNER -->
+        <div class="p-4 bg-emerald-100 border border-emerald-300 rounded-xl flex items-center justify-center gap-2 text-emerald-900 shadow-sm">
+            <span class="font-bold text-sm uppercase tracking-wider">Active Grading Period:</span>
+            <span class="px-3 py-1 bg-emerald-800 text-emerald-100 rounded-lg text-xs font-bold shadow-sm">
+                <%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %> | A.Y. <%= systemSettings.current_ay %>
+            </span>
+        </div>
+
+        <!-- SEARCH STUDENT BY ID ONLY -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <form method="GET" action="/faculty/edit-grades" class="flex flex-col sm:flex-row items-end gap-3 w-full">
+                <div class="flex-grow w-full">
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Enrolled Student by ID Number:</label>
                     <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-emerald-500">
                 </div>
-
-                <!-- Year and Semester Filters -->
-                <div class="flex-grow w-full sm:w-auto">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Filter by Year & Semester:</label>
-                    <div class="flex gap-2">
-                        <% 
-                            let facYear = '2';
-                            let facSem = '1';
-                            let displaySem = "Unknown Semester";
-
-                            if (currentTerm) {
-                                const y = Math.ceil(parseInt(currentTerm) / 2);
-                                const s = parseInt(currentTerm) % 2 === 0 ? 2 : 1;
-                                facYear = y.toString();
-                                facSem = s.toString();
-                                
-                                const yText = y === 1 ? '1st' : y === 2 ? '2nd' : y === 3 ? '3rd' : '4th';
-                                const sText = s === 1 ? '1st' : '2nd';
-                                displaySem = `${yText} Year - ${sText} Semester`;
-                            }
-                        %>
-                        <select id="faculty_year_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
-                            <option value="1" <%= facYear === '1' ? 'selected' : '' %>>1st Year</option>
-                            <option value="2" <%= facYear === '2' ? 'selected' : '' %>>2nd Year</option>
-                            <option value="3" <%= facYear === '3' ? 'selected' : '' %>>3rd Year</option>
-                            <option value="4" <%= facYear === '4' ? 'selected' : '' %>>4th Year</option>
-                        </select>
-
-                        <select id="faculty_sem_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
-                            <option value="1" <%= facSem === '1' ? 'selected' : '' %>>1st Semester</option>
-                            <option value="2" <%= facSem === '2' ? 'selected' : '' %>>2nd Semester</option>
-                        </select>
-                        
-                        <!-- Hidden input stores calculated 1-8 term for backend -->
-                        <input type="hidden" name="term" id="faculty_term_hidden" value="<%= currentTerm %>">
-                        <button type="button" onclick="submitFacultyFilter()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
-                    </div>
-                </div>
+                <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-bold shadow transition-colors">Search Grades</button>
             </form>
         </div>
 
         <!-- DYNAMIC CONTENT CONTAINER -->
         <div id="studentWorkflowContainer" class="space-y-6">
 
-            <!-- EDITING GRADES SECTION -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                 <div class="border-b border-slate-100 pb-3 mb-4 flex justify-between items-center">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900">
@@ -102,18 +71,18 @@
                     </h3>
                 </div>
 
-                <% if (!selectedStudent || !currentTerm) { %>
+                <% if (!selectedStudent) { %>
                     <div class="text-center py-12 text-slate-400">
-                        <p class="text-sm">Please search a student and select a Year & Semester above. Enrolled subjects will auto-populate.</p>
+                        <p class="text-sm">Please search a student above. Only subjects enrolled for the Active Grading Period will appear.</p>
                     </div>
                 <% } else { %>
                     <form action="/faculty/update-grades-batch" method="POST" class="space-y-4">
                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                        <input type="hidden" name="term" value="<%= currentTerm %>">
+                        <input type="hidden" name="academic_year" value="<%= systemSettings.current_ay %>">
 
                         <% if (grades.length === 0) { %>
                             <div class="text-center py-8 text-slate-400 text-xs">
-                                No subjects enrolled for this student in <strong><%= displaySem %></strong>. Please request the CONM Registrar to enroll subjects for this student.
+                                No subjects enrolled for this student in the <strong><%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %> (A.Y. <%= systemSettings.current_ay %>)</strong>.
                             </div>
                         <% } else { %>
                             <% grades.forEach((g, index) => { %>
@@ -188,14 +157,6 @@
     </main>
 
     <script>
-        // Combine Year and Semester into Term ID before searching
-        function submitFacultyFilter() {
-            const y = parseInt(document.getElementById('faculty_year_select').value);
-            const s = parseInt(document.getElementById('faculty_sem_select').value);
-            document.getElementById('faculty_term_hidden').value = (y - 1) * 2 + s;
-            document.getElementById('facultyFilterForm').submit();
-        }
-
         function autoMatchRemark(selectElement, index) {
             const grade = selectElement.value;
             const remarkSelect = document.getElementById('remark_' + index);

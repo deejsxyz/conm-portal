@@ -28,16 +28,37 @@
     <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
         
         <% if (locals.message) { %>
-            <div style="background: #d4edda; color: #155724; padding: 12px 20px; border-radius: 6px; border: 1px solid #c3e6cb; font-weight: 500; text-align: center;">
+            <div style="background: #d4edda; color: #155724; padding: 12px 20px; border-radius: 6px; border: 1px solid #c3e6cb; font-weight: 500; text-align: center; margin-bottom: 1rem;">
                 <%= message %>
             </div>
         <% } %>
 
         <% if (locals.error) { %>
-            <div style="background: #f8d7da; color: #721c24; padding: 12px 20px; border-radius: 6px; border: 1px solid #f5c6cb; font-weight: 500; text-align: center;">
+            <div style="background: #f8d7da; color: #721c24; padding: 12px 20px; border-radius: 6px; border: 1px solid #f5c6cb; font-weight: 500; text-align: center; margin-bottom: 1rem;">
                 <%= error %>
             </div>
         <% } %>
+
+        <!-- GLOBAL SYSTEM SETTINGS (Controls Faculty View) -->
+        <div class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+                <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
+                <p class="text-xs text-indigo-700 mt-1">Set the active Academic Year and Semester. This locks the Faculty Portal so instructors can only view and edit grades for this exact period.</p>
+            </div>
+            <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center w-full sm:w-auto">
+                <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
+                    <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                    <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                    <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                    <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                </select>
+                <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
+                    <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
+                    <option value="2" <%= systemSettings.current_semester === 2 ? 'selected' : '' %>>2nd Semester</option>
+                </select>
+                <button type="submit" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors">Apply System-Wide</button>
+            </form>
+        </div>
 
         <!-- TOGGLE BUTTONS FOR ACCOUNT REGISTRATION -->
         <div class="flex flex-wrap gap-4">
@@ -58,17 +79,18 @@
             <!-- BATCH UPLOAD CSV FORM -->
             <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-2">Batch Upload & Enroll Students</h3>
-                <p class="text-xs text-slate-500 mb-4">Export your Google Form responses as a <strong>.csv</strong> file. The system will auto-generate secure passwords and enroll all selected subjects.</p>
+                <p class="text-xs text-slate-500 mb-4">Export your Google Form responses as a <strong>.csv</strong> file. The system will auto-generate secure passwords and enroll all selected subjects based on the student's Year, Semester, and Academic Year.</p>
                 
                 <div class="mb-5 p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
                     <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
-                    <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, term, subjects</code>
+                    <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, semester, academic_year, subjects</code>
                     
                     <div class="mt-3 text-[11px] text-slate-500">
                         <strong>Formatting Rules:</strong>
                         <ul class="list-disc pl-4 mt-1 space-y-1">
-                            <li>Ensure the Google Form questions match the exact header names above (rename columns in Google Sheets before exporting if necessary).</li>
-                            <li><strong>subjects:</strong> Google Forms automatically separates checkbox answers with a comma. The system will parse these commas automatically.</li>
+                            <li><strong>academic_year:</strong> Must be formatted like <code class="bg-slate-200 px-1 rounded">2026-2027</code>.</li>
+                            <li><strong>year_level:</strong> Use 1, 2, 3, or 4.</li>
+                            <li><strong>semester:</strong> Use 1 (for 1st Sem) or 2 (for 2nd Sem).</li>
                         </ul>
                     </div>
                 </div>
@@ -109,36 +131,42 @@
                         </div>
                     </div>
 
+                    <!-- Row 2: Year, Semester, and Academic Year Selection -->
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
                         <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year Level</label>
-                            <select name="year_level" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Enrollment Academic Year</label>
+                            <select name="academic_year" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                                <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                                <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                                <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                                <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Year Level</label>
+                            <select name="year_level" id="reg_year_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
                                 <option value="1">1st Year</option>
                                 <option value="2" selected>2nd Year</option>
                                 <option value="3">3rd Year</option>
                                 <option value="4">4th Year</option>
                             </select>
                         </div>
-                        <div class="sm:col-span-2">
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Active Enrollment Term (Triggers Subjects)</label>
-                            <select name="term" id="reg_term_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800">
-                                <option value="">-- Select Active Enrollment Term --</option>
-                                <option value="1">1st Year - 1st Sem</option>
-                                <option value="2">1st Year - 2nd Sem</option>
-                                <option value="3">2nd Year - 1st Sem</option>
-                                <option value="4">2nd Year - 2nd Sem</option>
-                                <option value="5">3rd Year - 1st Sem</option>
-                                <option value="6">3rd Year - 2nd Sem</option>
-                                <option value="7">4th Year - 1st Sem</option>
-                                <option value="8">4th Year - 2nd Sem</option>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester (Triggers Subjects)</label>
+                            <select id="reg_sem_select" onchange="updateSubjectChecklist()" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800">
+                                <option value="1">1st Semester</option>
+                                <option value="2">2nd Semester</option>
                             </select>
                         </div>
                     </div>
                     
+                    <input type="hidden" name="term" id="reg_term_hidden" value="" <%= selectedStudent ? 'disabled' : '' %>>
+                    
+                    <!-- Dynamic Subjects Checklist Container -->
                     <div class="pt-2">
                         <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects to Enroll (Available for Irregular / Back Subjects)</label>
                         <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                            <p class="text-xs text-slate-400 italic">Please select an Active Enrollment Term above to populate the full curriculum catalog.</p>
+                            <!-- Populated by JS -->
                         </div>
                     </div>
 
@@ -186,34 +214,40 @@
         </div>
 
         <!-- SEARCH STUDENT & TERM TOOLBAR -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-            <form method="GET" action="/registrar" class="flex items-center gap-2">
-                <div class="flex-grow">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
+            <form id="searchToolbarForm" method="GET" action="/registrar" class="flex flex-col sm:flex-row items-center gap-3 w-full">
+                <!-- Search ID -->
+                <div class="flex-grow w-full sm:w-auto">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
-                        <input type="hidden" name="term" value="<%= currentTerm %>">
-                        <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
-                    </div>
+                    <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
                 </div>
-            </form>
 
-            <form method="GET" action="/registrar" class="flex items-center gap-2">
-                <div class="flex-grow">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Semester Term:</label>
+                <!-- Year and Semester Filters -->
+                <div class="flex-grow w-full sm:w-auto">
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Filter by Year & Semester:</label>
                     <div class="flex gap-2">
-                        <select name="term" onchange="this.form.submit()" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
-                            <option value="" <%= !currentTerm ? 'selected' : '' %>>-- Select Term/Semester --</option>
-                            <option value="1" <%= currentTerm === '1' ? 'selected' : '' %>>1st Year - 1st Sem</option>
-                            <option value="2" <%= currentTerm === '2' ? 'selected' : '' %>>1st Year - 2nd Sem</option>
-                            <option value="3" <%= currentTerm === '3' ? 'selected' : '' %>>2nd Year - 1st Sem</option>
-                            <option value="4" <%= currentTerm === '4' ? 'selected' : '' %>>2nd Year - 2nd Sem</option>
-                            <option value="5" <%= currentTerm === '5' ? 'selected' : '' %>>3rd Year - 1st Sem</option>
-                            <option value="6" <%= currentTerm === '6' ? 'selected' : '' %>>3rd Year - 2nd Sem</option>
-                            <option value="7" <%= currentTerm === '7' ? 'selected' : '' %>>4th Year - 1st Sem</option>
-                            <option value="8" <%= currentTerm === '8' ? 'selected' : '' %>>4th Year - 2nd Sem</option>
+                        <% 
+                            let searchYear = '2'; 
+                            let searchSem = '1';
+                            if (currentTerm) {
+                                searchYear = Math.ceil(parseInt(currentTerm) / 2).toString();
+                                searchSem = (parseInt(currentTerm) % 2 === 0 ? 2 : 1).toString();
+                            }
+                        %>
+                        <select id="search_year_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
+                            <option value="1" <%= searchYear === '1' ? 'selected' : '' %>>1st Year</option>
+                            <option value="2" <%= searchYear === '2' ? 'selected' : '' %>>2nd Year</option>
+                            <option value="3" <%= searchYear === '3' ? 'selected' : '' %>>3rd Year</option>
+                            <option value="4" <%= searchYear === '4' ? 'selected' : '' %>>4th Year</option>
                         </select>
-                        <input type="hidden" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>">
+
+                        <select id="search_sem_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium">
+                            <option value="1" <%= searchSem === '1' ? 'selected' : '' %>>1st Semester</option>
+                            <option value="2" <%= searchSem === '2' ? 'selected' : '' %>>2nd Semester</option>
+                        </select>
+                        
+                        <input type="hidden" name="term" id="search_term_hidden" value="<%= currentTerm %>">
+                        <button type="button" onclick="submitSearchFilter()" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow">Search</button>
                     </div>
                 </div>
             </form>
@@ -223,12 +257,22 @@
             <!-- MANUAL ENROLL SINGLE SUBJECT -->
             <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5">
                 <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">Enroll Extra / Back Subject for Term <%= currentTerm %></h3>
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">Enroll Extra / Back Subject</h3>
                 </div>
                 <form action="/registrar/add-single-course" method="POST" class="flex gap-3 items-end text-sm">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                     <input type="hidden" name="term" value="<%= currentTerm %>">
                     
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Academic Year</label>
+                        <select name="academic_year" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                            <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                            <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                            <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                            <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                        </select>
+                    </div>
+
                     <div class="flex-grow">
                         <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Select Subject from Curriculum Catalog</label>
                         <select name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
@@ -268,7 +312,6 @@
                 </h3>
                 
                 <% if (selectedStudent) { %>
-                    <!-- Password Reset Button for Currently Searched Student -->
                     <form action="/registrar/reset-student-password" method="POST" onsubmit="return confirmPasswordReset(this, '<%= selectedStudent.student_id %>')" class="inline-block">
                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                         <input type="hidden" name="new_password" class="reset-pass-field">
@@ -281,7 +324,7 @@
 
             <% if (!selectedStudent || !currentTerm) { %>
                 <div class="text-center py-12 text-slate-400">
-                    <p class="text-sm">Please search a student and select a term above to manage grades and enrollments.</p>
+                    <p class="text-sm">Please search a student and select Year & Semester above to manage grades.</p>
                 </div>
             <% } else { %>
                 <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
@@ -298,7 +341,7 @@
                                 <input type="hidden" name="course_codes" value="<%= g.course_code %>">
 
                                 <div>
-                                    <span class="text-[10px] uppercase text-slate-400 block font-bold">Code</span>
+                                    <span class="text-[10px] uppercase text-slate-400 block font-bold">Code (<%= g.academic_year %>)</span>
                                     <span class="font-mono font-bold text-indigo-900"><%= g.course_code %></span>
                                 </div>
                                 <div class="sm:col-span-2">
@@ -375,17 +418,15 @@
         </div>
     </main>
 
-    <!-- SCRIPT FOR SUBJECT CHECKLIST, PASSWORD GEN, TOGGLES & AUTO-MATCHING -->
+    <!-- SCRIPT LOGIC -->
     <script id="courses-data" type="application/json">
         <%- JSON.stringify(locals.allCoursesRaw || []) %>
     </script>
     <script>
         const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
         
-        // Form Visibility Toggle Function
         function toggleSection(sectionId) {
             const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection'];
-            
             sections.forEach(id => {
                 const section = document.getElementById(id);
                 if (id === sectionId) {
@@ -396,15 +437,26 @@
             });
         }
         
+        function submitSearchFilter() {
+            const y = parseInt(document.getElementById('search_year_select').value);
+            const s = parseInt(document.getElementById('search_sem_select').value);
+            document.getElementById('search_term_hidden').value = (y - 1) * 2 + s;
+            document.getElementById('searchToolbarForm').submit();
+        }
+
         function updateSubjectChecklist() {
-            const termSelect = document.getElementById('reg_term_select');
+            const yearSelect = document.getElementById('reg_year_select');
+            const semSelect = document.getElementById('reg_sem_select');
             const container = document.getElementById('subjectChecklist');
-            const selectedTerm = termSelect.value;
+            const hiddenTerm = document.getElementById('reg_term_hidden');
             
-            if (!selectedTerm) {
-                container.innerHTML = '<p class="text-xs text-slate-400 italic">Please select an Active Enrollment Term above to populate the full curriculum catalog.</p>';
-                return;
-            }
+            if (!yearSelect || !semSelect || !yearSelect.value || !semSelect.value) return;
+
+            const year = parseInt(yearSelect.value);
+            const sem = parseInt(semSelect.value);
+            const selectedTerm = (year - 1) * 2 + sem;
+            
+            if (hiddenTerm) hiddenTerm.value = selectedTerm;
 
             const termNames = {
                 "1": "1st Year - 1st Sem", "2": "1st Year - 2nd Sem", "3": "2nd Year - 1st Sem",
@@ -413,13 +465,11 @@
             };
 
             let html = '<div class="max-h-[350px] overflow-y-auto pr-2 space-y-4">';
-            
             for (let i = 1; i <= 8; i++) {
                 const termCourses = allCoursesData.filter(c => String(c.term_id) === String(i));
                 if (termCourses.length === 0) continue;
 
                 const isCurrentTermGroup = String(i) === String(selectedTerm);
-                
                 html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'} shadow-sm">`;
                 html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${termNames[i]} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
                 html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">`;
@@ -435,7 +485,6 @@
                 });
                 html += `</div></div>`;
             }
-            
             html += '</div>';
             container.innerHTML = html;
         }
@@ -487,7 +536,6 @@
             for (let i = 0; i < 4; i++) {
                 pass.push(all[Math.floor(Math.random() * all.length)]);
             }
-            
             return pass.sort(() => Math.random() - 0.5).join('');
         }
         
@@ -498,7 +546,6 @@
             const msg = `You are about to reset the password for Student ID: ${studentId}.\n\n` +
                         `The NEW temporary password is:\n\n${newPass}\n\n` + 
                         `Please COPY or WRITE DOWN this password before clicking OK, as it will be securely hashed in the database.`;
-            
             return confirm(msg);
         }
 
@@ -507,6 +554,7 @@
             const stuPass = document.getElementById('regStudentTempPassword');
             if (facPass && !facPass.value) facPass.value = generateRandomPassword();
             if (stuPass && !stuPass.disabled && !stuPass.value) stuPass.value = generateRandomPassword();
+            updateSubjectChecklist();
         });
     </script>
 </body>
