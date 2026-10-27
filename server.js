@@ -913,7 +913,8 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     const facultyUsername = req.session.user.username;
     const facUserRes = await pool.query('SELECT first_name, middle_name, last_name FROM users WHERE username = $1', [facultyUsername]);
     const facUser = facUserRes.rows[0] || {};
-    const facultyFullName = [facUser.last_name, facUser.first_name, facUser.middle_name].filter(Boolean).join(', ');
+    // Format strictly as LAST NAME, FIRST NAME MIDDLE NAME (no comma between first and middle)
+    const facultyFullName = [facUser.last_name, [facUser.first_name, facUser.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
     const rawCourseCode = req.query.course_code;
     const selectedCourse = Array.isArray(rawCourseCode) ? rawCourseCode[0].trim() : (rawCourseCode ? rawCourseCode.trim() : '');
@@ -930,13 +931,15 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             const allC = await pool.query('SELECT course_code, descriptive_title FROM courses ORDER BY course_code');
             assignedCourses = allC.rows;
         } else {
+            // FIX: Faculty dropdown now checks both assigned teaching loads AND subjects where students are actively enrolled under this instructor
             const facC = await pool.query(`
-                SELECT c.course_code, c.descriptive_title 
-                FROM faculty_courses fc
-                JOIN courses c ON fc.course_code = c.course_code
-                WHERE fc.username = $1
+                SELECT DISTINCT c.course_code, c.descriptive_title 
+                FROM courses c
+                LEFT JOIN faculty_courses fc ON fc.course_code = c.course_code AND fc.username = $1
+                LEFT JOIN grades g ON g.course_code = c.course_code AND g.instructor = $2
+                WHERE fc.username = $1 OR g.instructor = $2
                 ORDER BY c.course_code
-            `, [facultyUsername]);
+            `, [facultyUsername, facultyFullName]);
             assignedCourses = facC.rows;
         }
 
