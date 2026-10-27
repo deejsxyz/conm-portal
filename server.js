@@ -235,14 +235,14 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
 
         req.session.user.mustChangePassword = false;
 
-        if (req.session.user.role === 'admin') {
-            res.redirect('/admin');
-        } else if (req.session.user.role === 'registrar') {
-            res.redirect('/registrar');
-        } else if (req.session.user.role === 'faculty') {
-            res.redirect('/faculty/edit-grades');
+        if (user.role === 'admin') {
+            return res.redirect('/admin');
+        } else if (user.role === 'registrar') {
+            return res.redirect('/registrar');
+        } else if (user.role === 'faculty') {
+            return res.redirect('/faculty/edit-grades');
         } else {
-            res.redirect('/portal');
+            return res.redirect('/portal');
         }
     } catch (err) {
         console.error(err);
@@ -933,24 +933,14 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         let matchingStudent = null;
         let gradeRecord = null;
 
-        if (selectedCourse && searchLastName) {
-            let queryStr = `
+        // ALL THREE NAME FIELDS ARE NOW MANDATORY
+        if (selectedCourse && searchLastName && searchFirstName && searchMiddleName) {
+            const studentRes = await pool.query(`
                 SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level
                 FROM students s
-                WHERE s.last_name ILIKE $1
-            `;
-            let queryParams = [`%${searchLastName}%`];
+                WHERE s.last_name ILIKE $1 AND s.first_name ILIKE $2 AND s.middle_name ILIKE $3
+            `, [`%${searchLastName}%`, `%${searchFirstName}%`, `%${searchMiddleName}%`]);
 
-            if (searchFirstName) {
-                queryParams.push(`%${searchFirstName}%`);
-                queryStr += ` AND s.first_name ILIKE $${queryParams.length}`;
-            }
-            if (searchMiddleName) {
-                queryParams.push(`%${searchMiddleName}%`);
-                queryStr += ` AND s.middle_name ILIKE $${queryParams.length}`;
-            }
-
-            const studentRes = await pool.query(queryStr, queryParams);
             if (studentRes.rows.length > 0) {
                 matchingStudent = studentRes.rows[0];
 

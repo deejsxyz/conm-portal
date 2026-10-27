@@ -18,8 +18,8 @@
                 </span>
                 <% if (currentUser.role === 'admin') { %>
                     <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
+                    <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
                 <% } %>
-                <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
             </div>
@@ -51,13 +51,13 @@
             <span class="text-xs text-emerald-800 font-medium">Secure Course-Locked Faculty Portal</span>
         </div>
 
-        <!-- STEP 1 & 2: SELECT SUBJECT & SEARCH STUDENT BY NAME -->
+        <!-- STEP 1 & 2: SELECT SUBJECT & SEARCH STUDENT BY NAME (ALL FIELDS REQUIRED) -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
             <form method="GET" action="/faculty/edit-grades" class="space-y-4">
                 <div>
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">1. Select Subject Handled / Taught:</label>
                     <select name="course_code" required onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-emerald-950 bg-slate-50 focus:ring-2 focus:ring-emerald-500">
-                        <option value="">-- Select Subject from Your Assigned Teaching Load --</option>
+                        <option value="" style="font-style: italic;">--Select Subject--</option>
                         <% assignedCourses.forEach(c => { %>
                             <option value="<%= c.course_code %>" <%= selectedCourse === c.course_code ? 'selected' : '' %>>
                                 [<%= c.course_code %>] <%= c.descriptive_title %>
@@ -73,18 +73,22 @@
                             <input type="text" name="last_name" value="<%= searchLastName || '' %>" required placeholder="e.g. Santiago" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">First Name (Optional):</label>
-                            <input type="text" name="first_name" value="<%= searchFirstName || '' %>" placeholder="e.g. Darius" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">First Name (Required):</label>
+                            <input type="text" name="first_name" value="<%= searchFirstName || '' %>" required placeholder="e.g. Darius" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
                         </div>
-                        <div class="flex gap-2">
-                            <input type="hidden" name="course_code" value="<%= selectedCourse %>">
-                            <button type="submit" class="flex-grow py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors">
-                                Search Student
-                            </button>
-                            <a href="/faculty/edit-grades" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-center">
-                                Clear
-                            </a>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Middle Name (Required):</label>
+                            <input type="text" name="middle_name" value="<%= searchMiddleName || '' %>" required placeholder="e.g. Ramiscal" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
                         </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <input type="hidden" name="course_code" value="<%= selectedCourse %>">
+                        <button type="submit" class="py-2 px-6 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors">
+                            Search Student
+                        </button>
+                        <a href="/faculty/edit-grades?course_code=<%= selectedCourse %>" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-center">
+                            Clear
+                        </a>
                     </div>
                 <% } %>
             </form>
@@ -103,18 +107,18 @@
                 </div>
 
                 <% if (!matchingStudent) { %>
-                    <% if (searchLastName) { %>
+                    <% if (searchLastName && searchFirstName && searchMiddleName) { %>
                         <div class="text-center py-8 text-slate-400 text-xs">
-                            No student found matching last name "<%= searchLastName %>".
+                            No student found matching <strong><%= searchLastName %>, <%= searchFirstName %> <%= searchMiddleName %></strong>.
                         </div>
                     <% } else { %>
                         <div class="text-center py-8 text-slate-400 text-xs italic">
-                            Please enter the student's name above to search and encode their grade for this subject.
+                            Please fill in all name fields above to search and encode the student's grade for this subject.
                         </div>
                     <% } %>
                 <% } else if (!gradeRecord) { %>
                     <div class="text-center py-8 text-amber-700 text-xs font-medium bg-amber-50 rounded-lg border border-amber-200">
-                        Student <strong><%= matchingStudent.last_name %>, <%= matchingStudent.first_name %> (<%= matchingStudent.student_id %>)</strong> is found, but they are <strong>not officially enrolled</strong> in <strong><%= selectedCourse %></strong> for the active Academic Year (<%= systemSettings.current_ay %>).
+                        Student <strong><%= matchingStudent.last_name %>, <%= matchingStudent.first_name %> <%= matchingStudent.middle_name || '' %> (<%= matchingStudent.student_id %>)</strong> is found, but they are <strong>not officially enrolled</strong> in <strong><%= selectedCourse %></strong> for the active Academic Year (<%= systemSettings.current_ay %>).
                     </div>
                 <% } else { %>
                     <form action="/faculty/update-grade" method="POST" class="space-y-4">
@@ -138,7 +142,7 @@
                                 <div>
                                     <label class="block text-[10px] uppercase text-slate-400 font-bold mb-1">Final Grade</label>
                                     <select name="final_grade" id="gradeSelect" onchange="autoMatchRemark(this)" class="w-full px-3 py-2 rounded border border-slate-300 font-bold text-emerald-700 bg-white text-xs">
-                                        <option value="" <%= !gradeRecord.final_grade ? 'selected' : '' %>>-- Select --</option>
+                                        <option value="" style="font-style: italic;">--Select Grade--</option>
                                         <option value="1.00" <%= gradeRecord.final_grade === '1.00' ? 'selected' : '' %>>1.00</option>
                                         <option value="1.25" <%= gradeRecord.final_grade === '1.25' ? 'selected' : '' %>>1.25</option>
                                         <option value="1.50" <%= gradeRecord.final_grade === '1.50' ? 'selected' : '' %>>1.50</option>
@@ -163,7 +167,7 @@
                                 <div>
                                     <label class="block text-[10px] uppercase text-slate-400 font-bold mb-1">Remarks</label>
                                     <select name="remarks" id="remarkSelect" class="w-full px-3 py-2 rounded border border-slate-300 text-xs bg-white font-medium">
-                                        <option value="" <%= !gradeRecord.remarks ? 'selected' : '' %>>-- Select --</option>
+                                        <option value="" style="font-style: italic;">--Select Remarks--</option>
                                         <option value="PASSED" <%= gradeRecord.remarks === 'PASSED' ? 'selected' : '' %>>PASSED</option>
                                         <option value="FAILED" <%= gradeRecord.remarks === 'FAILED' ? 'selected' : '' %>>FAILED</option>
                                         <option value="INCOMPLETE" <%= gradeRecord.remarks === 'INCOMPLETE' ? 'selected' : '' %>>INCOMPLETE</option>
