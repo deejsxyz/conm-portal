@@ -105,7 +105,7 @@
                 <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
                     <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
                     
-                    <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-bold shadow-md transition-colors">
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors">
                         Upload & Process CSV
                     </button>
                 </form>
@@ -391,9 +391,9 @@
                         </div>
                         <div class="w-full sm:w-64">
                             <select name="instructor" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700">
-                                <option value="" style="font-style: italic;">--Select Instructor--</option>
+                                <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
                                 <% facultyList.forEach(fac => { 
-                                    const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                                    const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(' ');
                                 %>
                                     <option value="<%= facName %>"><%= facName %></option>
                                 <% }) %>
@@ -474,9 +474,9 @@
                                 <div>
                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Instructor</span>
                                     <select name="instructors" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium text-slate-700">
-                                        <option value="">-- Select Instructor --</option>
+                                        <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
                                         <% facultyList.forEach(fac => { 
-                                            const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                                            const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(' ');
                                         %>
                                             <option value="<%= facName %>" <%= g.instructor === facName ? 'selected' : '' %>><%= facName %></option>
                                         <% }) %>
@@ -563,9 +563,9 @@
                 "7": "4th Year - 1st Sem", "8": "4th Year - 2nd Sem"
             };
 
-            let facultyOptionsHtml = '<option value="">-- Select Instructor --</option>';
+            let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>';
             facultyListData.forEach(fac => {
-                const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(' ');
                 facultyOptionsHtml += `<option value="${facName}">${facName}</option>`;
             });
 
