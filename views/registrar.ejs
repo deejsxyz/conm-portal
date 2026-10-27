@@ -393,7 +393,7 @@
                             <select name="instructor" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700">
                                 <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
                                 <% facultyList.forEach(fac => { 
-                                    const facName = [fac.last_name, fac.first_name, , fac.middle_name].filter(Boolean).join(' ');
+                                    const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
                                 %>
                                     <option value="<%= facName %>"><%= facName %></option>
                                 <% }) %>
@@ -476,7 +476,7 @@
                                     <select name="instructors" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium text-slate-700">
                                         <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
                                         <% facultyList.forEach(fac => { 
-                                            const facName = [fac.last_name, fac.first_name, , fac.middle_name].filter(Boolean).join(' ');
+                                            const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
                                         %>
                                             <option value="<%= facName %>" <%= g.instructor === facName ? 'selected' : '' %>><%= facName %></option>
                                         <% }) %>
@@ -565,7 +565,7 @@
 
             let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>';
             facultyListData.forEach(fac => {
-                const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(' ');
+                const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
                 facultyOptionsHtml += `<option value="${facName}">${facName}</option>`;
             });
 
