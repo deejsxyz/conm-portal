@@ -196,8 +196,9 @@ app.post('/login', async (req, res) => {
             return res.redirect('/change-password');
         }
 
+        // STRICT ROLE ROUTING (ADMIN GOES TO ADMIN PORTAL, REGISTRAR GOES TO REGISTRAR PORTAL)
         if (user.role === 'admin') {
-            return res.redirect('/registrar');
+            return res.redirect('/admin');
         } else if (user.role === 'registrar') {
             return res.redirect('/registrar');
         } else if (user.role === 'faculty') {
@@ -235,7 +236,9 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
 
         req.session.user.mustChangePassword = false;
 
-        if (req.session.user.role === 'admin' || req.session.user.role === 'registrar') {
+        if (req.session.user.role === 'admin') {
+            res.redirect('/admin');
+        } else if (req.session.user.role === 'registrar') {
             res.redirect('/registrar');
         } else if (req.session.user.role === 'faculty') {
             res.redirect('/faculty/edit-grades');
@@ -248,12 +251,218 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
     }
 });
 
-// Safe /admin route redirect
-app.get('/admin', isAuthenticated, (req, res) => {
-    res.redirect('/registrar');
+// ==================== DEDICATED ADMIN PORTAL ROUTES ====================
+app.get('/admin', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.redirect('/portal');
+
+    const selectedStaffUsername = req.query.staff_user ? req.query.staff_user.trim() : '';
+    const searchStudentId = req.query.search_student_id ? req.query.search_student_id.trim() : '';
+
+    try {
+        const staffRes = await pool.query(`
+            SELECT username, role, must_change_password, first_name, middle_name, last_name 
+            FROM users 
+            WHERE role IN ('faculty', 'registrar') 
+            ORDER BY role DESC, last_name ASC, username ASC
+        `);
+
+        let selectedStaff = null;
+        if (selectedStaffUsername) {
+            selectedStaff = staffRes.rows.find(f => f.username === selectedStaffUsername) || null;
+        }
+
+        const countsRes = await pool.query(`
+            SELECT year_level, COUNT(*) AS total 
+            FROM students 
+            GROUP BY year_level
+        `);
+        const yearCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+        countsRes.rows.forEach(r => {
+            yearCounts[r.year_level] = parseInt(r.total, 10);
+        });
+
+        let searchedStudents = [];
+        if (searchStudentId) {
+            const stuSearchRes = await pool.query(`
+                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level,
+                       u.must_change_password
+                FROM students s
+                LEFT JOIN users u ON s.student_id = u.username
+                WHERE s.student_id ILIKE $1
+                ORDER BY s.student_id ASC
+            `, [`%${searchStudentId}%`]);
+            searchedStudents = stuSearchRes.rows;
+        }
+
+        res.render('admin', {
+            currentUser: req.session.user,
+            staffList: staffRes.rows,
+            selectedStaff: selectedStaff,
+            yearCounts: yearCounts,
+            searchStudentId: searchStudentId,
+            searchedStudents: searchedStudents,
+            message: req.query.msg || null,
+            error: req.query.err || null
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading admin dashboard');
+    }
 });
 
-// Registrar Portal Routes
+app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { username, role, first_name, middle_name, last_name, temp_password } = req.body;
+    const cleanUser = username ? username.trim() : '';
+    const staffRole = role === 'registrar' ? 'registrar' : 'faculty';
+    const fName = first_name ? first_name.trim() : '';
+    const mName = middle_name ? middle_name.trim() : '';
+    const lName = last_name ? last_name.trim() : '';
+    const pass = temp_password ? temp_password.trim() : (staffRole === 'registrar' ? 'registrar2026' : 'conm2026');
+
+    if (!cleanUser || !fName || !lName) {
+        return res.redirect('/admin?err=Username, First Name, and Last Name are required.');
+    }
+
+    try {
+        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanUser]);
+        if (existing.rows.length > 0) {
+            return res.redirect(`/admin?err=Error: The username '${cleanUser}' is already registered in the system.`);
+        }
+
+        const hashedPassword = await bcrypt.hash(pass, 10);
+        await pool.query(`
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
+            VALUES ($1, $2, $3, TRUE, $4, $5, $6)
+        `, [cleanUser, hashedPassword, staffRole, fName, mName, lName]);
+
+        res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}&msg=Staff account created successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect('/admin?err=Database error while creating staff account.');
+    }
+});
+
+app.post('/admin/add-student', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, first_name, middle_name, last_name, year_level, temp_password } = req.body;
+    const cleanId = student_id ? student_id.trim() : '';
+    const fName = first_name ? first_name.trim() : '';
+    const mName = middle_name ? middle_name.trim() : '';
+    const lName = last_name ? last_name.trim() : '';
+    const pass = temp_password ? temp_password.trim() : 'password123';
+
+    try {
+        const existing = await pool.query('SELECT * FROM users WHERE username = $1', [cleanId]);
+        if (existing.rows.length > 0) {
+            return res.redirect(`/admin?err=Error: The Student ID '${cleanId}' is already registered in the system.`);
+        }
+
+        const hashedPassword = await bcrypt.hash(pass, 10);
+
+        await pool.query(`
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name) 
+            VALUES ($1, $2, 'student', TRUE, $3, $4, $5)
+        `, [cleanId, hashedPassword, fName, mName, lName]);
+
+        await pool.query(`
+            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
+            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
+        `, [cleanId, fName, mName, lName, year_level || 1]);
+
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student account successfully created.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/admin?err=Error adding new student: ${err.message}`);
+    }
+});
+
+app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { username, role } = req.body;
+    try {
+        await pool.query('DELETE FROM users WHERE username = $1', [username]);
+        if (role === 'student') {
+            await pool.query('DELETE FROM students WHERE student_id = $1', [username]);
+            await pool.query('DELETE FROM grades WHERE student_id = $1', [username]);
+        }
+        if (role === 'faculty') {
+            await pool.query('DELETE FROM faculty_courses WHERE username = $1', [username]);
+        }
+        res.redirect('/admin?msg=User account successfully deleted.');
+    } catch (err) {
+        console.error(err);
+        res.redirect('/admin?err=Failed to delete user account.');
+    }
+});
+
+app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { original_username, username, first_name, middle_name, last_name, temp_password } = req.body;
+    const cleanUser = username.trim();
+    
+    try {
+        await pool.query(`
+            UPDATE users 
+            SET username = $1, first_name = $2, middle_name = $3, last_name = $4
+            WHERE username = $5
+        `, [cleanUser, first_name.trim(), middle_name.trim(), last_name.trim(), original_username]);
+
+        if (temp_password && temp_password.trim() !== '') {
+            const hashedPassword = await bcrypt.hash(temp_password.trim(), 10);
+            await pool.query(`
+                UPDATE users 
+                SET password_hash = $1, must_change_password = TRUE 
+                WHERE username = $2
+            `, [hashedPassword, cleanUser]);
+        }
+
+        res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}&msg=Staff profile updated successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/admin?staff_user=${encodeURIComponent(original_username)}&err=Failed to update staff profile.`);
+    }
+});
+
+app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, first_name, middle_name, last_name, year_level, temp_password } = req.body;
+    
+    try {
+        await pool.query(`
+            UPDATE students 
+            SET first_name = $1, middle_name = $2, last_name = $3, year_level = $4
+            WHERE student_id = $5
+        `, [first_name.trim(), middle_name.trim(), last_name.trim(), year_level, student_id]);
+
+        await pool.query(`
+            UPDATE users 
+            SET first_name = $1, middle_name = $2, last_name = $3
+            WHERE username = $4
+        `, [first_name.trim(), middle_name.trim(), last_name.trim(), student_id]);
+
+        if (temp_password && temp_password.trim() !== '') {
+            const hashedPassword = await bcrypt.hash(temp_password.trim(), 10);
+            await pool.query(`
+                UPDATE users 
+                SET password_hash = $1, must_change_password = TRUE 
+                WHERE username = $2
+            `, [hashedPassword, student_id]);
+        }
+
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&msg=Student profile updated successfully.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&err=Failed to update student profile.`);
+    }
+});
+
+// ==================== REGISTRAR PORTAL ROUTES ====================
 app.get('/registrar', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
@@ -811,7 +1020,8 @@ app.post('/faculty/update-grade', isAuthenticated, async (req, res) => {
 app.get('/portal', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     
-    if (user.role === 'admin' || user.role === 'registrar') return res.redirect('/registrar');
+    if (user.role === 'admin') return res.redirect('/admin');
+    if (user.role === 'registrar') return res.redirect('/registrar');
     if (user.role === 'faculty') return res.redirect('/faculty/edit-grades');
 
     const selectedTerm = req.query.term || '4';
