@@ -906,7 +906,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
     
     const facultyUsername = req.session.user.username;
-    // Safely extract single course code if duplicate params are sent
     const rawCourseCode = req.query.course_code;
     const selectedCourse = Array.isArray(rawCourseCode) ? rawCourseCode[0].trim() : (rawCourseCode ? rawCourseCode.trim() : '');
     const searchLastName = req.query.last_name ? req.query.last_name.trim() : '';
@@ -935,13 +934,13 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         let matchingStudent = null;
         let gradeRecord = null;
 
-        // ALL THREE NAME FIELDS ARE MANDATORY TO PREVENT SERVER ERRORS
+        // STRICT EXACT MATCH FOR LAST NAME, FIRST NAME, AND MIDDLE NAME
         if (selectedCourse && searchLastName && searchFirstName && searchMiddleName) {
             const studentRes = await pool.query(`
                 SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level
                 FROM students s
                 WHERE s.last_name ILIKE $1 AND s.first_name ILIKE $2 AND s.middle_name ILIKE $3
-            `, [`%${searchLastName}%`, `%${searchFirstName}%`, `%${searchMiddleName}%`]);
+            `, [searchLastName, searchFirstName, searchMiddleName]);
 
             if (studentRes.rows.length > 0) {
                 matchingStudent = studentRes.rows[0];
