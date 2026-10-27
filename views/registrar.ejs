@@ -105,7 +105,7 @@
                 <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
                     <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
                     
-                    <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors">
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-bold shadow-md transition-colors">
                         Upload & Process CSV
                     </button>
                 </form>
@@ -372,7 +372,7 @@
                     <% } %>
                 </div>
 
-                <!-- ENROLL ANOTHER SUBJECT WITH INSTRUCTOR SELECTION -->
+                <!-- ENROLL ANOTHER SUBJECT WITH INSTRUCTOR DROPDOWN -->
                 <div class="pt-3 border-t border-indigo-200">
                     <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Add / Enroll Another Subject to this Term</label>
                     <form action="/registrar/add-single-course" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
@@ -390,7 +390,14 @@
                             </select>
                         </div>
                         <div class="w-full sm:w-64">
-                            <input type="text" name="instructor" placeholder="Instructor Name (optional)" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
+                            <select name="instructor" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700">
+                                <option value="" style="font-style: italic;">--Select Instructor--</option>
+                                <% facultyList.forEach(fac => { 
+                                    const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                                %>
+                                    <option value="<%= facName %>"><%= facName %></option>
+                                <% }) %>
+                            </select>
                         </div>
                         
                         <div class="flex gap-2 w-full sm:w-auto">
@@ -466,7 +473,14 @@
                                 </div>
                                 <div>
                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Instructor</span>
-                                    <input type="text" name="instructors" value="<%= g.instructor || '' %>" placeholder="e.g. Prof. Dizon" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white">
+                                    <select name="instructors" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium text-slate-700">
+                                        <option value="">-- Select Instructor --</option>
+                                        <% facultyList.forEach(fac => { 
+                                            const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                                        %>
+                                            <option value="<%= facName %>" <%= g.instructor === facName ? 'selected' : '' %>><%= facName %></option>
+                                        <% }) %>
+                                    </select>
                                 </div>
                                 <div class="flex items-end gap-2">
                                     <div class="flex-grow">

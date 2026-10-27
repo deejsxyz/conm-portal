@@ -45,7 +45,6 @@ async function seedDatabase() {
             );
         `);
 
-        // Removed UNIQUE constraint on (username, course_code) to allow multiple faculty per subject
         await pool.query(`
             CREATE TABLE IF NOT EXISTS faculty_courses (
                 id SERIAL PRIMARY KEY,
@@ -609,7 +608,6 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                         const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
                         
                         for (const code of courseCodes) {
-                            // Check if CSV provided an explicit instructor for this subject, otherwise leave blank or assign default
                             const instructorKey = `instructor_${code.replace(/\s+/g, '_')}`;
                             const assignedInstructor = student[instructorKey] || student.instructor || '';
 
@@ -913,7 +911,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
     
     const facultyUsername = req.session.user.username;
-    // Query faculty's full formal name to match against instructor column in grades table
     const facUserRes = await pool.query('SELECT first_name, middle_name, last_name FROM users WHERE username = $1', [facultyUsername]);
     const facUser = facUserRes.rows[0] || {};
     const facultyFullName = [facUser.last_name, facUser.first_name, facUser.middle_name].filter(Boolean).join(', ');
@@ -946,7 +943,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         let matchingStudent = null;
         let gradeRecord = null;
 
-        // STRICT EXACT MATCH FOR LAST NAME, FIRST NAME, AND MIDDLE NAME
         if (selectedCourse && searchLastName && searchFirstName && searchMiddleName) {
             const studentRes = await pool.query(`
                 SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level
@@ -971,7 +967,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
                 `;
                 let gradeParams = [matchingStudent.student_id, selectedCourse, systemSettings.current_ay, validTerms];
 
-                // If logged in as faculty (not admin), restrict grade editing only to grades assigned specifically to this instructor
                 if (req.session.user.role !== 'admin') {
                     gradeQuery += ` AND g.instructor = $5`;
                     gradeParams.push(facultyFullName);
