@@ -196,7 +196,6 @@ app.post('/login', async (req, res) => {
             return res.redirect('/change-password');
         }
 
-        // STRICT ROLE ROUTING (ADMIN GOES TO ADMIN PORTAL, REGISTRAR GOES TO REGISTRAR PORTAL)
         if (user.role === 'admin') {
             return res.redirect('/admin');
         } else if (user.role === 'registrar') {
@@ -251,7 +250,7 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
     }
 });
 
-// ==================== DEDICATED ADMIN PORTAL ROUTES ====================
+// Admin Routes
 app.get('/admin', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.redirect('/portal');
 
@@ -462,7 +461,7 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     }
 });
 
-// ==================== REGISTRAR PORTAL ROUTES ====================
+// Registrar Portal Routes
 app.get('/registrar', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');

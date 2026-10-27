@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CONM Admin Portal - User Management</title>
+    <title>CONM System Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
     <header class="bg-emerald-950 text-white shadow-md border-b-4 border-pink-500">
         <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
             <div>
-                <h2 class="text-base font-bold">City University of Pasay - System Administrator</h2>
-                <p class="text-xs text-pink-300">College of Nursing and School of Midwifery (CONM)</p>
+                <h2 class="text-base font-bold">College of Nursing and School of Midwifery</h2>
+                <p class="text-xs text-pink-300">System Administrator</p>
             </div>
             <div class="flex items-center space-x-3">
                 <span class="text-xs bg-emerald-800 px-3 py-1.5 rounded-full text-emerald-100 font-medium">
-                    <%= currentUser.fullName || currentUser.username %> (<%= currentUser.role.toUpperCase() %>)
+                    <%= currentUser.fullName || currentUser.username %>
                 </span>
                 <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
-                <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Open Grade Editor</a>
+                <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Grade Portal</a>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
             </div>
