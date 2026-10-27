@@ -235,11 +235,11 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
 
         req.session.user.mustChangePassword = false;
 
-        if (user.role === 'admin') {
+        if (req.session.user.role === 'admin') {
             return res.redirect('/admin');
-        } else if (user.role === 'registrar') {
+        } else if (req.session.user.role === 'registrar') {
             return res.redirect('/registrar');
-        } else if (user.role === 'faculty') {
+        } else if (req.session.user.role === 'faculty') {
             return res.redirect('/faculty/edit-grades');
         } else {
             return res.redirect('/portal');
@@ -906,7 +906,9 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
     
     const facultyUsername = req.session.user.username;
-    const selectedCourse = req.query.course_code ? req.query.course_code.trim() : '';
+    // Safely extract single course code if duplicate params are sent
+    const rawCourseCode = req.query.course_code;
+    const selectedCourse = Array.isArray(rawCourseCode) ? rawCourseCode[0].trim() : (rawCourseCode ? rawCourseCode.trim() : '');
     const searchLastName = req.query.last_name ? req.query.last_name.trim() : '';
     const searchFirstName = req.query.first_name ? req.query.first_name.trim() : '';
     const searchMiddleName = req.query.middle_name ? req.query.middle_name.trim() : '';
@@ -933,7 +935,7 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         let matchingStudent = null;
         let gradeRecord = null;
 
-        // ALL THREE NAME FIELDS ARE NOW MANDATORY
+        // ALL THREE NAME FIELDS ARE MANDATORY TO PREVENT SERVER ERRORS
         if (selectedCourse && searchLastName && searchFirstName && searchMiddleName) {
             const studentRes = await pool.query(`
                 SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level
