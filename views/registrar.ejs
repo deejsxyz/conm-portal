@@ -18,7 +18,7 @@
                 </span>
                 <% if (currentUser.role === 'admin') { %>
                     <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
-                    <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Grade Portal</a>
+                    <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Open Grade Editor</a>
                 <% } %>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
@@ -61,10 +61,6 @@
                     <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
                     <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
                     <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                    <option value="2030-2031" <%= systemSettings.current_ay === '2030-2031' ? 'selected' : '' %>>A.Y. 2030-2031</option>
-                    <option value="2031-2032" <%= systemSettings.current_ay === '2031-2032' ? 'selected' : '' %>>A.Y. 2031-2032</option>
-                    <option value="2032-2033" <%= systemSettings.current_ay === '2032-2033' ? 'selected' : '' %>>A.Y. 2032-2033</option>
-                    <option value="2033-2034" <%= systemSettings.current_ay === '2033-2034' ? 'selected' : '' %>>A.Y. 2033-2034</option>
                 </select>
                 <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
                     <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
@@ -99,11 +95,11 @@
             <!-- BATCH UPLOAD CSV FORM -->
             <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6 space-y-4">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Batch Upload & Enroll Students</h3>
-                <p class="text-xs text-slate-500 mb-2">Export your Google Form responses as a <strong>.csv</strong> file. The system will auto-generate secure passwords and enroll all selected subjects based on the student's Year, Semester, and Academic Year.</p>
+                <p class="text-xs text-slate-500 mb-2">Export your Google Form responses as a <strong>.csv</strong> file. Include an <code class="text-pink-600 font-bold">instructor</code> column if assigning a default instructor per row.</p>
                 
                 <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
                     <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
-                    <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, semester, academic_year, subjects</code>
+                    <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, semester, academic_year, subjects, instructor</code>
                 </div>
 
                 <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
@@ -159,10 +155,6 @@
                                 <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
                                 <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
                                 <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                                <option value="2030-2031" <%= systemSettings.current_ay === '2030-2031' ? 'selected' : '' %>>A.Y. 2030-2031</option>
-                                <option value="2031-2032" <%= systemSettings.current_ay === '2031-2032' ? 'selected' : '' %>>A.Y. 2031-2032</option>
-                                <option value="2032-2033" <%= systemSettings.current_ay === '2032-2033' ? 'selected' : '' %>>A.Y. 2032-2033</option>
-                                <option value="2033-2034" <%= systemSettings.current_ay === '2033-2034' ? 'selected' : '' %>>A.Y. 2033-2034</option>
                             </select>
                         </div>
                         <div>
@@ -186,7 +178,7 @@
                     <input type="hidden" name="term" id="reg_term_hidden" value="" <%= selectedStudent ? 'disabled' : '' %>>
                     
                     <div class="pt-2">
-                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects to Enroll</label>
+                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects & Assign Instructors</label>
                         <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200"></div>
                     </div>
 
@@ -355,16 +347,20 @@
                     </span>
                 </div>
 
-                <!-- LIST OF CURRENTLY ENROLLED SUBJECTS WITH INDEPENDENT DELETE BUTTONS -->
+                <!-- LIST OF CURRENTLY ENROLLED SUBJECTS -->
                 <div class="space-y-2">
                     <label class="block text-[10px] uppercase font-bold text-indigo-800">Currently Enrolled Subjects in Selected Term:</label>
                     <% if (grades.length === 0) { %>
                         <p class="text-xs text-slate-500 italic">No subjects enrolled in this term.</p>
                     <% } else { %>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div class="space-y-2">
                             <% grades.forEach(g => { %>
-                                <div class="flex items-center justify-between bg-white p-2.5 rounded-lg border border-indigo-200 text-xs">
-                                    <span class="font-mono font-bold text-indigo-950">[<%= g.course_code %>] <span class="font-normal text-slate-700"><%= g.descriptive_title %></span></span>
+                                <div class="flex flex-col sm:flex-row items-center justify-between bg-white p-3 rounded-lg border border-indigo-200 text-xs gap-3">
+                                    <div>
+                                        <span class="font-mono font-bold text-indigo-950">[<%= g.course_code %>]</span> 
+                                        <span class="font-normal text-slate-700"><%= g.descriptive_title %></span>
+                                        <span class="block text-[10px] text-emerald-700 font-semibold mt-0.5">Instructor: <%= g.instructor || 'Not Assigned' %></span>
+                                    </div>
                                     <form action="/registrar/delete-grade" method="POST" onsubmit="return confirm('Remove <%= g.course_code %> from student record?');" class="inline">
                                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                                         <input type="hidden" name="course_code" value="<%= g.course_code %>">
@@ -376,7 +372,7 @@
                     <% } %>
                 </div>
 
-                <!-- ENROLL ANOTHER SUBJECT FORM -->
+                <!-- ENROLL ANOTHER SUBJECT WITH INSTRUCTOR SELECTION -->
                 <div class="pt-3 border-t border-indigo-200">
                     <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Add / Enroll Another Subject to this Term</label>
                     <form action="/registrar/add-single-course" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
@@ -392,6 +388,9 @@
                                     <% }) %>
                                 <% } %>
                             </select>
+                        </div>
+                        <div class="w-full sm:w-64">
+                            <input type="text" name="instructor" placeholder="Instructor Name (optional)" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
                         </div>
                         
                         <div class="flex gap-2 w-full sm:w-auto">
@@ -507,11 +506,15 @@
     <script id="courses-data" type="application/json">
         <%- JSON.stringify(locals.allCoursesRaw || []) %>
     </script>
+    <script id="faculty-list-data" type="application/json">
+        <%- JSON.stringify(locals.facultyList || []) %>
+    </script>
     <script id="faculty-assigned-data" type="application/json">
         <%- JSON.stringify(locals.facultyAssignedCourses || []) %>
     </script>
     <script>
         const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
+        const facultyListData = JSON.parse(document.getElementById('faculty-list-data').textContent);
         const facultyAssignedData = JSON.parse(document.getElementById('faculty-assigned-data').textContent);
         
         function toggleSection(sectionId) {
@@ -546,7 +549,13 @@
                 "7": "4th Year - 1st Sem", "8": "4th Year - 2nd Sem"
             };
 
-            let html = '<div class="max-h-[350px] overflow-y-auto pr-2 space-y-4">';
+            let facultyOptionsHtml = '<option value="">-- Select Instructor --</option>';
+            facultyListData.forEach(fac => {
+                const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                facultyOptionsHtml += `<option value="${facName}">${facName}</option>`;
+            });
+
+            let html = '<div class="max-h-[400px] overflow-y-auto pr-2 space-y-4">';
             for (let i = 1; i <= 8; i++) {
                 const termCourses = allCoursesData.filter(c => String(c.term_id) === String(i));
                 if (termCourses.length === 0) continue;
@@ -554,15 +563,22 @@
                 const isCurrentTermGroup = String(i) === String(selectedTerm);
                 html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'} shadow-sm">`;
                 html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${termNames[i]} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
-                html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">`;
+                html += `<div class="space-y-2">`;
                 
                 termCourses.forEach(c => {
                     const isAutoChecked = isCurrentTermGroup ? 'checked' : '';
                     html += `
-                        <label class="flex items-center space-x-2 p-1.5 rounded cursor-pointer hover:bg-slate-100 transition-colors">
-                            <input type="checkbox" name="course_codes" value="${c.course_code}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                            <span class="text-[11px] font-semibold text-slate-700">[${c.course_code}] <span class="font-normal truncate block w-full">${c.descriptive_title}</span></span>
-                        </label>
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded hover:bg-slate-100 gap-2 border border-slate-100">
+                            <label class="flex items-center space-x-2 cursor-pointer flex-grow">
+                                <input type="checkbox" name="course_codes" value="${c.course_code}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-[11px] font-semibold text-slate-700">[${c.course_code}] ${c.descriptive_title}</span>
+                            </label>
+                            <div class="w-full sm:w-64">
+                                <select name="instructors" class="w-full px-2 py-1 rounded border border-slate-300 bg-white text-[11px] font-medium text-slate-700">
+                                    ${facultyOptionsHtml}
+                                </select>
+                            </div>
+                        </div>
                     `;
                 });
                 html += `</div></div>`;
