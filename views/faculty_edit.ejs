@@ -55,7 +55,7 @@
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
             <form method="GET" action="/faculty/edit-grades" class="space-y-4">
                 <div>
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">1. Select Subject Handled / Taught:</label>
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Select Subject Handled</label>
                     <select name="course_code" required onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-emerald-950 bg-slate-50 focus:ring-2 focus:ring-emerald-500">
                         <option value="" style="font-style: italic;">--Select Subject--</option>
                         <% assignedCourses.forEach(c => { %>
@@ -69,16 +69,16 @@
                 <% if (selectedCourse) { %>
                     <div class="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                         <div>
-                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">2. Student Last Name (Required):</label>
-                            <input type="text" name="last_name" value="<%= searchLastName || '' %>" required placeholder="e.g. Santiago" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Student Last Name (Required):</label>
+                            <input type="text" name="last_name" value="<%= searchLastName || '' %>" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">First Name (Required):</label>
-                            <input type="text" name="first_name" value="<%= searchFirstName || '' %>" required placeholder="e.g. Darius" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
+                            <input type="text" name="first_name" value="<%= searchFirstName || '' %>" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Middle Name (Required):</label>
-                            <input type="text" name="middle_name" value="<%= searchMiddleName || '' %>" required placeholder="e.g. Ramiscal" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
+                            <input type="text" name="middle_name" value="<%= searchMiddleName || '' %>" required placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50">
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 pt-2">
@@ -118,7 +118,7 @@
                     <% } %>
                 <% } else if (!gradeRecord) { %>
                     <div class="text-center py-8 text-amber-700 text-xs font-medium bg-amber-50 rounded-lg border border-amber-200">
-                        Student <strong><%= matchingStudent.last_name %>, <%= matchingStudent.first_name %> <%= matchingStudent.middle_name || '' %> (<%= matchingStudent.student_id %>)</strong> is found, but they are <strong>not officially enrolled</strong> in <strong><%= selectedCourse %></strong> for the active Academic Year (<%= systemSettings.current_ay %>).
+                        <strong><%= matchingStudent.last_name %>, <%= matchingStudent.first_name %> <%= matchingStudent.middle_name || '' %> (<%= matchingStudent.student_id %>)</strong> is found, but they are <strong>not officially enrolled</strong> in <strong><%= selectedCourse %></strong> for the active Academic Year (<%= systemSettings.current_ay %>).
                     </div>
                 <% } else { %>
                     <form action="/faculty/update-grade" method="POST" class="space-y-4">
