@@ -197,7 +197,7 @@ app.post('/login', async (req, res) => {
         }
 
         if (user.role === 'admin') {
-            return res.redirect('/admin');
+            return res.redirect('/registrar');
         } else if (user.role === 'registrar') {
             return res.redirect('/registrar');
         } else if (user.role === 'faculty') {
@@ -235,9 +235,7 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
 
         req.session.user.mustChangePassword = false;
 
-        if (req.session.user.role === 'admin') {
-            res.redirect('/admin');
-        } else if (req.session.user.role === 'registrar') {
+        if (req.session.user.role === 'admin' || req.session.user.role === 'registrar') {
             res.redirect('/registrar');
         } else if (req.session.user.role === 'faculty') {
             res.redirect('/faculty/edit-grades');
@@ -248,6 +246,11 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
         console.error(err);
         res.status(500).send('Error updating password');
     }
+});
+
+// Safe /admin route redirect
+app.get('/admin', isAuthenticated, (req, res) => {
+    res.redirect('/registrar');
 });
 
 // Registrar Portal Routes
@@ -808,9 +811,8 @@ app.post('/faculty/update-grade', isAuthenticated, async (req, res) => {
 app.get('/portal', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     
-    if (user.role === 'admin') return res.redirect('/portal');
+    if (user.role === 'admin' || user.role === 'registrar') return res.redirect('/registrar');
     if (user.role === 'faculty') return res.redirect('/faculty/edit-grades');
-    if (user.role === 'registrar') return res.redirect('/registrar');
 
     const selectedTerm = req.query.term || '4';
 
