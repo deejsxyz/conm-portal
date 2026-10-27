@@ -238,7 +238,7 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
             return res.redirect('/admin');
         } else if (req.session.user.role === 'registrar') {
             return res.redirect('/registrar');
-        } else if (req.session.user.role === 'faculty') {
+        } else if (user.role === 'faculty') {
             return res.redirect('/faculty/edit-grades');
         } else {
             return res.redirect('/portal');
@@ -913,7 +913,8 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     const facultyUsername = req.session.user.username;
     const facUserRes = await pool.query('SELECT first_name, middle_name, last_name FROM users WHERE username = $1', [facultyUsername]);
     const facUser = facUserRes.rows[0] || {};
-    // Format strictly as LAST NAME, FIRST NAME MIDDLE NAME (no comma between first and middle)
+    
+    // Formatted strictly as LAST NAME, FIRST NAME MIDDLE NAME (matching dropdown format)
     const facultyFullName = [facUser.last_name, [facUser.first_name, facUser.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
     const rawCourseCode = req.query.course_code;
@@ -931,15 +932,15 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             const allC = await pool.query('SELECT course_code, descriptive_title FROM courses ORDER BY course_code');
             assignedCourses = allC.rows;
         } else {
-            // FIX: Faculty dropdown now checks both assigned teaching loads AND subjects where students are actively enrolled under this instructor
+            // FIX: Using exact matching and checking both faculty_courses AND grades instructor assignments (supporting comma variations)
             const facC = await pool.query(`
                 SELECT DISTINCT c.course_code, c.descriptive_title 
                 FROM courses c
                 LEFT JOIN faculty_courses fc ON fc.course_code = c.course_code AND fc.username = $1
-                LEFT JOIN grades g ON g.course_code = c.course_code AND g.instructor = $2
-                WHERE fc.username = $1 OR g.instructor = $2
+                LEFT JOIN grades g ON g.course_code = c.course_code AND (g.instructor = $2 OR g.instructor ILIKE $3)
+                WHERE fc.username = $1 OR g.instructor = $2 OR g.instructor ILIKE $3
                 ORDER BY c.course_code
-            `, [facultyUsername, facultyFullName]);
+            `, [facultyUsername, facultyFullName, `%${facUser.last_name}%${facUser.first_name}%`]);
             assignedCourses = facC.rows;
         }
 
@@ -971,8 +972,8 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
                 let gradeParams = [matchingStudent.student_id, selectedCourse, systemSettings.current_ay, validTerms];
 
                 if (req.session.user.role !== 'admin') {
-                    gradeQuery += ` AND g.instructor = $5`;
-                    gradeParams.push(facultyFullName);
+                    gradeQuery += ` AND (g.instructor = $5 OR g.instructor ILIKE $6)`;
+                    gradeParams.push(facultyFullName, `%${facUser.last_name}%${facUser.first_name}%`);
                 }
 
                 const gradeRes = await pool.query(gradeQuery, gradeParams);
