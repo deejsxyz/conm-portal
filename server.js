@@ -234,7 +234,6 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
 
         req.session.user.mustChangePassword = false;
 
-        // FIXED: Using req.session.user.role for all checks
         if (req.session.user.role === 'admin') {
             return res.redirect('/admin');
         } else if (req.session.user.role === 'registrar') {
@@ -899,6 +898,23 @@ app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
         `, [student_id, course_code]);
 
         res.redirect(`/registrar?student_id=${student_id}&msg=Subject removed from student record.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
+    }
+});
+
+app.post('/registrar/unenroll-term', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, term } = req.body;
+    try {
+        await pool.query(`
+            DELETE FROM grades 
+            WHERE student_id = $1 AND enrolled_term = $2
+        `, [student_id, term]);
+
+        res.redirect(`/registrar?student_id=${student_id}&msg=Student successfully unenrolled from all subjects for this term.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
