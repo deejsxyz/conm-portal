@@ -87,9 +87,19 @@
                             3: '3rd Year Nursing Students (Level 3)',
                             4: '4th Year Nursing Students (Level 4)'
                         };
+                        
+                        let displayLevels = [1, 2, 3, 4];
+                        if (locals.searchStudentId && locals.searchedStudents) {
+                            // Sort so that the level containing the matched student jumps to the top
+                            displayLevels.sort((a, b) => {
+                                const aMatch = searchedStudents.some(s => Number(s.year_level) === a) ? 1 : 0;
+                                const bMatch = searchedStudents.some(s => Number(s.year_level) === b) ? 1 : 0;
+                                return bMatch - aMatch;
+                            });
+                        }
                     %>
 
-                    <% [1, 2, 3, 4].forEach(level => { 
+                    <% displayLevels.forEach(level => { 
                         const levelMatches = locals.searchedStudents ? searchedStudents.filter(s => Number(s.year_level) === level) : [];
                     %>
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
