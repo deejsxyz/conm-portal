@@ -5,12 +5,12 @@
     <title>Login - CONM Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gradient-to-br from-emerald-950 via-emerald-900 to-pink-950 min-h-screen flex flex-col items-center justify-between p-4 font-sans">
+<body class="bg-gradient-to-br from-emerald-950 via-emerald-900 to-pink-950 min-h-screen flex flex-col items-center justify-between p-4 font-sans relative">
     
     <div></div>
 
     <!-- Login Box Card -->
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border-t-4 border-pink-600 space-y-6">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border-t-4 border-pink-600 space-y-6 z-10">
         <div class="text-center space-y-1">
             <h1 class="text-md font-bold text-emerald-950">City University of Pasay</h1>
             <p class="text-sm font-bold uppercase tracking-wider text-pink-600">College of Nursing & School of Midwifery</p>
@@ -34,7 +34,7 @@
                 <label class="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Password</label>
                 <input type="password" name="password" required autocomplete="current-password" placeholder="Enter password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm bg-slate-50">
                 <div class="flex justify-end mt-2">
-                    <a href="#" onclick="alert('Contact the College Registrar to Reset your Password'); return false;" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 transition-colors uppercase tracking-wider">
+                    <a href="#" id="forgotPassBtn" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 transition-colors uppercase tracking-wider">
                         Forgot Password?
                     </a>
                 </div>
@@ -53,8 +53,8 @@
 
     <!-- PROFESSIONAL POP-UP MODAL FOR LOCKED FACULTY PORTAL -->
     <% if (locals.popupMessage) { %>
-        <div id="lockedModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border-t-4 border-amber-500 text-center space-y-4">
+        <div id="lockedModalOverlay" class="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border-t-4 border-amber-500 text-center space-y-4 relative z-50">
                 <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto text-2xl">
                     🔒
                 </div>
@@ -64,16 +64,39 @@
                         <%= popupMessage %>
                     </p>
                 </div>
-                <button type="button" onclick="document.getElementById('lockedModal').remove()" class="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow transition-colors">
+                <button type="button" id="closeLockedModalBtn" class="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow transition-colors cursor-pointer">
                     Understood
                 </button>
             </div>
         </div>
     <% } %>
 
-    <footer class="text-center pb-2">
+    <footer class="text-center pb-2 z-10">
         <p class="text-xs text-emerald-200/70 font-medium">© CONM Academic Information System</p>
     </footer>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const closeBtn = document.getElementById('closeLockedModalBtn');
+            const overlay = document.getElementById('lockedModalOverlay');
+            if (closeBtn && overlay) {
+                closeBtn.addEventListener('click', () => {
+                    overlay.remove();
+                    // Clear the ?locked=1 query parameter from the URL cleanly
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                });
+            }
+
+            const forgotBtn = document.getElementById('forgotPassBtn');
+            if (forgotBtn) {
+                forgotBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    alert('Contact the College Registrar to Reset your Password');
+                });
+            }
+        });
+    </script>
 </body>
 </html>
