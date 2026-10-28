@@ -178,7 +178,7 @@
                     <input type="hidden" name="term" id="reg_term_hidden" value="" <%= selectedStudent ? 'disabled' : '' %>>
                     
                     <div class="pt-2">
-                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects & Assign Instructors</label>
+                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects & Assign Instructors (Optional)</label>
                         <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200"></div>
                     </div>
 
@@ -347,14 +347,16 @@
                             Auto-Matched: <%= currentTermLabel %>
                         </span>
                         
-                        <!-- PERMANENT UNENROLL BUTTON FOR THE ACTIVE TERM -->
-                        <form action="/registrar/unenroll-term" method="POST" onsubmit="return confirm('WARNING: Are you sure you want to unenroll this student from ALL subjects in <%= currentTermLabel %>? \n\nThis will instantly clear their enrolled subjects and grades for this active term.');">
-                            <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                            <input type="hidden" name="term" value="<%= currentTerm %>">
-                            <button type="submit" class="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1">
-                                ⚠️ Unenroll Student from Term
-                            </button>
-                        </form>
+                        <!-- UNENROLL BUTTON: ONLY VISIBLE WHEN SUBJECTS ARE ENROLLED IN THIS TERM -->
+                        <% if (grades.length > 0) { %>
+                            <form action="/registrar/unenroll-term" method="POST" onsubmit="return confirm('WARNING: Are you sure you want to unenroll this student from ALL subjects in <%= currentTermLabel %>? \n\nThis will instantly clear their enrolled subjects and grades for this active term.');">
+                                <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                <input type="hidden" name="term" value="<%= currentTerm %>">
+                                <button type="submit" class="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1">
+                                    ⚠️ Unenroll Student from Term
+                                </button>
+                            </form>
+                        <% } %>
                     </div>
                 </div>
 
@@ -383,7 +385,7 @@
                     <% } %>
                 </div>
 
-                <!-- ENROLL ANOTHER SUBJECT WITH INSTRUCTOR DROPDOWN -->
+                <!-- ENROLL ANOTHER SUBJECT WITH OPTIONAL INSTRUCTOR DROPDOWN -->
                 <div class="pt-3 border-t border-indigo-200">
                     <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Add / Enroll Another Subject to this Term</label>
                     <form action="/registrar/add-single-course" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
@@ -401,8 +403,9 @@
                             </select>
                         </div>
                         <div class="w-full sm:w-64">
-                            <select name="instructor" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700">
-                                <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
+                            <!-- INSTRUCTOR IS NOW OPTIONAL (NO 'required' ATTRIBUTE) -->
+                            <select name="instructor" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700">
+                                <option value="" style="font-style: italic;">-- Select Clinical Instructor (Optional) --</option>
                                 <% facultyList.forEach(fac => { 
                                     const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                                 %>
@@ -485,7 +488,7 @@
                                 <div>
                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Instructor</span>
                                     <select name="instructors" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium text-slate-700">
-                                        <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
+                                        <option value="" style="font-style: italic;">-- Select Clinical Instructor (Optional) --</option>
                                         <% facultyList.forEach(fac => { 
                                             const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                                         %>
@@ -575,7 +578,7 @@
                 "7": "4th Year - 1st Sem", "8": "4th Year - 2nd Sem"
             };
 
-            let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>';
+            let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Clinical Instructor (Optional) --</option>';
             facultyListData.forEach(fac => {
                 const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                 facultyOptionsHtml += `<option value="${facName}">${facName}</option>`;
@@ -672,7 +675,7 @@
             } else if (grade === '4.00') {
                 remarkSelect.value = 'CONDITIONAL';
             } else if (grade === '5.00') {
-                remarkSignSelect = 'FAILED';
+                remarkSelect.value = 'FAILED';
             } else if (grade === 'X') {
                 remarkSelect.value = 'DROPPED';
             } else if (grade === 'INC') {
@@ -735,7 +738,7 @@
             const studentManagedOpen = "<%= locals.selectedStudent ? 'true' : 'false' %>" === "true";
             
             if (facultyManagedOpen) {
-                sessionStorage.setItem('activeRegistrarSection', 'facultyManageManageSection' || 'facultyManageSection');
+                sessionStorage.setItem('activeRegistrarSection', 'facultyManageSection');
             } else if (studentManagedOpen) {
                 sessionStorage.setItem('activeRegistrarSection', 'studentManageSection');
             } else {
