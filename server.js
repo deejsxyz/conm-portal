@@ -1064,15 +1064,15 @@ app.get('/portal', isAuthenticated, async (req, res) => {
             selectedTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
         }
 
-        // Compute the student's true active term based on their registered year level and global system semester
+        // True active system term based on student's registered year level and global system semester
         const activeSystemTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
 
-        // Check if student has records for the active system term (or overall in the active academic year)
+        // Check if student has records for the active system term under the active academic year
         const activeCheckRes = await pool.query(`
             SELECT COUNT(*) AS total FROM grades WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3
         `, [user.username, activeSystemTerm, systemSettings.current_ay]);
         
-        // Enrollment status is locked to the global active period regardless of dropdown viewing selection
+        // Enrollment status and academic year are strictly locked to the global active system settings
         const isOfficiallyEnrolled = parseInt(activeCheckRes.rows[0].total, 10) > 0;
 
         // Fetch grades for whichever term the dropdown is asking to view
