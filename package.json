@@ -1,6 +1,6 @@
 {
   "name": "conm-grading-portal",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "description": "CONM Academic Grading & Information System",
   "main": "server.js",
   "engines": {
