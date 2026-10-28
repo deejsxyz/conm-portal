@@ -1058,20 +1058,24 @@ app.get('/portal', isAuthenticated, async (req, res) => {
         const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [user.username]);
         const student = studentRes.rows[0];
 
-        // Default term based on active system settings if not provided in query
+        // Selected term from dropdown for viewing past/other grades
         let selectedTerm = req.query.term;
         if (!selectedTerm) {
             selectedTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
         }
 
-        // Check if student has ANY grades/subjects enrolled in the CURRENT active system term
+        // Compute the student's true active term based on their registered year level and global system semester
         const activeSystemTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
+
+        // Check if student has records for the active system term (or overall in the active academic year)
         const activeCheckRes = await pool.query(`
-            SELECT COUNT(*) AS total FROM grades WHERE student_id = $1 AND enrolled_term = $2
-        `, [user.username, activeSystemTerm]);
+            SELECT COUNT(*) AS total FROM grades WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3
+        `, [user.username, activeSystemTerm, systemSettings.current_ay]);
+        
+        // Enrollment status is locked to the global active period regardless of dropdown viewing selection
         const isOfficiallyEnrolled = parseInt(activeCheckRes.rows[0].total, 10) > 0;
 
-        // Fetch grades for whatever term the student selected from the dropdown
+        // Fetch grades for whichever term the dropdown is asking to view
         const gradesRes = await pool.query(`
             SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
                    c.descriptive_title, c.lec_units, c.rle_units, c.total_units
