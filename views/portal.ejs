@@ -70,7 +70,7 @@
                 else if (String(studentRecord.year_level) === '3') yearString = "Third Year";
                 else if (String(studentRecord.year_level) === '4') yearString = "Fourth Year";
             %>
-            <div class="grid grid-cols-2 gap-4 mb-8 text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 text-sm">
                 <div class="text-left space-y-4">
                     <p>
                        <span class="font-bold uppercase text-[10px] text-slate-500">Student Name:</span> <br> 
@@ -82,7 +82,7 @@
                     </p>
                 </div>
                 
-                <div class="text-right space-y-4">
+                <div class="text-left sm:text-center space-y-4 border-t sm:border-t-0 sm:border-l border-slate-200 pt-4 sm:pt-0 sm:pl-6">
                     <p>
                        <span class="font-bold uppercase text-[10px] text-slate-500">Program:</span> <br> 
                        <span class="font-medium"><%= studentRecord.program %></span>
@@ -90,6 +90,17 @@
                     <p>
                        <span class="font-bold uppercase text-[10px] text-slate-500">Year Level:</span> <br> 
                        <span class="font-medium"><%= yearString %></span>
+                    </p>
+                </div>
+
+                <div class="text-left sm:text-right space-y-4 border-t sm:border-t-0 sm:border-l border-slate-200 pt-4 sm:pt-0 sm:pl-6">
+                    <p>
+                       <span class="font-bold uppercase text-[10px] text-slate-500">Term Status:</span> <br> 
+                       <% if (grades.length > 0) { %>
+                           <span class="inline-block px-3 py-1.5 mt-1 bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase tracking-wider rounded-full shadow-sm border border-emerald-300">✅ Officially Enrolled</span>
+                       <% } else { %>
+                           <span class="inline-block px-3 py-1.5 mt-1 bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider rounded-full shadow-sm border border-slate-300">Not Enrolled</span>
+                       <% } %>
                     </p>
                 </div>
             </div>
