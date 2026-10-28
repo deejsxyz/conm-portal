@@ -234,11 +234,12 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
 
         req.session.user.mustChangePassword = false;
 
+        // FIXED: Using req.session.user.role for all checks
         if (req.session.user.role === 'admin') {
             return res.redirect('/admin');
         } else if (req.session.user.role === 'registrar') {
             return res.redirect('/registrar');
-        } else if (user.role === 'faculty') {
+        } else if (req.session.user.role === 'faculty') {
             return res.redirect('/faculty/edit-grades');
         } else {
             return res.redirect('/portal');
