@@ -102,6 +102,12 @@
                            <span class="inline-block px-3 py-1.5 mt-1 bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider rounded-full shadow-sm border border-slate-300">Not Enrolled</span>
                        <% } %>
                     </p>
+                    <p>
+                       <span class="font-bold uppercase text-[10px] text-slate-500">Academic Term:</span> <br> 
+                       <span class="font-medium text-slate-700">
+                           <%= viewSem === '1' ? 'First Semester' : 'Second Semester' %>, A.Y. <%= grades.length > 0 ? grades[0].academic_year : systemSettings.current_ay %>
+                       </span>
+                    </p>
                 </div>
             </div>
 

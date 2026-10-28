@@ -1054,11 +1054,14 @@ app.get('/portal', isAuthenticated, async (req, res) => {
     const selectedTerm = req.query.term || '4';
 
     try {
+        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
+        const systemSettings = settingsRes.rows[0];
+
         const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [user.username]);
         const student = studentRes.rows[0];
 
         const gradesRes = await pool.query(`
-            SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term,
+            SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
                    c.descriptive_title, c.lec_units, c.rle_units, c.total_units
             FROM grades g
             JOIN courses c ON g.course_code = c.course_code
@@ -1069,7 +1072,8 @@ app.get('/portal', isAuthenticated, async (req, res) => {
             currentUser: user,
             studentRecord: student,
             grades: gradesRes.rows,
-            currentTerm: selectedTerm
+            currentTerm: selectedTerm,
+            systemSettings: systemSettings
         });
     } catch (err) {
         console.error(err);
