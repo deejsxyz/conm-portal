@@ -965,7 +965,6 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
 
-        // If Registrar locks the portal while a faculty member is logged in, kick them out to the login notice
         if (req.session.user.role === 'faculty' && systemSettings.faculty_portal_locked) {
             return req.session.destroy(() => {
                 res.redirect('/?locked=1');
@@ -1004,10 +1003,13 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         let gradeRecord = null;
 
         if (selectedCourse && searchLastName && searchFirstName && searchMiddleName) {
+            // CASE-INSENSITIVE STUDENT NAME SEARCH
             const studentRes = await pool.query(`
                 SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level
                 FROM students s
-                WHERE s.last_name = $1 AND s.first_name = $2 AND s.middle_name = $3
+                WHERE TRIM(s.last_name) ILIKE $1 
+                  AND TRIM(s.first_name) ILIKE $2 
+                  AND TRIM(COALESCE(s.middle_name, '')) ILIKE $3
             `, [searchLastName, searchFirstName, searchMiddleName]);
 
             if (studentRes.rows.length > 0) {
