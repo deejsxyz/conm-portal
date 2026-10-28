@@ -247,7 +247,7 @@
                         <select name="faculty_user" onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500">
                             <option value="">-- Select Faculty Member --</option>
                             <% facultyList.forEach(fac => { 
-                                const formalName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                                const formalName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                             %>
                                 <option value="<%= fac.username %>" <%= (locals.selectedFaculty && selectedFaculty.username === fac.username) ? 'selected' : '' %>>
                                     <%= formalName %>
@@ -259,7 +259,7 @@
 
                 <% if (locals.selectedFaculty) { %>
                     <% 
-                        const editingFormalName = [selectedFaculty.last_name, selectedFaculty.first_name, selectedFaculty.middle_name].filter(Boolean).join(', ');
+                        const editingFormalName = [selectedFaculty.last_name, [selectedFaculty.first_name, selectedFaculty.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                     %>
                     <div class="bg-indigo-50/70 rounded-xl border border-indigo-200 p-5 space-y-4">
                         <div class="flex flex-wrap justify-between items-center gap-2">
@@ -393,7 +393,7 @@
                             <select name="instructor" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700">
                                 <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
                                 <% facultyList.forEach(fac => { 
-                                    const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(' ');
+                                    const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                                 %>
                                     <option value="<%= facName %>"><%= facName %></option>
                                 <% }) %>
@@ -476,7 +476,7 @@
                                     <select name="instructors" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium text-slate-700">
                                         <option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>
                                         <% facultyList.forEach(fac => { 
-                                            const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(' ');
+                                            const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                                         %>
                                             <option value="<%= facName %>" <%= g.instructor === facName ? 'selected' : '' %>><%= facName %></option>
                                         <% }) %>
@@ -536,11 +536,12 @@
             sections.forEach(id => {
                 const section = document.getElementById(id);
                 if (id === sectionId) {
-                    section.classList.toggle('hidden');
+                    section.classList.remove('hidden');
                 } else {
                     section.classList.add('hidden');
                 }
             });
+            sessionStorage.setItem('activeRegistrarSection', sectionId);
         }
 
         function updateSubjectChecklist() {
@@ -565,7 +566,7 @@
 
             let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Clinical Instructor --</option>';
             facultyListData.forEach(fac => {
-                const facName = [fac.last_name, fac.first_name, fac.middle_name].filter(Boolean).join(', ');
+                const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                 facultyOptionsHtml += `<option value="${facName}">${facName}</option>`;
             });
 
@@ -718,6 +719,20 @@
             if (stuPass && !stuPass.disabled && !stuPass.value) stuPass.value = generateRandomPassword();
             updateSubjectChecklist();
             initFacultySubjectDropdowns();
+            
+            const facultyManagedOpen = <%= locals.selectedFaculty ? 'true' : 'false' %>;
+            const studentManagedOpen = <%= locals.selectedStudent ? 'true' : 'false' %>;
+            
+            if (facultyManagedOpen) {
+                sessionStorage.setItem('activeRegistrarSection', 'facultyManageSection');
+            } else if (studentManagedOpen) {
+                sessionStorage.setItem('activeRegistrarSection', 'studentManageSection');
+            } else {
+                const savedSection = sessionStorage.getItem('activeRegistrarSection');
+                if (savedSection) {
+                    toggleSection(savedSection);
+                }
+            }
         });
     </script>
 </body>

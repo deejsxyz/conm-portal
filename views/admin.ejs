@@ -370,6 +370,7 @@
                     section.classList.add('hidden');
                 }
             });
+            sessionStorage.setItem('activeAdminSection', sectionId);
         }
 
         function generateRandomPassword() {
@@ -398,6 +399,20 @@
             const studentPass = document.getElementById('studentTempPassword');
             if (staffPass && !staffPass.value) staffPass.value = generateRandomPassword();
             if (studentPass && (!studentPass.value || studentPass.value === 'password123')) studentPass.value = generateRandomPassword();
+            
+            const staffManagedOpen = <%= locals.selectedStaff ? 'true' : 'false' %>;
+            const studentManagedOpen = <%= locals.searchStudentId ? 'true' : 'false' %>;
+            
+            if (staffManagedOpen) {
+                sessionStorage.setItem('activeAdminSection', 'staffManageSection');
+            } else if (studentManagedOpen) {
+                sessionStorage.setItem('activeAdminSection', 'studentManageSection');
+            } else {
+                const savedSection = sessionStorage.getItem('activeAdminSection');
+                if (savedSection) {
+                    toggleSection(savedSection);
+                }
+            }
         });
     </script>
 </body>
