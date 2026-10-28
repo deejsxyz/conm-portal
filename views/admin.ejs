@@ -19,7 +19,10 @@
                 <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
                 <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Grade Portal</a>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
-                <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
+                <form action="/logout" method="POST" class="inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</button>
+                </form>
             </div>
         </div>
     </header>
@@ -58,7 +61,6 @@
             <!-- ==================== MANAGE STUDENTS SECTION ==================== -->
             <div id="studentManageSection" class="<%= locals.searchStudentId ? '' : 'hidden' %> space-y-5">
                 
-                <!-- Search Bar for Student ID -->
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div>
                         <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Search Registered Student Accounts by ID</h4>
@@ -81,13 +83,7 @@
                 <!-- 4 YEAR LEVEL STUDENT TABLES (BSN1 - BSN4) -->
                 <div class="grid grid-cols-1 gap-4">
                     <% 
-                        const yearLabels = {
-                            1: 'BSN1',
-                            2: 'BSN2',
-                            3: 'BSN3',
-                            4: 'BSN4'
-                        };
-                        
+                        const yearLabels = { 1: 'BSN1', 2: 'BSN2', 3: 'BSN3', 4: 'BSN4' };
                         let displayLevels = [1, 2, 3, 4];
                         if (locals.searchStudentId && locals.searchedStudents) {
                             displayLevels.sort((a, b) => {
@@ -107,7 +103,7 @@
                                     <%= yearLabels[level] %>
                                 </h4>
                                 <span class="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
-                                    Total Registered: <%= locals.yearCounts ? (yearCounts[level] || 0) : 0 %>
+                                    Active Registered: <%= locals.yearCounts ? (yearCounts[level] || 0) : 0 %>
                                 </span>
                             </div>
 
@@ -121,7 +117,9 @@
                                 </div>
                             <% } else { %>
                                 <div class="divide-y divide-slate-100 p-4 space-y-3">
-                                    <% levelMatches.forEach(stu => { %>
+                                    <% levelMatches.forEach(stu => { 
+                                        const actionWord = stu.is_archived ? 'Restore' : 'Archive';
+                                    %>
                                         <div class="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-3">
                                             <div class="flex flex-wrap justify-between items-center gap-2">
                                                 <div class="flex items-center gap-2">
@@ -132,7 +130,9 @@
                                                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">
                                                         BSN<%= stu.year_level %> - <%= stu.section || 'A' %>
                                                     </span>
-                                                    <% if (stu.must_change_password) { %>
+                                                    <% if (stu.is_archived) { %>
+                                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">Archived</span>
+                                                    <% } else if (stu.must_change_password) { %>
                                                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Pending Password Change</span>
                                                     <% } else { %>
                                                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Active / Verified</span>
@@ -140,14 +140,15 @@
                                                 </div>
 
                                                 <div class="flex items-center gap-2">
-                                                    <a href="/registrar?student_id=<%= stu.student_id %>" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-sm">
+                                                    <a href="/registrar?student_id=<%= encodeURIComponent(stu.student_id) %>" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-sm">
                                                         Manage in Registrar
                                                     </a>
-                                                    <form action="/admin/delete-user" method="POST" class="inline" onsubmit="return confirm('Permanently delete student <%= stu.student_id %> and all their grades?');">
+                                                    <form action="/admin/delete-user" method="POST" class="inline" data-confirm="<%= actionWord %> student <%= stu.student_id %>? Academic records and grades are preserved." onsubmit="return confirm(this.dataset.confirm);">
+                                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                                         <input type="hidden" name="username" value="<%= stu.student_id %>">
-                                                        <input type="hidden" name="role" value="student">
-                                                        <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold shadow-sm">
-                                                            Delete Student
+                                                        <input type="hidden" name="action" value="<%= stu.is_archived ? 'restore' : 'archive' %>">
+                                                        <button type="submit" class="px-3 py-1.5 <%= stu.is_archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700' %> text-white rounded text-xs font-bold shadow-sm">
+                                                            <%= actionWord %> Student
                                                         </button>
                                                     </form>
                                                 </div>
@@ -155,6 +156,7 @@
 
                                             <!-- Quick Edit Student Form -->
                                             <form action="/admin/edit-student" method="POST" class="grid grid-cols-1 sm:grid-cols-7 gap-2 items-end pt-2 border-t border-slate-200">
+                                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                                 <input type="hidden" name="student_id" value="<%= stu.student_id %>">
                                                 <div>
                                                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
@@ -189,7 +191,7 @@
                                                     <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
                                                     <div class="flex">
                                                         <input type="text" name="temp_password" id="temp_pass_<%= stu.student_id %>" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded-l border border-amber-300 bg-amber-50 text-[11px] font-mono focus:ring-1 focus:ring-amber-500">
-                                                        <button type="button" onclick="document.getElementById('temp_pass_<%= stu.student_id %>').value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
+                                                        <button type="button" data-target="temp_pass_<%= stu.student_id %>" onclick="document.getElementById(this.dataset.target).value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
                                                     </div>
                                                 </div>
                                                 <div class="flex gap-2">
@@ -214,6 +216,7 @@
                 <p class="text-xs text-slate-500 mb-4">Create a student user account along with their official student profile record (BSN1–BSN4 & Section A/B/C).</p>
                 
                 <form action="/admin/add-student" method="POST" class="grid grid-cols-1 sm:grid-cols-8 gap-3 items-end">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student ID</label>
                         <input type="text" name="student_id" required placeholder="e.g. 2024-00150" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
@@ -265,7 +268,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
                         <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Registered Staff Members (<%= locals.staffList ? staffList.length : 0 %>)</h4>
-                        <p class="text-xs text-slate-500">Select a staff member from the dropdown list to view, edit, reset password, or delete.</p>
+                        <p class="text-xs text-slate-500">Select a staff member from the dropdown list to view, edit, reset password, or archive.</p>
                     </div>
 
                     <form method="GET" action="/admin" class="w-full sm:w-80">
@@ -296,17 +299,18 @@
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <form action="/admin/delete-user" method="POST" class="inline" onsubmit="return confirm('Permanently delete account <%= selectedStaff.username %>?');">
+                                <form action="/admin/delete-user" method="POST" class="inline" data-confirm="Archive staff account <%= selectedStaff.username %>?" onsubmit="return confirm(this.dataset.confirm);">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                     <input type="hidden" name="username" value="<%= selectedStaff.username %>">
-                                    <input type="hidden" name="role" value="<%= selectedStaff.role %>">
                                     <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm">
-                                        Delete Staff
+                                        Archive Staff
                                     </button>
                                 </form>
                             </div>
                         </div>
 
                         <form action="/admin/edit-faculty" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end pt-2 border-t border-emerald-200/60">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <input type="hidden" name="original_username" value="<%= selectedStaff.username %>">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-emerald-900 mb-1">Username / ID</label>
@@ -328,7 +332,7 @@
                                 <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
                                 <div class="flex">
                                     <input type="text" name="temp_password" id="temp_pass_staff_<%= selectedStaff.username %>" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded-l border border-amber-300 bg-amber-50 text-[11px] font-mono focus:ring-1 focus:ring-amber-500">
-                                    <button type="button" onclick="document.getElementById('temp_pass_staff_<%= selectedStaff.username %>').value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
+                                    <button type="button" data-target="temp_pass_staff_<%= selectedStaff.username %>" onclick="document.getElementById(this.dataset.target).value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
                                 </div>
                             </div>
                             <div class="flex gap-2">
@@ -348,6 +352,7 @@
                 <p class="text-xs text-slate-500 mb-4">Create accounts for Faculty or CONM Registrars.</p>
                 
                 <form action="/admin/add-staff" method="POST" class="grid grid-cols-1 sm:grid-cols-7 gap-3 items-end">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
                         <input type="text" name="username" required placeholder="e.g. prof.dizon" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
@@ -401,6 +406,12 @@
             sessionStorage.setItem('activeAdminSection', sectionId);
         }
 
+        function secureRandInt(max) {
+            const arr = new Uint32Array(1);
+            window.crypto.getRandomValues(arr);
+            return arr[0] % max;
+        }
+
         function generateRandomPassword() {
             const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
             const lower = 'abcdefghijklmnopqrstuvwxyz';
@@ -409,24 +420,26 @@
             const all = upper + lower + num + special;
             
             let pass = [
-                upper[Math.floor(Math.random() * upper.length)],
-                lower[Math.floor(Math.random() * lower.length)],
-                num[Math.floor(Math.random() * num.length)],
-                special[Math.floor(Math.random() * special.length)]
+                upper[secureRandInt(upper.length)],
+                lower[secureRandInt(lower.length)],
+                num[secureRandInt(num.length)],
+                special[secureRandInt(special.length)]
             ];
-            
-            for (let i = 0; i < 4; i++) {
-                pass.push(all[Math.floor(Math.random() * all.length)]);
+            for (let i = 0; i < 6; i++) {
+                pass.push(all[secureRandInt(all.length)]);
             }
-            
-            return pass.sort(() => Math.random() - 0.5).join('');
+            for (let i = pass.length - 1; i > 0; i--) {
+                const j = secureRandInt(i + 1);
+                [pass[i], pass[j]] = [pass[j], pass[i]];
+            }
+            return pass.join('');
         }
         
         document.addEventListener('DOMContentLoaded', () => {
             const staffPass = document.getElementById('staffTempPassword');
             const studentPass = document.getElementById('studentTempPassword');
             if (staffPass && !staffPass.value) staffPass.value = generateRandomPassword();
-            if (studentPass && (!studentPass.value || studentPass.value === 'password123')) studentPass.value = generateRandomPassword();
+            if (studentPass && !studentPass.value) studentPass.value = generateRandomPassword();
             
             const staffManagedOpen = "<%= locals.selectedStaff ? 'true' : 'false' %>" === "true";
             const studentManagedOpen = "<%= locals.searchStudentId ? 'true' : 'false' %>" === "true";

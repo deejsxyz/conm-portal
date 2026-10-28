@@ -7,7 +7,6 @@
 </head>
 <body class="bg-gradient-to-br from-emerald-950 via-emerald-900 to-pink-950 min-h-screen flex flex-col items-center justify-between p-4 font-sans">
     
-    <!-- Empty spacer for vertical centering -->
     <div></div>
 
     <!-- Login Box Card -->
@@ -25,14 +24,15 @@
         <% } %>
 
         <form action="/login" method="POST" class="space-y-4">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div>
                 <label class="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Username</label>
-                <input type="text" name="username" required placeholder="Enter username" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm font-mono bg-slate-50">
+                <input type="text" name="username" required autocomplete="username" placeholder="Enter username" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm font-mono bg-slate-50">
             </div>
 
             <div>
                 <label class="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Password</label>
-                <input type="password" name="password" required placeholder="Enter password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm bg-slate-50">
+                <input type="password" name="password" required autocomplete="current-password" placeholder="Enter password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm bg-slate-50">
                 <div class="flex justify-end mt-2">
                     <a href="#" onclick="alert('Contact the College Registrar to Reset your Password'); return false;" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 transition-colors uppercase tracking-wider">
                         Forgot Password?
@@ -44,6 +44,11 @@
                 Sign In
             </button>
         </form>
+
+        <!-- Data Privacy Act (RA 10173) Notice -->
+        <div class="pt-3 border-t border-slate-100 text-[10px] text-slate-400 leading-relaxed text-center">
+            🔒 <strong>Data Privacy Notice (RA 10173):</strong> By signing in, you acknowledge that student records and academic grades are confidential personal information. All grade modifications and access events are logged for security and academic audit purposes.
+        </div>
     </div>
 
     <!-- PROFESSIONAL POP-UP MODAL FOR LOCKED FACULTY PORTAL -->
@@ -66,7 +71,6 @@
         </div>
     <% } %>
 
-    <!-- Footer Copyright -->
     <footer class="text-center pb-2">
         <p class="text-xs text-emerald-200/70 font-medium">© CONM Academic Information System</p>
     </footer>

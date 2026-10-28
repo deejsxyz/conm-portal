@@ -21,7 +21,10 @@
                     <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
                 <% } %>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
-                <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
+                <form action="/logout" method="POST" class="inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</button>
+                </form>
             </div>
         </div>
     </header>
@@ -100,7 +103,6 @@
         <!-- EXCEL-STYLE GRADE SHEET SECTION -->
         <% if (selectedCourse && selectedYearLevel && selectedSection) { %>
             <div class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden">
-                <!-- Sheet Header Bar -->
                 <div class="bg-emerald-950 text-white px-5 py-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-emerald-800">
                     <div>
                         <div class="flex items-center gap-2">
@@ -127,10 +129,10 @@
                     </div>
                 <% } else { %>
                     <form action="/faculty/update-grades-sheet" method="POST">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <input type="hidden" name="course_code" value="<%= selectedCourse %>">
                         <input type="hidden" name="year_level" value="<%= selectedYearLevel %>">
                         <input type="hidden" name="section" value="<%= selectedSection %>">
-                        <input type="hidden" name="academic_year" value="<%= systemSettings.current_ay %>">
 
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse text-xs">
@@ -182,19 +184,10 @@
                                                 </select>
                                             </td>
                                             <td class="p-1.5 border-r border-slate-300">
-                                                <select name="remarks_list" id="remark_row_<%= idx %>" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-bold">
-                                                    <option value="" <%= !stu.remarks ? 'selected' : '' %>>-- Remarks --</option>
-                                                    <option value="PASSED" <%= stu.remarks === 'PASSED' ? 'selected' : '' %>>PASSED</option>
-                                                    <option value="FAILED" <%= stu.remarks === 'FAILED' ? 'selected' : '' %>>FAILED</option>
-                                                    <option value="INCOMPLETE" <%= stu.remarks === 'INCOMPLETE' ? 'selected' : '' %>>INCOMPLETE</option>
-                                                    <option value="CONDITIONAL" <%= stu.remarks === 'CONDITIONAL' ? 'selected' : '' %>>CONDITIONAL</option>
-                                                    <option value="DROPPED" <%= stu.remarks === 'DROPPED' ? 'selected' : '' %>>DROPPED</option>
-                                                    <option value="ABSENT FROM EXAMINATION" <%= stu.remarks === 'ABSENT FROM EXAMINATION' ? 'selected' : '' %>>ABSENT FROM EXAMINATION</option>
-                                                    <option value="NO GRADE" <%= stu.remarks === 'NO GRADE' ? 'selected' : '' %>>NO GRADE</option>
-                                                </select>
+                                                <input type="text" id="remark_row_<%= idx %>" value="<%= stu.remarks || '' %>" readonly class="w-full px-2 py-1.5 rounded border border-slate-200 text-xs bg-slate-100 font-bold text-center text-slate-700">
                                             </td>
                                             <td class="p-1.5">
-                                                <input type="text" name="instructors" value="<%= stu.instructor || facultyFullName %>" class="w-full px-2.5 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium text-slate-700">
+                                                <input type="text" value="<%= stu.instructor || facultyFullName %>" readonly class="w-full px-2.5 py-1.5 rounded border border-slate-200 text-xs bg-slate-100 font-medium text-slate-600">
                                             </td>
                                         </tr>
                                     <% }) %>
@@ -202,10 +195,9 @@
                             </table>
                         </div>
 
-                        <!-- Bottom Action Bar -->
                         <div class="bg-slate-100 px-5 py-4 border-t border-slate-300 flex flex-col sm:flex-row justify-between items-center gap-3">
                             <span class="text-xs text-slate-500">
-                                💡 <strong>Tip:</strong> Selecting a Final Grade automatically sets the corresponding Remarks. Click Save when finished.
+                                💡 <strong>Note:</strong> Remarks are automatically computed and verified by the server based on the selected Final Grade.
                             </span>
                             <button type="submit" class="w-full sm:w-auto px-8 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors">
                                 💾 Save All Grades for BSN<%= selectedYearLevel %> - <%= selectedSection %>
@@ -229,35 +221,26 @@
 
             const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
             const suggestedYear = selectedOpt ? selectedOpt.getAttribute('data-year') : '';
-            if (suggestedYear && !yearSelect.value) {
+            if (suggestedYear) {
                 yearSelect.value = suggestedYear;
             }
         }
 
         function autoMatchRowRemark(selectElement, rowIndex) {
             const grade = selectElement.value;
-            const remarkSelect = document.getElementById('remark_row_' + rowIndex);
-            if (!remarkSelect) return;
+            const remarkInput = document.getElementById('remark_row_' + rowIndex);
+            if (!remarkInput) return;
 
             const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
 
-            if (passedGrades.includes(grade)) {
-                remarkSelect.value = 'PASSED';
-            } else if (grade === '4.00') {
-                remarkSelect.value = 'CONDITIONAL';
-            } else if (grade === '5.00') {
-                remarkSelect.value = 'FAILED';
-            } else if (grade === 'X') {
-                remarkSelect.value = 'DROPPED';
-            } else if (grade === 'INC') {
-                remarkSelect.value = 'INCOMPLETE';
-            } else if (grade === 'W') {
-                remarkSelect.value = 'ABSENT FROM EXAMINATION';
-            } else if (grade === 'NG') {
-                remarkSelect.value = 'NO GRADE';
-            } else {
-                remarkSelect.value = '';
-            }
+            if (passedGrades.includes(grade)) remarkInput.value = 'PASSED';
+            else if (grade === '4.00') remarkInput.value = 'CONDITIONAL';
+            else if (grade === '5.00') remarkInput.value = 'FAILED';
+            else if (grade === 'X') remarkInput.value = 'DROPPED';
+            else if (grade === 'INC') remarkInput.value = 'INCOMPLETE';
+            else if (grade === 'W') remarkInput.value = 'ABSENT FROM EXAMINATION';
+            else if (grade === 'NG') remarkInput.value = 'NO GRADE';
+            else remarkInput.value = '';
         }
     </script>
 </body>

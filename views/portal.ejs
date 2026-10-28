@@ -19,7 +19,10 @@
                     <%= currentUser.fullName %>
                 </span>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
-                <a href="/logout" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
+                <form action="/logout" method="POST" class="inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded font-medium">Log Out</button>
+                </form>
             </div>
         </div>
     </header>
@@ -61,7 +64,6 @@
         <!-- GRADES VIEW AREA -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
             
-            <!-- Student Information Block (Strictly Locked to Global System Settings) -->
             <% 
                 const yearNum = studentRecord.year_level || '1';
                 const studentSection = studentRecord.section || 'A';
@@ -71,7 +73,7 @@
                 <div class="text-left space-y-4">
                     <p>
                        <span class="font-bold uppercase text-[10px] text-slate-500">Student Name:</span> <br> 
-                       <span class="font-bold text-base uppercase"><%= studentRecord.last_name %>, <%= studentRecord.first_name %> <%= studentRecord.middle_name %></span>
+                       <span class="font-bold text-base uppercase"><%= studentRecord.last_name ? `${studentRecord.last_name}, ${studentRecord.first_name} ${studentRecord.middle_name || ''}` : studentRecord.first_name %></span>
                     </p>
                     <p>
                        <span class="font-bold uppercase text-[10px] text-slate-500">Student Number:</span> <br> 
@@ -108,7 +110,7 @@
                 </div>
             </div>
 
-            <!-- Grades Table (Displays whichever semester was selected in the dropdown) -->
+            <!-- Grades Table -->
             <% if (grades.length === 0) { %>
                 <div class="text-center py-12 text-slate-400 border-t border-slate-200">
                     <p class="text-sm">No subjects enrolled or grades recorded for this selected semester.</p>

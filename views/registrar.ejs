@@ -21,7 +21,10 @@
                     <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Open Grade Editor</a>
                 <% } %>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
-                <a href="/logout" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</a>
+                <form action="/logout" method="POST" class="inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</button>
+                </form>
             </div>
         </div>
     </header>
@@ -39,14 +42,14 @@
         %>
 
         <% if (locals.message) { %>
-            <div style="background: #d4edda; color: #155724; padding: 12px 20px; border-radius: 6px; border: 1px solid #c3e6cb; font-weight: 500; text-align: center; margin-bottom: 1rem;">
-                <%= message %>
+            <div class="p-4 bg-emerald-100 border border-emerald-400 text-emerald-800 text-xs font-bold rounded-xl shadow-sm text-center">
+                ✅ <%= message %>
             </div>
         <% } %>
 
         <% if (locals.error) { %>
-            <div style="background: #f8d7da; color: #721c24; padding: 12px 20px; border-radius: 6px; border: 1px solid #f5c6cb; font-weight: 500; text-align: center; margin-bottom: 1rem;">
-                <%= error %>
+            <div class="p-4 bg-red-100 border border-red-400 text-red-700 text-xs font-bold rounded-xl shadow-sm text-center">
+                ⚠️ <%= error %>
             </div>
         <% } %>
 
@@ -70,7 +73,9 @@
             
             <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
                 <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
+                        <option value="2025-2026" <%= systemSettings.current_ay === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
                         <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
                         <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
                         <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
@@ -85,8 +90,8 @@
                     </button>
                 </form>
 
-                <!-- LOCK / UNLOCK FACULTY PORTAL BUTTON -->
                 <form action="/registrar/toggle-faculty-lock" method="POST" class="inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <% if (systemSettings.faculty_portal_locked) { %>
                         <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap flex items-center gap-1.5">
                             🔓 Unlock Faculty Portal
@@ -100,7 +105,7 @@
             </div>
         </div>
 
-        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT (SINGLE LINE) -->
+        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT -->
         <div class="flex flex-row flex-nowrap gap-3 overflow-x-auto pb-2">
             <button type="button" onclick="toggleSection('studentRegSection')" class="flex-1 px-4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap">
                 👤 Register Student
@@ -125,14 +130,15 @@
             <!-- BATCH UPLOAD CSV FORM -->
             <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6 space-y-4">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Batch Upload & Enroll Students</h3>
-                <p class="text-xs text-slate-500 mb-2">Export your Google Form responses as a <strong>.csv</strong> file. Include <code class="text-pink-600 font-bold">section</code> (A, B, or C) and an optional <code class="text-pink-600 font-bold">instructor</code> column.</p>
+                <p class="text-xs text-slate-500 mb-2">Export your Google Form responses as a <strong>.csv</strong> file (max 300 rows per upload). Include <code class="text-pink-600 font-bold">section</code> (A, B, or C) and an optional <code class="text-pink-600 font-bold">instructor</code> column.</p>
                 
                 <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
                     <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
                     <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, section, semester, academic_year, subjects, instructor</code>
                 </div>
 
-                <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
+                <form action="/registrar/batch-upload?_csrf=<%= encodeURIComponent(csrfToken) %>" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
                     
                     <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors">
@@ -142,7 +148,7 @@
 
                 <% if (locals.hasBatchCredentials) { %>
                     <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <span class="text-xs font-bold text-emerald-900">✅ Recent batch passwords are generated and ready to print!</span>
+                        <span class="text-xs font-bold text-emerald-900">✅ New student passwords generated! (One-time download for security)</span>
                         <a href="/registrar/export-batch-credentials" class="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap">
                             📥 Download Passwords CSV
                         </a>
@@ -154,6 +160,7 @@
             <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Single Student</h3>
                 <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
@@ -233,6 +240,7 @@
             <div id="facultyRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
                 <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1">Register New Faculty Account & Assign Subjects</h3>
                 <form action="/registrar/add-faculty" method="POST" class="space-y-4 text-sm">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
                         <div>
                             <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
@@ -278,7 +286,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
                         <h4 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Manage Registered Faculty Members (<%= facultyList.length %>)</h4>
-                        <p class="text-xs text-slate-500">Select a faculty member to edit their profile, reset their password, delete their account, or update their assigned subjects.</p>
+                        <p class="text-xs text-slate-500">Select a faculty member to edit their profile, reset their password, archive their account, or update their assigned subjects.</p>
                     </div>
 
                     <form method="GET" action="/registrar" class="w-full sm:w-80">
@@ -288,7 +296,7 @@
                                 const formalName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                             %>
                                 <option value="<%= fac.username %>" <%= (locals.selectedFaculty && selectedFaculty.username === fac.username) ? 'selected' : '' %>>
-                                    <%= formalName %>
+                                    <%= formalName %> (<%= fac.username %>)
                                 </option>
                             <% }) %>
                         </select>
@@ -306,15 +314,17 @@
                                 <span class="font-bold text-xs bg-indigo-900 text-white px-2.5 py-0.5 rounded"><%= editingFormalName %></span>
                             </div>
 
-                            <form action="/registrar/delete-faculty" method="POST" class="inline" onsubmit="return confirm('Permanently delete faculty account <%= editingFormalName %>?');">
+                            <form action="/registrar/delete-faculty" method="POST" class="inline" onsubmit="return confirm('Archive faculty account <%= editingFormalName %>?');">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <input type="hidden" name="username" value="<%= selectedFaculty.username %>">
                                 <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm">
-                                    Delete Faculty
+                                    Archive Faculty
                                 </button>
                             </form>
                         </div>
 
                         <form action="/registrar/edit-faculty" method="POST" class="space-y-4 pt-2 border-t border-indigo-200/60">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <input type="hidden" name="original_username" value="<%= selectedFaculty.username %>">
                             
                             <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
@@ -372,19 +382,44 @@
         </div>
 
         <% if (selectedStudent) { %>
+            <!-- TERM & ACADEMIC YEAR SWITCHER FOR VIEWING CURRENT OR HISTORICAL STUDENT RECORDS -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold uppercase text-slate-500">Viewing Term Record:</span>
+                    <span class="px-3 py-1 bg-indigo-100 text-indigo-900 rounded-lg text-xs font-bold"><%= currentTermLabel %> (<%= currentViewAy %>)</span>
+                </div>
+                <form method="GET" action="/registrar" class="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                    <select name="view_ay" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50">
+                        <option value="2025-2026" <%= currentViewAy === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
+                        <option value="2026-2027" <%= currentViewAy === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                        <option value="2027-2028" <%= currentViewAy === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                        <option value="2028-2029" <%= currentViewAy === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                        <option value="2029-2030" <%= currentViewAy === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                    </select>
+                    <select name="view_term" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50">
+                        <% Object.keys(termNames).forEach(tKey => { %>
+                            <option value="<%= tKey %>" <%= String(currentTerm) === String(tKey) ? 'selected' : '' %>><%= termNames[tKey] %></option>
+                        <% }) %>
+                    </select>
+                    <button type="submit" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-xs font-bold">Switch Term</button>
+                </form>
+            </div>
+
             <!-- EDIT SUBJECT ENROLLED SECTION -->
             <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5 space-y-4">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-indigo-200 pb-3">
                     <div>
                         <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
                             Edit Subject Enrolled 
-                            <span class="text-[10px] font-bold bg-indigo-200 text-indigo-800 px-2 py-1 rounded ml-2">A.Y. <%= systemSettings.current_ay %> - <%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %></span>
+                            <span class="text-[10px] font-bold bg-indigo-200 text-indigo-800 px-2 py-1 rounded ml-2">A.Y. <%= currentViewAy %> — <%= currentTermLabel %></span>
                         </h3>
                     </div>
                     
                     <div class="flex flex-wrap items-center gap-2">
                         <!-- QUICK UPDATE YEAR LEVEL (BSN1-BSN4) & SECTION (A, B, C) -->
                         <form action="/registrar/update-student-year-section" method="POST" class="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-indigo-300 shadow-sm">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                             <span class="text-[10px] font-bold uppercase text-slate-500">Class:</span>
                             <select name="year_level" class="text-xs font-bold text-indigo-900 bg-transparent focus:outline-none">
@@ -401,16 +436,13 @@
                             </select>
                             <button type="submit" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold">Update</button>
                         </form>
-
-                        <span class="text-xs font-bold bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg shadow-sm">
-                            Auto-Matched: <%= currentTermLabel %>
-                        </span>
                         
-                        <!-- UNENROLL BUTTON: ONLY VISIBLE WHEN SUBJECTS ARE ENROLLED IN THIS TERM -->
                         <% if (grades.length > 0) { %>
-                            <form action="/registrar/unenroll-term" method="POST" onsubmit="return confirm('WARNING: Are you sure you want to unenroll this student from ALL subjects in <%= currentTermLabel %>? \n\nThis will instantly clear their enrolled subjects and grades for this active term.');">
+                            <form action="/registrar/unenroll-term" method="POST" onsubmit="return confirm('WARNING: Are you sure you want to unenroll this student from ALL subjects in <%= currentTermLabel %> (<%= currentViewAy %>)?');">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                                 <input type="hidden" name="term" value="<%= currentTerm %>">
+                                <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
                                 <button type="submit" class="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1">
                                     ⚠️ Unenroll Student from Term
                                 </button>
@@ -434,8 +466,11 @@
                                         <span class="block text-[10px] text-emerald-700 font-semibold mt-0.5">Instructor: <%= g.instructor || 'Not Assigned' %></span>
                                     </div>
                                     <form action="/registrar/delete-grade" method="POST" onsubmit="return confirm('Remove <%= g.course_code %> from student record?');" class="inline">
+                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                                         <input type="hidden" name="course_code" value="<%= g.course_code %>">
+                                        <input type="hidden" name="term" value="<%= currentTerm %>">
+                                        <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
                                         <button type="submit" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow">Delete</button>
                                     </form>
                                 </div>
@@ -448,8 +483,10 @@
                 <div class="pt-3 border-t border-indigo-200">
                     <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Add / Enroll Another Subject to this Term</label>
                     <form action="/registrar/add-single-course" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                         <input type="hidden" name="term" value="<%= currentTerm %>">
+                        <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
                         
                         <div class="flex-grow w-full">
                             <select id="extraCourseSelect" name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium">
@@ -467,7 +504,7 @@
                                 <% facultyList.forEach(fac => { 
                                     const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
                                 %>
-                                    <option value="<%= facName %>"><%= facName %></option>
+                                    <option value="<%= fac.username %>"><%= facName %></option>
                                 <% }) %>
                             </select>
                         </div>
@@ -493,10 +530,11 @@
                         <span class="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
                             BSN<%= selectedStudent.year_level %> - <%= selectedStudent.section || 'A' %>
                         </span>
-                        <span class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">A.Y. <%= systemSettings.current_ay %> - <%= systemSettings.current_semester === 1 ? '1st Semester' : '2nd Semester' %></span>
+                        <span class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">A.Y. <%= currentViewAy %> — <%= currentTermLabel %></span>
                     </h3>
                     
                     <form action="/registrar/reset-student-password" method="POST" onsubmit="return confirmPasswordReset(this, '<%= selectedStudent.student_id %>')" class="inline-block">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                         <input type="hidden" name="new_password" class="reset-pass-field">
                         <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-md transition-colors">
@@ -506,7 +544,10 @@
                 </div>
 
                 <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                    <input type="hidden" name="enrolled_term" value="<%= currentTerm %>">
+                    <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
 
                     <% if (grades.length === 0) { %>
                         <div class="text-center py-8 text-slate-400 text-xs">
@@ -552,24 +593,16 @@
                                         <option value="" style="font-style: italic;">-- Select Clinical Instructor (Optional) --</option>
                                         <% facultyList.forEach(fac => { 
                                             const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                                            const isSelected = (g.instructor_username && g.instructor_username === fac.username) || (g.instructor === facName);
                                         %>
-                                            <option value="<%= facName %>" <%= g.instructor === facName ? 'selected' : '' %>><%= facName %></option>
+                                            <option value="<%= fac.username %>" <%= isSelected ? 'selected' : '' %>><%= facName %></option>
                                         <% }) %>
                                     </select>
                                 </div>
                                 <div class="flex items-end gap-2">
                                     <div class="flex-grow">
-                                        <span class="text-[10px] uppercase text-slate-400 block font-bold">Remarks</span>
-                                        <select name="remarks_list" id="remark_<%= index %>" class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs bg-white font-medium">
-                                            <option value="" <%= !g.remarks ? 'selected' : '' %>>-- Select --</option>
-                                            <option value="PASSED" <%= g.remarks === 'PASSED' ? 'selected' : '' %>>PASSED</option>
-                                            <option value="FAILED" <%= g.remarks === 'FAILED' ? 'selected' : '' %>>FAILED</option>
-                                            <option value="INCOMPLETE" <%= g.remarks === 'INCOMPLETE' ? 'selected' : '' %>>INCOMPLETE</option>
-                                            <option value="CONDITIONAL" <%= g.remarks === 'CONDITIONAL' ? 'selected' : '' %>>CONDITIONAL</option>
-                                            <option value="DROPPED" <%= g.remarks === 'DROPPED' ? 'selected' : '' %>>DROPPED</option>
-                                            <option value="ABSENT FROM EXAMINATION" <%= g.remarks === 'ABSENT FROM EXAMINATION' ? 'selected' : '' %>>ABSENT FROM EXAMINATION</option>
-                                            <option value="NO GRADE" <%= g.remarks === 'NO GRADE' ? 'selected' : '' %>>NO GRADE</option>
-                                        </select>
+                                        <span class="text-[10px] uppercase text-slate-400 block font-bold">Remarks (Server Verified)</span>
+                                        <input type="text" id="remark_<%= index %>" value="<%= g.remarks || '' %>" readonly class="w-full px-2 py-1.5 rounded border border-slate-200 text-xs bg-slate-100 font-bold text-slate-700">
                                     </div>
                                 </div>
                             </div>
@@ -591,21 +624,30 @@
 
     </main>
 
-    <!-- SCRIPT LOGIC -->
+    <!-- XSS-SAFE JSON SCRIPT BLOCKS -->
     <script id="courses-data" type="application/json">
-        <%- JSON.stringify(locals.allCoursesRaw || []) %>
+        <%- JSON.stringify(locals.allCoursesRaw || []).replace(/</g, '\\u003c') %>
     </script>
     <script id="faculty-list-data" type="application/json">
-        <%- JSON.stringify(locals.facultyList || []) %>
+        <%- JSON.stringify(locals.facultyList || []).replace(/</g, '\\u003c') %>
     </script>
     <script id="faculty-assigned-data" type="application/json">
-        <%- JSON.stringify(locals.facultyAssignedCourses || []) %>
+        <%- JSON.stringify(locals.facultyAssignedCourses || []).replace(/</g, '\\u003c') %>
     </script>
     <script>
         const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
         const facultyListData = JSON.parse(document.getElementById('faculty-list-data').textContent);
         const facultyAssignedData = JSON.parse(document.getElementById('faculty-assigned-data').textContent);
         
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function toggleSection(sectionId) {
             const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection', 'facultyManageSection', 'studentManageSection'];
             sections.forEach(id => {
@@ -643,7 +685,7 @@
             let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Clinical Instructor (Optional) --</option>';
             facultyListData.forEach(fac => {
                 const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-                facultyOptionsHtml += `<option value="${facName}">${facName}</option>`;
+                facultyOptionsHtml += `<option value="${escapeHtml(fac.username)}">${escapeHtml(facName)}</option>`;
             });
 
             let html = '<div class="max-h-[400px] overflow-y-auto pr-2 space-y-4">';
@@ -653,7 +695,7 @@
 
                 const isCurrentTermGroup = String(i) === String(selectedTerm);
                 html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'} shadow-sm">`;
-                html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${termNames[i]} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
+                html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${escapeHtml(termNames[i])} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
                 html += `<div class="space-y-2">`;
                 
                 termCourses.forEach(c => {
@@ -661,8 +703,8 @@
                     html += `
                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded hover:bg-slate-100 gap-2 border border-slate-100">
                             <label class="flex items-center space-x-2 cursor-pointer flex-grow">
-                                <input type="checkbox" name="course_codes" value="${c.course_code}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-[11px] font-semibold text-slate-700">[${c.course_code}] ${c.descriptive_title}</span>
+                                <input type="checkbox" name="course_codes" value="${escapeHtml(c.course_code)}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-[11px] font-semibold text-slate-700">[${escapeHtml(c.course_code)}] ${escapeHtml(c.descriptive_title)}</span>
                             </label>
                             <div class="w-full sm:w-64">
                                 <select name="instructors" class="w-full px-2 py-1 rounded border border-slate-300 bg-white text-[11px] font-medium text-slate-700">
@@ -688,7 +730,7 @@
             let optionsHtml = '<option value="" style="font-style: italic;">--Select Subject--</option>';
             allCoursesData.forEach(c => {
                 const selected = c.course_code === selectedValue ? 'selected' : '';
-                optionsHtml += `<option value="${c.course_code}" ${selected}>[${c.course_code}] ${c.descriptive_title}</option>`;
+                optionsHtml += `<option value="${escapeHtml(c.course_code)}" ${selected}>[${escapeHtml(c.course_code)}] ${escapeHtml(c.descriptive_title)}</option>`;
             });
 
             div.innerHTML = `
@@ -726,28 +768,19 @@
 
         function autoMatchRemark(selectElement, index) {
             const grade = selectElement.value;
-            const remarkSelect = document.getElementById('remark_' + index);
-            if (!remarkSelect) return;
+            const remarkInput = document.getElementById('remark_' + index);
+            if (!remarkInput) return;
 
             const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
 
-            if (passedGrades.includes(grade)) {
-                remarkSelect.value = 'PASSED';
-            } else if (grade === '4.00') {
-                remarkSelect.value = 'CONDITIONAL';
-            } else if (grade === '5.00') {
-                remarkSelect.value = 'FAILED';
-            } else if (grade === 'X') {
-                remarkSelect.value = 'DROPPED';
-            } else if (grade === 'INC') {
-                remarkSelect.value = 'INCOMPLETE';
-            } else if (grade === 'W') {
-                remarkSelect.value = 'ABSENT FROM EXAMINATION';
-            } else if (grade === 'NG') {
-                remarkSelect.value = 'NO GRADE';
-            } else {
-                remarkSelect.value = '';
-            }
+            if (passedGrades.includes(grade)) remarkInput.value = 'PASSED';
+            else if (grade === '4.00') remarkInput.value = 'CONDITIONAL';
+            else if (grade === '5.00') remarkInput.value = 'FAILED';
+            else if (grade === 'X') remarkInput.value = 'DROPPED';
+            else if (grade === 'INC') remarkInput.value = 'INCOMPLETE';
+            else if (grade === 'W') remarkInput.value = 'ABSENT FROM EXAMINATION';
+            else if (grade === 'NG') remarkInput.value = 'NO GRADE';
+            else remarkInput.value = '';
         }
 
         const searchInput = document.getElementById('studentSearchInput');
@@ -755,6 +788,12 @@
             searchInput.addEventListener('click', function() {
                 this.value = '';
             });
+        }
+
+        function secureRandInt(max) {
+            const arr = new Uint32Array(1);
+            window.crypto.getRandomValues(arr);
+            return arr[0] % max;
         }
 
         function generateRandomPassword() {
@@ -765,16 +804,19 @@
             const all = upper + lower + num + special;
             
             let pass = [
-                upper[Math.floor(Math.random() * upper.length)],
-                lower[Math.floor(Math.random() * lower.length)],
-                num[Math.floor(Math.random() * num.length)],
-                special[Math.floor(Math.random() * special.length)]
+                upper[secureRandInt(upper.length)],
+                lower[secureRandInt(lower.length)],
+                num[secureRandInt(num.length)],
+                special[secureRandInt(special.length)]
             ];
-            
-            for (let i = 0; i < 4; i++) {
-                pass.push(all[Math.floor(Math.random() * all.length)]);
+            for (let i = 0; i < 6; i++) {
+                pass.push(all[secureRandInt(all.length)]);
             }
-            return pass.sort(() => Math.random() - 0.5).join('');
+            for (let i = pass.length - 1; i > 0; i--) {
+                const j = secureRandInt(i + 1);
+                [pass[i], pass[j]] = [pass[j], pass[i]];
+            }
+            return pass.join('');
         }
         
         function confirmPasswordReset(form, studentId) {
