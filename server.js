@@ -77,12 +77,14 @@ async function seedDatabase() {
             CREATE TABLE IF NOT EXISTS settings (
                 id INT PRIMARY KEY,
                 current_ay VARCHAR(20),
-                current_semester INT
+                current_semester INT,
+                faculty_portal_locked BOOLEAN DEFAULT FALSE
             );
         `);
+        await pool.query(`ALTER TABLE settings ADD COLUMN IF NOT EXISTS faculty_portal_locked BOOLEAN DEFAULT FALSE;`);
         await pool.query(`
-            INSERT INTO settings (id, current_ay, current_semester) 
-            VALUES (1, '2026-2027', 1) 
+            INSERT INTO settings (id, current_ay, current_semester, faculty_portal_locked) 
+            VALUES (1, '2026-2027', 1, FALSE) 
             ON CONFLICT (id) DO NOTHING;
         `);
 
@@ -157,7 +159,10 @@ function isAuthenticated(req, res, next) {
 
 app.get('/', (req, res) => {
     if (req.session.user) return res.redirect('/portal');
-    res.render('login', { error: null });
+    const lockedPopup = req.query.locked === '1' 
+        ? 'Encoding of Grades is Not Yet Officially Open. Please wait for the College Registrar to unlock the Faculty Portal.' 
+        : null;
+    res.render('login', { error: null, popupMessage: lockedPopup });
 });
 
 app.post('/login', async (req, res) => {
@@ -165,13 +170,24 @@ app.post('/login', async (req, res) => {
     try {
         const userQuery = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         if (userQuery.rows.length === 0) {
-            return res.render('login', { error: 'Invalid username or password.' });
+            return res.render('login', { error: 'Invalid username or password.', popupMessage: null });
         }
 
         const user = userQuery.rows[0];
         const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
-            return res.render('login', { error: 'Invalid username or password.' });
+            return res.render('login', { error: 'Invalid username or password.', popupMessage: null });
+        }
+
+        // Check if Faculty Portal is currently locked by the Registrar
+        if (user.role === 'faculty') {
+            const settingsRes = await pool.query('SELECT faculty_portal_locked FROM settings WHERE id = 1');
+            if (settingsRes.rows.length > 0 && settingsRes.rows[0].faculty_portal_locked) {
+                return res.render('login', { 
+                    error: null, 
+                    popupMessage: 'Encoding of Grades is Not Yet Officially Open. Please wait for the College Registrar to unlock the Faculty Portal.' 
+                });
+            }
         }
 
         let fullName = formatFullName(user.first_name, user.middle_name, user.last_name, null);
@@ -206,7 +222,7 @@ app.post('/login', async (req, res) => {
         }
     } catch (err) {
         console.error(err);
-        res.render('login', { error: 'Database error occurred.' });
+        res.render('login', { error: 'Database error occurred.', popupMessage: null });
     }
 });
 
@@ -555,6 +571,24 @@ app.post('/registrar/update-settings', isAuthenticated, async (req, res) => {
     }
 });
 
+app.post('/registrar/toggle-faculty-lock', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+    try {
+        const currentRes = await pool.query('SELECT faculty_portal_locked FROM settings WHERE id = 1');
+        const currentState = currentRes.rows[0] ? currentRes.rows[0].faculty_portal_locked : false;
+        const newState = !currentState;
+
+        await pool.query('UPDATE settings SET faculty_portal_locked = $1 WHERE id = 1', [newState]);
+        const statusMsg = newState 
+            ? '🔒 Faculty Portal is now LOCKED. Instructors cannot log in or encode grades.' 
+            : '🔓 Faculty Portal is now UNLOCKED. Instructors may now log in and encode grades.';
+        res.redirect(`/registrar?msg=${encodeURIComponent(statusMsg)}`);
+    } catch (err) {
+        console.error(err);
+        res.redirect('/registrar?err=Failed to toggle Faculty Portal lock.');
+    }
+});
+
 app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -702,7 +736,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             }
         }
 
-        res.redirect(`/registrar?student_id=${cleanId}&msg=Student registered and officially enrolled in selected subjects with assigned instructors.`);
+        res.redirect(`/registrar?student_id=${cleanId}&msg=Student registered and officially enrolled in selected subjects.`);
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding new student: ${err.message}`);
@@ -842,7 +876,7 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             DO UPDATE SET enrolled_term = $4, academic_year = $5, instructor = $3;
         `, [student_id, course_code, instructor || '', term, currentAy]);
 
-        res.redirect(`/registrar?student_id=${student_id}&msg=Subject successfully enrolled with assigned instructor for A.Y. ${currentAy}.`);
+        res.redirect(`/registrar?student_id=${student_id}&msg=Subject successfully enrolled for A.Y. ${currentAy}.`);
     } catch (err) {
         console.error(err);
         res.redirect(`/registrar?student_id=${student_id}&err=${encodeURIComponent(err.message)}`);
@@ -926,30 +960,35 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
     }
-    
-    const facultyUsername = req.session.user.username;
-    const facUserRes = await pool.query('SELECT first_name, middle_name, last_name FROM users WHERE username = $1', [facultyUsername]);
-    const facUser = facUserRes.rows[0] || {};
-    
-    // Formatted strictly as LAST NAME, FIRST NAME MIDDLE NAME (matching dropdown format)
-    const facultyFullName = [facUser.last_name, [facUser.first_name, facUser.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-
-    const rawCourseCode = req.query.course_code;
-    const selectedCourse = Array.isArray(rawCourseCode) ? rawCourseCode[0].trim() : (rawCourseCode ? rawCourseCode.trim() : '');
-    const searchLastName = req.query.last_name ? req.query.last_name.trim() : '';
-    const searchFirstName = req.query.first_name ? req.query.first_name.trim() : '';
-    const searchMiddleName = req.query.middle_name ? req.query.middle_name.trim() : '';
 
     try {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
+
+        // If Registrar locks the portal while a faculty member is logged in, kick them out to the login notice
+        if (req.session.user.role === 'faculty' && systemSettings.faculty_portal_locked) {
+            return req.session.destroy(() => {
+                res.redirect('/?locked=1');
+            });
+        }
+
+        const facultyUsername = req.session.user.username;
+        const facUserRes = await pool.query('SELECT first_name, middle_name, last_name FROM users WHERE username = $1', [facultyUsername]);
+        const facUser = facUserRes.rows[0] || {};
+        
+        const facultyFullName = [facUser.last_name, [facUser.first_name, facUser.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+        const rawCourseCode = req.query.course_code;
+        const selectedCourse = Array.isArray(rawCourseCode) ? rawCourseCode[0].trim() : (rawCourseCode ? rawCourseCode.trim() : '');
+        const searchLastName = req.query.last_name ? req.query.last_name.trim() : '';
+        const searchFirstName = req.query.first_name ? req.query.first_name.trim() : '';
+        const searchMiddleName = req.query.middle_name ? req.query.middle_name.trim() : '';
 
         let assignedCourses = [];
         if (req.session.user.role === 'admin') {
             const allC = await pool.query('SELECT course_code, descriptive_title FROM courses ORDER BY course_code');
             assignedCourses = allC.rows;
         } else {
-            // FIX: Using exact matching and checking both faculty_courses AND grades instructor assignments (supporting comma variations)
             const facC = await pool.query(`
                 SELECT DISTINCT c.course_code, c.descriptive_title 
                 FROM courses c
@@ -1022,9 +1061,18 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
 app.post('/faculty/update-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, course_code, academic_year, final_grade, instructor, remarks } = req.body;
-    
     try {
+        if (req.session.user.role === 'faculty') {
+            const settingsRes = await pool.query('SELECT faculty_portal_locked FROM settings WHERE id = 1');
+            if (settingsRes.rows.length > 0 && settingsRes.rows[0].faculty_portal_locked) {
+                return req.session.destroy(() => {
+                    res.redirect('/?locked=1');
+                });
+            }
+        }
+
+        const { student_id, course_code, academic_year, final_grade, instructor, remarks } = req.body;
+        
         let cleanGrade = final_grade ? final_grade.trim() : '';
         if (/^\d+$/.test(cleanGrade)) {
             cleanGrade = `${cleanGrade}.00`;
@@ -1058,24 +1106,19 @@ app.get('/portal', isAuthenticated, async (req, res) => {
         const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [user.username]);
         const student = studentRes.rows[0];
 
-        // Selected term from dropdown for viewing past/other grades
         let selectedTerm = req.query.term;
         if (!selectedTerm) {
             selectedTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
         }
 
-        // True active system term based on student's registered year level and global system semester
         const activeSystemTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
 
-        // Check if student has records for the active system term under the active academic year
         const activeCheckRes = await pool.query(`
             SELECT COUNT(*) AS total FROM grades WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3
         `, [user.username, activeSystemTerm, systemSettings.current_ay]);
         
-        // Enrollment status and academic year are strictly locked to the global active system settings
         const isOfficiallyEnrolled = parseInt(activeCheckRes.rows[0].total, 10) > 0;
 
-        // Fetch grades for whichever term the dropdown is asking to view
         const gradesRes = await pool.query(`
             SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
                    c.descriptive_title, c.lec_units, c.rle_units, c.total_units

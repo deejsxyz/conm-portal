@@ -49,25 +49,54 @@
             </div>
         <% } %>
 
-        <!-- GLOBAL SYSTEM SETTINGS -->
-        <div class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <!-- GLOBAL SYSTEM SETTINGS & FACULTY PORTAL LOCK -->
+        <div class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div>
-                <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
-                <p class="text-xs text-indigo-700 mt-1">Set the active Academic Year and Semester. This locks the Faculty Portal so instructors can only view and edit grades for this exact period.</p>
+                <div class="flex items-center gap-2.5">
+                    <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
+                    <% if (systemSettings.faculty_portal_locked) { %>
+                        <span class="px-2.5 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                            🔒 Faculty Portal Locked
+                        </span>
+                    <% } else { %>
+                        <span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                            🔓 Faculty Portal Open
+                        </span>
+                    <% } %>
+                </div>
+                <p class="text-xs text-indigo-700 mt-1">Set the active Academic Year, Semester, and control whether clinical instructors are allowed to access the Faculty Portal to encode grades.</p>
             </div>
-            <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center w-full sm:w-auto">
-                <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
-                    <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                    <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                    <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                    <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                </select>
-                <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
-                    <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
-                    <option value="2" <%= systemSettings.current_semester === 2 ? 'selected' : '' %>>2nd Semester</option>
-                </select>
-                <button type="submit" class="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors">Apply System-Wide</button>
-            </form>
+            
+            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center">
+                    <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
+                        <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                        <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                        <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                        <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                    </select>
+                    <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white">
+                        <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
+                        <option value="2" <%= systemSettings.current_semester === 2 ? 'selected' : '' %>>2nd Semester</option>
+                    </select>
+                    <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap">
+                        Apply System-Wide
+                    </button>
+                </form>
+
+                <!-- LOCK / UNLOCK FACULTY PORTAL BUTTON -->
+                <form action="/registrar/toggle-faculty-lock" method="POST" class="inline">
+                    <% if (systemSettings.faculty_portal_locked) { %>
+                        <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap flex items-center gap-1.5">
+                            🔓 Unlock Faculty Portal
+                        </button>
+                    <% } else { %>
+                        <button type="submit" onclick="return confirm('Lock the Faculty Portal? Instructors will be prevented from logging in or encoding grades until you unlock it.');" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap flex items-center gap-1.5">
+                            🔒 Lock Faculty Portal
+                        </button>
+                    <% } %>
+                </form>
+            </div>
         </div>
 
         <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT (SINGLE LINE) -->
@@ -403,7 +432,6 @@
                             </select>
                         </div>
                         <div class="w-full sm:w-64">
-                            <!-- INSTRUCTOR IS NOW OPTIONAL (NO 'required' ATTRIBUTE) -->
                             <select name="instructor" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700">
                                 <option value="" style="font-style: italic;">-- Select Clinical Instructor (Optional) --</option>
                                 <% facultyList.forEach(fac => { 
