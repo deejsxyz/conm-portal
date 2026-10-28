@@ -400,8 +400,8 @@
             if (staffPass && !staffPass.value) staffPass.value = generateRandomPassword();
             if (studentPass && (!studentPass.value || studentPass.value === 'password123')) studentPass.value = generateRandomPassword();
             
-            const staffManagedOpen = <%= locals.selectedStaff ? 'true' : 'false' %>;
-            const studentManagedOpen = <%= locals.searchStudentId ? 'true' : 'false' %>;
+            const staffManagedOpen = "<%= locals.selectedStaff ? 'true' : 'false' %>" === "true";
+            const studentManagedOpen = "<%= locals.searchStudentId ? 'true' : 'false' %>" === "true";
             
             if (staffManagedOpen) {
                 sessionStorage.setItem('activeAdminSection', 'staffManageSection');

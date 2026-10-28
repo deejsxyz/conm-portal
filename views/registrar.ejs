@@ -720,8 +720,8 @@
             updateSubjectChecklist();
             initFacultySubjectDropdowns();
             
-            const facultyManagedOpen = <%= locals.selectedFaculty ? 'true' : 'false' %>;
-            const studentManagedOpen = <%= locals.selectedStudent ? 'true' : 'false' %>;
+            const facultyManagedOpen = "<%= locals.selectedFaculty ? 'true' : 'false' %>" === "true";
+            const studentManagedOpen = "<%= locals.selectedStudent ? 'true' : 'false' %>" === "true";
             
             if (facultyManagedOpen) {
                 sessionStorage.setItem('activeRegistrarSection', 'facultyManageSection');
