@@ -1051,14 +1051,18 @@ app.get('/portal', isAuthenticated, async (req, res) => {
     if (user.role === 'registrar') return res.redirect('/registrar');
     if (user.role === 'faculty') return res.redirect('/faculty/edit-grades');
 
-    const selectedTerm = req.query.term || '4';
-
     try {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
 
         const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [user.username]);
         const student = studentRes.rows[0];
+
+        // DYNAMIC TERM CALCULATION
+        let selectedTerm = req.query.term;
+        if (!selectedTerm) {
+            selectedTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
+        }
 
         const gradesRes = await pool.query(`
             SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
