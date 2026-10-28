@@ -456,7 +456,7 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
         res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&msg=Student profile updated successfully.`);
     } catch (err) {
         console.error(err);
-        res.redirect(`/admin?search_student_id=${encodeURIComponent(student_id)}&err=Failed to update student profile.`);
+        res.redirect(`/admin?err=Failed to update student profile: ${err.message}`);
     }
 });
 
@@ -1058,12 +1058,20 @@ app.get('/portal', isAuthenticated, async (req, res) => {
         const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1', [user.username]);
         const student = studentRes.rows[0];
 
-        // DYNAMIC TERM CALCULATION
+        // Default term based on active system settings if not provided in query
         let selectedTerm = req.query.term;
         if (!selectedTerm) {
             selectedTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
         }
 
+        // Check if student has ANY grades/subjects enrolled in the CURRENT active system term
+        const activeSystemTerm = ((parseInt(student.year_level || 1) - 1) * 2 + parseInt(systemSettings.current_semester)).toString();
+        const activeCheckRes = await pool.query(`
+            SELECT COUNT(*) AS total FROM grades WHERE student_id = $1 AND enrolled_term = $2
+        `, [user.username, activeSystemTerm]);
+        const isOfficiallyEnrolled = parseInt(activeCheckRes.rows[0].total, 10) > 0;
+
+        // Fetch grades for whatever term the student selected from the dropdown
         const gradesRes = await pool.query(`
             SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
                    c.descriptive_title, c.lec_units, c.rle_units, c.total_units
@@ -1077,7 +1085,8 @@ app.get('/portal', isAuthenticated, async (req, res) => {
             studentRecord: student,
             grades: gradesRes.rows,
             currentTerm: selectedTerm,
-            systemSettings: systemSettings
+            systemSettings: systemSettings,
+            isOfficiallyEnrolled: isOfficiallyEnrolled
         });
     } catch (err) {
         console.error(err);
