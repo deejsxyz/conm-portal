@@ -42,10 +42,10 @@
                 
                 <div class="flex gap-2">
                     <select id="portal_year_select" onchange="submitPortalFilter()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
-                        <option value="1" <%= viewYear === '1' ? 'selected' : '' %>>1st Year</option>
-                        <option value="2" <%= viewYear === '2' ? 'selected' : '' %>>2nd Year</option>
-                        <option value="3" <%= viewYear === '3' ? 'selected' : '' %>>3rd Year</option>
-                        <option value="4" <%= viewYear === '4' ? 'selected' : '' %>>4th Year</option>
+                        <option value="1" <%= viewYear === '1' ? 'selected' : '' %>>BSN1</option>
+                        <option value="2" <%= viewYear === '2' ? 'selected' : '' %>>BSN2</option>
+                        <option value="3" <%= viewYear === '3' ? 'selected' : '' %>>BSN3</option>
+                        <option value="4" <%= viewYear === '4' ? 'selected' : '' %>>BSN4</option>
                     </select>
 
                     <select id="portal_sem_select" onchange="submitPortalFilter()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
@@ -63,11 +63,9 @@
             
             <!-- Student Information Block (Strictly Locked to Global System Settings) -->
             <% 
-                let yearString = "Unknown";
-                if (String(studentRecord.year_level) === '1') yearString = "First Year";
-                else if (String(studentRecord.year_level) === '2') yearString = "Second Year";
-                else if (String(studentRecord.year_level) === '3') yearString = "Third Year";
-                else if (String(studentRecord.year_level) === '4') yearString = "Fourth Year";
+                const yearNum = studentRecord.year_level || '1';
+                const studentSection = studentRecord.section || 'A';
+                const yearSectionLabel = `BSN${yearNum} - ${studentSection}`;
             %>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8 text-sm">
                 <div class="text-left space-y-4">
@@ -87,8 +85,8 @@
                        <span class="font-medium"><%= studentRecord.program %></span>
                     </p>
                     <p>
-                       <span class="font-bold uppercase text-[10px] text-slate-500">Year Level:</span> <br> 
-                       <span class="font-medium"><%= yearString %></span>
+                       <span class="font-bold uppercase text-[10px] text-slate-500">Year & Section:</span> <br> 
+                       <span class="font-bold text-emerald-900"><%= yearSectionLabel %></span>
                     </p>
                 </div>
 

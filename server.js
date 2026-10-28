@@ -73,6 +73,10 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS enrolled_term VARCHAR(10);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-2027';`);
 
+        // Ensure students table has section column (A, B, C)
+        await pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS section VARCHAR(10) DEFAULT 'A';`);
+        await pool.query(`UPDATE students SET section = 'A' WHERE section IS NULL OR TRIM(section) = '';`);
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS settings (
                 id INT PRIMARY KEY,
@@ -179,7 +183,6 @@ app.post('/login', async (req, res) => {
             return res.render('login', { error: 'Invalid username or password.', popupMessage: null });
         }
 
-        // Check if Faculty Portal is currently locked by the Registrar
         if (user.role === 'faculty') {
             const settingsRes = await pool.query('SELECT faculty_portal_locked FROM settings WHERE id = 1');
             if (settingsRes.rows.length > 0 && settingsRes.rows[0].faculty_portal_locked) {
@@ -298,7 +301,7 @@ app.get('/admin', isAuthenticated, async (req, res) => {
         let searchedStudents = [];
         if (searchStudentId) {
             const stuSearchRes = await pool.query(`
-                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level,
+                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level, COALESCE(s.section, 'A') AS section,
                        u.must_change_password
                 FROM students s
                 LEFT JOIN users u ON s.student_id = u.username
@@ -361,11 +364,12 @@ app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
 app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, first_name, middle_name, last_name, year_level, temp_password } = req.body;
+    const { student_id, first_name, middle_name, last_name, year_level, section, temp_password } = req.body;
     const cleanId = student_id ? student_id.trim() : '';
     const fName = first_name ? first_name.trim() : '';
     const mName = middle_name ? middle_name.trim() : '';
     const lName = last_name ? last_name.trim() : '';
+    const sec = section ? section.trim().toUpperCase() : 'A';
     const pass = temp_password ? temp_password.trim() : 'password123';
 
     try {
@@ -382,9 +386,9 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await pool.query(`
-            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
-            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
-        `, [cleanId, fName, mName, lName, year_level || 1]);
+            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level, section) 
+            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5, $6)
+        `, [cleanId, fName, mName, lName, year_level || 1, sec]);
 
         res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}&msg=Student account successfully created.`);
     } catch (err) {
@@ -445,14 +449,15 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
 app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, first_name, middle_name, last_name, year_level, temp_password } = req.body;
+    const { student_id, first_name, middle_name, last_name, year_level, section, temp_password } = req.body;
+    const sec = section ? section.trim().toUpperCase() : 'A';
     
     try {
         await pool.query(`
             UPDATE students 
-            SET first_name = $1, middle_name = $2, last_name = $3, year_level = $4
-            WHERE student_id = $5
-        `, [first_name.trim(), middle_name.trim(), last_name.trim(), year_level, student_id]);
+            SET first_name = $1, middle_name = $2, last_name = $3, year_level = $4, section = $5
+            WHERE student_id = $6
+        `, [first_name.trim(), middle_name.trim(), last_name.trim(), year_level, sec, student_id]);
 
         await pool.query(`
             UPDATE users 
@@ -623,6 +628,10 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                     const tempPassword = passArray.sort(() => Math.random() - 0.5).join('');
                     const hashedPassword = await bcrypt.hash(tempPassword, 10);
                     
+                    const rawYear = String(student.year_level || '1').replace(/[^0-9]/g, '');
+                    const cleanYear = parseInt(rawYear, 10) || 1;
+                    const cleanSection = student.section ? student.section.trim().toUpperCase() : 'A';
+
                     await pool.query(
                         `INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password) 
                          VALUES ($1, $2, 'student', $3, $4, $5, TRUE) 
@@ -631,14 +640,14 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                     );
 
                     await pool.query(
-                        `INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
-                         VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
-                         ON CONFLICT (student_id) DO NOTHING`,
-                        [student.student_id, student.first_name, student.middle_name, student.last_name, student.year_level || 1]
+                        `INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level, section) 
+                         VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5, $6)
+                         ON CONFLICT (student_id) DO UPDATE SET year_level = $5, section = $6`,
+                        [student.student_id, student.first_name, student.middle_name, student.last_name, cleanYear, cleanSection]
                     );
 
-                    if (student.year_level && student.semester && student.subjects && student.academic_year) {
-                        const termId = (parseInt(student.year_level) - 1) * 2 + parseInt(student.semester);
+                    if (cleanYear && student.semester && student.subjects && student.academic_year) {
+                        const termId = (cleanYear - 1) * 2 + parseInt(student.semester);
                         const courseCodes = student.subjects.split(',').map(s => s.trim()).filter(s => s);
                         
                         for (const code of courseCodes) {
@@ -658,6 +667,7 @@ app.post('/registrar/batch-upload', isAuthenticated, upload.single('file'), (req
                     generatedCredentials.push({
                         student_id: student.student_id,
                         name: `${student.last_name}, ${student.first_name} ${student.middle_name || ''}`.trim(),
+                        year_section: `BSN${cleanYear} - ${cleanSection}`,
                         temp_password: tempPassword
                     });
                 }
@@ -682,8 +692,8 @@ app.get('/registrar/export-batch-credentials', isAuthenticated, (req, res) => {
         return res.status(400).send('No recent batch upload credentials found in session.');
     }
 
-    let csvHeader = 'Student ID,Student Name,Temporary Password\n';
-    let csvRows = credentials.map(c => `"${c.student_id}","${c.name}","${c.temp_password}"`).join('\n');
+    let csvHeader = 'Student ID,Student Name,Year & Section,Temporary Password\n';
+    let csvRows = credentials.map(c => `"${c.student_id}","${c.name}","${c.year_section || ''}","${c.temp_password}"`).join('\n');
     let csvContent = csvHeader + csvRows;
 
     res.setHeader('Content-Type', 'text/csv');
@@ -694,11 +704,12 @@ app.get('/registrar/export-batch-credentials', isAuthenticated, (req, res) => {
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    const { student_id, first_name, middle_name, last_name, year_level, term, academic_year, course_codes, instructors, temp_password } = req.body;
+    const { student_id, first_name, middle_name, last_name, year_level, section, term, academic_year, course_codes, instructors, temp_password } = req.body;
     const cleanId = student_id ? student_id.trim() : '';
     const fName = first_name ? first_name.trim() : '';
     const mName = middle_name ? middle_name.trim() : '';
     const lName = last_name ? last_name.trim() : '';
+    const sec = section ? section.trim().toUpperCase() : 'A';
     const pass = temp_password ? temp_password.trim() : 'password123';
 
     try {
@@ -715,9 +726,9 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await pool.query(`
-            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level) 
-            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5)
-        `, [cleanId, fName, mName, lName, year_level || 1]);
+            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level, section) 
+            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5, $6)
+        `, [cleanId, fName, mName, lName, year_level || 1, sec]);
 
         if (term && course_codes && academic_year) {
             const codes = Array.isArray(course_codes) ? course_codes : [course_codes];
@@ -736,10 +747,26 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             }
         }
 
-        res.redirect(`/registrar?student_id=${cleanId}&msg=Student registered and officially enrolled in selected subjects.`);
+        res.redirect(`/registrar?student_id=${cleanId}&msg=Student registered (BSN${year_level || 1} - ${sec}) and officially enrolled in selected subjects.`);
     } catch (err) {
         console.error(err);
         res.status(500).send(`Error adding new student: ${err.message}`);
+    }
+});
+
+app.post('/registrar/update-student-year-section', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    const { student_id, year_level, section } = req.body;
+    const sec = section ? section.trim().toUpperCase() : 'A';
+    try {
+        await pool.query(`
+            UPDATE students SET year_level = $1, section = $2 WHERE student_id = $3
+        `, [year_level, sec, student_id]);
+        res.redirect(`/registrar?student_id=${encodeURIComponent(student_id)}&msg=Student class updated to BSN${year_level} - ${sec}.`);
+    } catch (err) {
+        console.error(err);
+        res.redirect(`/registrar?student_id=${encodeURIComponent(student_id)}&err=Failed to update Year Level and Section.`);
     }
 });
 
@@ -955,7 +982,7 @@ app.post('/registrar/unenroll-term', isAuthenticated, async (req, res) => {
     }
 });
 
-// Faculty Portal Routes
+// ==================== FACULTY PORTAL ROUTES (EXCEL-LIKE CLASS ROSTER) ====================
 app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
@@ -979,17 +1006,16 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
 
         const rawCourseCode = req.query.course_code;
         const selectedCourse = Array.isArray(rawCourseCode) ? rawCourseCode[0].trim() : (rawCourseCode ? rawCourseCode.trim() : '');
-        const searchLastName = req.query.last_name ? req.query.last_name.trim() : '';
-        const searchFirstName = req.query.first_name ? req.query.first_name.trim() : '';
-        const searchMiddleName = req.query.middle_name ? req.query.middle_name.trim() : '';
+        const selectedYearLevel = req.query.year_level ? req.query.year_level.trim() : '';
+        const selectedSection = req.query.section ? req.query.section.trim().toUpperCase() : '';
 
         let assignedCourses = [];
         if (req.session.user.role === 'admin') {
-            const allC = await pool.query('SELECT course_code, descriptive_title FROM courses ORDER BY course_code');
+            const allC = await pool.query('SELECT course_code, descriptive_title, term_id FROM courses ORDER BY course_code');
             assignedCourses = allC.rows;
         } else {
             const facC = await pool.query(`
-                SELECT DISTINCT c.course_code, c.descriptive_title 
+                SELECT DISTINCT c.course_code, c.descriptive_title, c.term_id
                 FROM courses c
                 LEFT JOIN faculty_courses fc ON fc.course_code = c.course_code AND fc.username = $1
                 LEFT JOIN grades g ON g.course_code = c.course_code AND (g.instructor = $2 OR g.instructor ILIKE $3)
@@ -999,58 +1025,52 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             assignedCourses = facC.rows;
         }
 
-        let matchingStudent = null;
-        let gradeRecord = null;
+        let enrolledStudents = [];
+        let selectedCourseDetails = null;
 
-        if (selectedCourse && searchLastName && searchFirstName && searchMiddleName) {
-            // CASE-INSENSITIVE STUDENT NAME SEARCH
-            const studentRes = await pool.query(`
-                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level
+        if (selectedCourse) {
+            selectedCourseDetails = assignedCourses.find(c => c.course_code === selectedCourse) || null;
+        }
+
+        if (selectedCourse && selectedYearLevel && selectedSection) {
+            const validTerms = systemSettings.current_semester === 1 ? [1, 3, 5, 7] : [2, 4, 6, 8];
+
+            let rosterQuery = `
+                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.year_level, COALESCE(s.section, 'A') AS section,
+                       g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
+                       c.descriptive_title
                 FROM students s
-                WHERE TRIM(s.last_name) ILIKE $1 
-                  AND TRIM(s.first_name) ILIKE $2 
-                  AND TRIM(COALESCE(s.middle_name, '')) ILIKE $3
-            `, [searchLastName, searchFirstName, searchMiddleName]);
+                JOIN grades g ON s.student_id = g.student_id
+                JOIN courses c ON g.course_code = c.course_code
+                WHERE g.course_code = $1
+                  AND s.year_level = $2
+                  AND UPPER(COALESCE(s.section, 'A')) = $3
+                  AND g.academic_year = $4
+                  AND CAST(g.enrolled_term AS INTEGER) = ANY($5)
+            `;
+            let rosterParams = [selectedCourse, parseInt(selectedYearLevel, 10), selectedSection, systemSettings.current_ay, validTerms];
 
-            if (studentRes.rows.length > 0) {
-                matchingStudent = studentRes.rows[0];
-
-                const validTerms = systemSettings.current_semester === 1 ? [1, 3, 5, 7] : [2, 4, 6, 8];
-                
-                let gradeQuery = `
-                    SELECT g.id, g.course_code, g.final_grade, g.instructor, g.remarks, g.enrolled_term, g.academic_year,
-                           c.descriptive_title
-                    FROM grades g
-                    JOIN courses c ON g.course_code = c.course_code
-                    WHERE g.student_id = $1 
-                      AND g.course_code = $2
-                      AND g.academic_year = $3 
-                      AND CAST(g.enrolled_term AS INTEGER) = ANY($4)
-                `;
-                let gradeParams = [matchingStudent.student_id, selectedCourse, systemSettings.current_ay, validTerms];
-
-                if (req.session.user.role !== 'admin') {
-                    gradeQuery += ` AND (g.instructor = $5 OR g.instructor ILIKE $6)`;
-                    gradeParams.push(facultyFullName, `%${facUser.last_name}%${facUser.first_name}%`);
-                }
-
-                const gradeRes = await pool.query(gradeQuery, gradeParams);
-                if (gradeRes.rows.length > 0) {
-                    gradeRecord = gradeRes.rows[0];
-                }
+            if (req.session.user.role !== 'admin') {
+                rosterQuery += ` AND (g.instructor = $6 OR g.instructor ILIKE $7 OR COALESCE(TRIM(g.instructor), '') = '')`;
+                rosterParams.push(facultyFullName, `%${facUser.last_name}%${facUser.first_name}%`);
             }
+
+            rosterQuery += ` ORDER BY s.last_name ASC, s.first_name ASC`;
+
+            const rosterRes = await pool.query(rosterQuery, rosterParams);
+            enrolledStudents = rosterRes.rows;
         }
 
         res.render('faculty_edit', {
             currentUser: req.session.user,
+            facultyFullName: facultyFullName || req.session.user.fullName || req.session.user.username,
             systemSettings: systemSettings,
             assignedCourses: assignedCourses,
             selectedCourse: selectedCourse,
-            searchLastName: searchLastName,
-            searchFirstName: searchFirstName,
-            searchMiddleName: searchMiddleName,
-            matchingStudent: matchingStudent,
-            gradeRecord: gradeRecord,
+            selectedCourseDetails: selectedCourseDetails,
+            selectedYearLevel: selectedYearLevel,
+            selectedSection: selectedSection,
+            enrolledStudents: enrolledStudents,
             message: req.query.msg || null,
             error: req.query.err || null
         });
@@ -1060,7 +1080,8 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
     }
 });
 
-app.post('/faculty/update-grade', isAuthenticated, async (req, res) => {
+// Batch Save Class Grades from Excel-like Sheet
+app.post('/faculty/update-grades-sheet', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'faculty' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
     try {
@@ -1073,20 +1094,32 @@ app.post('/faculty/update-grade', isAuthenticated, async (req, res) => {
             }
         }
 
-        const { student_id, course_code, academic_year, final_grade, instructor, remarks } = req.body;
-        
-        let cleanGrade = final_grade ? final_grade.trim() : '';
-        if (/^\d+$/.test(cleanGrade)) {
-            cleanGrade = `${cleanGrade}.00`;
+        const { course_code, year_level, section, academic_year, student_ids, final_grades, instructors, remarks_list } = req.body;
+
+        const stuIds = Array.isArray(student_ids) ? student_ids : (student_ids ? [student_ids] : []);
+        const grades = Array.isArray(final_grades) ? final_grades : (final_grades !== undefined ? [final_grades] : []);
+        const insts = Array.isArray(instructors) ? instructors : (instructors !== undefined ? [instructors] : []);
+        const rems = Array.isArray(remarks_list) ? remarks_list : (remarks_list !== undefined ? [remarks_list] : []);
+
+        for (let i = 0; i < stuIds.length; i++) {
+            const sId = stuIds[i];
+            let cleanGrade = grades[i] ? grades[i].trim() : '';
+            if (/^\d+$/.test(cleanGrade)) {
+                cleanGrade = `${cleanGrade}.00`;
+            }
+            const inst = insts[i] ? insts[i].trim() : '';
+            const rem = rems[i] ? rems[i].trim() : '';
+
+            if (sId) {
+                await pool.query(`
+                    UPDATE grades 
+                    SET final_grade = $1, instructor = $2, remarks = $3 
+                    WHERE student_id = $4 AND course_code = $5 AND academic_year = $6
+                `, [cleanGrade, inst, rem, sId, course_code, academic_year]);
+            }
         }
 
-        await pool.query(`
-            UPDATE grades 
-            SET final_grade = $1, instructor = $2, remarks = $3 
-            WHERE student_id = $4 AND course_code = $5 AND academic_year = $6
-        `, [cleanGrade, instructor || '', remarks || '', student_id, course_code, academic_year]);
-
-        res.redirect(`/faculty/edit-grades?course_code=${encodeURIComponent(course_code)}&msg=Grade updated successfully!`);
+        res.redirect(`/faculty/edit-grades?course_code=${encodeURIComponent(course_code)}&year_level=${encodeURIComponent(year_level)}&section=${encodeURIComponent(section)}&msg=${encodeURIComponent(`Successfully saved grades for ${stuIds.length} student(s) in BSN${year_level} - ${section}!`)}`);
     } catch (err) {
         console.error(err);
         res.redirect(`/faculty/edit-grades?err=${encodeURIComponent(err.message)}`);

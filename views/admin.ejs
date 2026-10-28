@@ -62,7 +62,7 @@
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div>
                         <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Search Registered Student Accounts by ID</h4>
-                        <p class="text-xs text-slate-500">To keep the page fast, students are grouped into the 4 Year Level tables below and only displayed when searched by ID number.</p>
+                        <p class="text-xs text-slate-500">To keep the page fast, students are grouped into the 4 Year Level tables (BSN1–BSN4) below and displayed when searched by ID number.</p>
                     </div>
 
                     <form method="GET" action="/admin" class="flex items-center gap-2 w-full sm:w-auto">
@@ -78,19 +78,18 @@
                     </form>
                 </div>
 
-                <!-- 4 YEAR LEVEL STUDENT TABLES -->
+                <!-- 4 YEAR LEVEL STUDENT TABLES (BSN1 - BSN4) -->
                 <div class="grid grid-cols-1 gap-4">
                     <% 
                         const yearLabels = {
-                            1: '1st Year Nursing Students (Level 1)',
-                            2: '2nd Year Nursing Students (Level 2)',
-                            3: '3rd Year Nursing Students (Level 3)',
-                            4: '4th Year Nursing Students (Level 4)'
+                            1: 'BSN1',
+                            2: 'BSN2',
+                            3: 'BSN3',
+                            4: 'BSN4'
                         };
                         
                         let displayLevels = [1, 2, 3, 4];
                         if (locals.searchStudentId && locals.searchedStudents) {
-                            // Sort so that the level containing the matched student jumps to the top
                             displayLevels.sort((a, b) => {
                                 const aMatch = searchedStudents.some(s => Number(s.year_level) === a) ? 1 : 0;
                                 const bMatch = searchedStudents.some(s => Number(s.year_level) === b) ? 1 : 0;
@@ -114,11 +113,11 @@
 
                             <% if (!locals.searchStudentId) { %>
                                 <div class="py-4 px-5 text-xs text-slate-400 italic">
-                                    Use the Search Student ID bar above to look up a Level <%= level %> student account.
+                                    Use the Search Student ID bar above to look up a BSN<%= level %> student account.
                                 </div>
                             <% } else if (levelMatches.length === 0) { %>
                                 <div class="py-4 px-5 text-xs text-slate-400">
-                                    No matching student ID "<span class="font-mono font-semibold text-slate-600"><%= searchStudentId %></span>" in Level <%= level %>.
+                                    No matching student ID "<span class="font-mono font-semibold text-slate-600"><%= searchStudentId %></span>" in BSN<%= level %>.
                                 </div>
                             <% } else { %>
                                 <div class="divide-y divide-slate-100 p-4 space-y-3">
@@ -130,6 +129,9 @@
                                                     <span class="text-xs font-bold text-slate-700">
                                                         — <%= [stu.first_name, stu.middle_name, stu.last_name].filter(Boolean).join(' ') %>
                                                     </span>
+                                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                                                        BSN<%= stu.year_level %> - <%= stu.section || 'A' %>
+                                                    </span>
                                                     <% if (stu.must_change_password) { %>
                                                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Pending Password Change</span>
                                                     <% } else { %>
@@ -138,8 +140,8 @@
                                                 </div>
 
                                                 <div class="flex items-center gap-2">
-                                                    <a href="/faculty/edit-grades?student_id=<%= stu.student_id %>" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold shadow-sm">
-                                                        View/Edit Grades
+                                                    <a href="/registrar?student_id=<%= stu.student_id %>" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-sm">
+                                                        Manage in Registrar
                                                     </a>
                                                     <form action="/admin/delete-user" method="POST" class="inline" onsubmit="return confirm('Permanently delete student <%= stu.student_id %> and all their grades?');">
                                                         <input type="hidden" name="username" value="<%= stu.student_id %>">
@@ -152,7 +154,7 @@
                                             </div>
 
                                             <!-- Quick Edit Student Form -->
-                                            <form action="/admin/edit-student" method="POST" class="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end pt-2 border-t border-slate-200">
+                                            <form action="/admin/edit-student" method="POST" class="grid grid-cols-1 sm:grid-cols-7 gap-2 items-end pt-2 border-t border-slate-200">
                                                 <input type="hidden" name="student_id" value="<%= stu.student_id %>">
                                                 <div>
                                                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
@@ -168,11 +170,19 @@
                                                 </div>
                                                 <div>
                                                     <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year Level</label>
-                                                    <select name="year_level" class="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white text-xs font-medium">
-                                                        <option value="1" <%= Number(stu.year_level) === 1 ? 'selected' : '' %>>1st Year</option>
-                                                        <option value="2" <%= Number(stu.year_level) === 2 ? 'selected' : '' %>>2nd Year</option>
-                                                        <option value="3" <%= Number(stu.year_level) === 3 ? 'selected' : '' %>>3rd Year</option>
-                                                        <option value="4" <%= Number(stu.year_level) === 4 ? 'selected' : '' %>>4th Year</option>
+                                                    <select name="year_level" class="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white text-xs font-bold">
+                                                        <option value="1" <%= Number(stu.year_level) === 1 ? 'selected' : '' %>>BSN1</option>
+                                                        <option value="2" <%= Number(stu.year_level) === 2 ? 'selected' : '' %>>BSN2</option>
+                                                        <option value="3" <%= Number(stu.year_level) === 3 ? 'selected' : '' %>>BSN3</option>
+                                                        <option value="4" <%= Number(stu.year_level) === 4 ? 'selected' : '' %>>BSN4</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Section</label>
+                                                    <select name="section" class="w-full px-2.5 py-1.5 rounded border border-slate-300 bg-white text-xs font-bold">
+                                                        <option value="A" <%= (stu.section || 'A') === 'A' ? 'selected' : '' %>>A</option>
+                                                        <option value="B" <%= stu.section === 'B' ? 'selected' : '' %>>B</option>
+                                                        <option value="C" <%= stu.section === 'C' ? 'selected' : '' %>>C</option>
                                                     </select>
                                                 </div>
                                                 <div>
@@ -201,9 +211,9 @@
             <!-- ==================== REGISTER STUDENT SECTION ==================== -->
             <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Register New Student Account</h3>
-                <p class="text-xs text-slate-500 mb-4">Create a student user account along with their official student profile record.</p>
+                <p class="text-xs text-slate-500 mb-4">Create a student user account along with their official student profile record (BSN1–BSN4 & Section A/B/C).</p>
                 
-                <form action="/admin/add-student" method="POST" class="grid grid-cols-1 sm:grid-cols-7 gap-3 items-end">
+                <form action="/admin/add-student" method="POST" class="grid grid-cols-1 sm:grid-cols-8 gap-3 items-end">
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student ID</label>
                         <input type="text" name="student_id" required placeholder="e.g. 2024-00150" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
@@ -222,11 +232,19 @@
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Year Level</label>
-                        <select name="year_level" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
-                            <option value="1">1st Year</option>
-                            <option value="2" selected>2nd Year</option>
-                            <option value="3">3rd Year</option>
-                            <option value="4">4th Year</option>
+                        <select name="year_level" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold">
+                            <option value="1">BSN1</option>
+                            <option value="2" selected>BSN2</option>
+                            <option value="3">BSN3</option>
+                            <option value="4">BSN4</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Section</label>
+                        <select name="section" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold">
+                            <option value="A" selected>A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
                         </select>
                     </div>
                     <div>
@@ -236,7 +254,7 @@
                     <div class="flex gap-2">
                         <button type="button" onclick="toggleSection('studentManageSection')" class="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
                         <button type="submit" class="flex-[2] py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
-                            + Add Student
+                            + Add
                         </button>
                     </div>
                 </form>
