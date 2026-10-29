@@ -1127,6 +1127,45 @@ async function calculateImmunizationStatus(client, studentId) {
     return report;
 }
 
+// ==================== AJAX STUDENT LOOKUP API ====================
+app.get('/registrar/api/lookup-student', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const studentId = req.query.student_id ? String(req.query.student_id).trim() : '';
+    if (!studentId) return res.status(400).json({ error: 'Student ID required' });
+
+    let client;
+    try {
+        client = await pool.connect();
+        const studentRes = await client.query('SELECT * FROM students WHERE student_id = $1 AND COALESCE(is_archived, FALSE) = FALSE', [studentId]);
+        
+        if (studentRes.rows.length === 0) {
+            return res.json({ exists: false, message: 'No student record. Please enroll the student.' });
+        }
+
+        const student = studentRes.rows[0];
+        const immunizationReport = await calculateImmunizationStatus(client, studentId);
+
+        await client.query(
+            'INSERT INTO immunization_access_logs (student_id, accessed_by, action_type) VALUES ($1, $2, $3)',
+            [studentId, req.session.user.username, 'VIEW']
+        );
+
+        res.json({
+            exists: true,
+            student: student,
+            immunization: immunizationReport
+        });
+    } catch (err) {
+        console.error('API Student lookup error:', err);
+        res.status(500).json({ error: 'Lookup failed' });
+    } finally {
+        if (client) client.release();
+    }
+});
+
 // ==================== REGISTRAR PORTAL ROUTES ====================
 app.get('/registrar', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
@@ -1198,7 +1237,6 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
                 `, [targetStudentId, selectedTerm, selectedAy]);
                 grades = gradesRes.rows;
 
-                // Calculate Immunization Status & Log Access (RA 10173)
                 immunizationReport = await calculateImmunizationStatus(client, targetStudentId);
                 await client.query(
                     'INSERT INTO immunization_access_logs (student_id, accessed_by, action_type) VALUES ($1, $2, $3)',
@@ -1748,7 +1786,7 @@ app.post('/registrar/edit-faculty', isAuthenticated, async (req, res) => {
                     await client.query(`
                         INSERT INTO faculty_courses (username, course_code) 
                         VALUES ($1, $2) ON CONFLICT DO NOTHING;
-                    `, [cleanUser, String(code).trim()]);
+                    `, [cleanUser, code.trim()]);
                 }
             }
         }

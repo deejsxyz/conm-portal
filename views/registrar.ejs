@@ -128,18 +128,18 @@
 
         <div class="space-y-4">
 
-            <div id="studentPanel" class="<%= studentPanelOpen ? '' : 'hidden' %> space-y-4">
+            <div id="studentPanel" class="space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div role="tablist" aria-label="Student tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="true" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer bg-white text-indigo-900 shadow">✏️ Manage Student</button>
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="false" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Register Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register / Enroll Student</button>
                     </div>
                     <% if (selectedStudent) { %>
                         <a href="/registrar" class="text-xs font-bold text-slate-600 hover:text-slate-900 underline">Close student record</a>
                     <% } %>
                 </div>
 
-                <div id="studentManageSection" class="space-y-4">
+                <div id="studentManageSection" class="<%= studentPanelOpen ? 'hidden' : '' %> space-y-4">
                     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                         <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
                             <div class="flex-grow w-full">
@@ -447,46 +447,53 @@
                 <% } %>
                 </div>
 
-                <!-- Single Student Form -->
-                <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 <%= selectedStudent ? 'opacity-50 pointer-events-none' : '' %>">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Single Student</h3>
-                    <% if (selectedStudent) { %>
-                        <p class="mb-3 text-xs font-semibold text-slate-600">A student record is open. Use &ldquo;Close student record&rdquo; above to register a new student.</p>
-                    <% } %>
+                <!-- Register / Enroll Student Form -->
+                <div id="studentRegSection" class="<%= studentPanelOpen ? '' : 'hidden' %> bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
+                    
+                    <!-- Notification / Message Box for Lookup -->
+                    <div id="lookupMessageContainer" class="hidden mb-3 p-3 text-xs font-bold rounded-lg text-center"></div>
+
+                    <!-- IMMUNIZATION STATUS PANEL ON REGISTER FORM -->
+                    <div id="registerImmunizationContainer" class="hidden mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-900">🛡️ Existing Student Immunization Status</h4>
+                        <div id="registerImmunizationGrid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+                    </div>
+
                     <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
                                 <div class="flex">
-                                    <input type="text" id="regStudentIdInput" name="student_id" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-l-lg border border-slate-300 bg-slate-50 text-xs font-mono">
-                                    <button type="button" id="lookupStudentBtn" class="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-lg text-xs font-bold flex items-center justify-center cursor-pointer" title="Lookup Student">
+                                    <input type="text" id="regStudentIdInput" name="student_id" placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-l-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                                    <button type="button" id="lookupStudentApiBtn" class="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-lg text-xs font-bold flex items-center justify-center cursor-pointer" title="Search Student">
                                         🔍
                                     </button>
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
-                                <input type="text" name="first_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                                <input type="text" id="regFirstNameInput" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
-                                <input type="text" name="middle_name" <%= selectedStudent ? 'disabled' : '' %> placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                                <input type="text" id="regMiddleNameInput" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
-                                <input type="text" name="last_name" <%= selectedStudent ? 'disabled' : 'required' %> placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                                <input type="text" id="regLastNameInput" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
-                                <input type="text" id="regStudentTempPassword" name="temp_password" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
+                                <input type="text" id="regStudentTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 border-t border-slate-100 pt-3">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Enrollment Academic Year</label>
-                                <select name="academic_year" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium cursor-pointer">
+                                <select name="academic_year" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium cursor-pointer">
                                     <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
                                     <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
                                     <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
@@ -495,7 +502,7 @@
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Year Level</label>
-                                <select name="year_level" id="reg_year_select" <%= selectedStudent ? 'disabled' : '' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
+                                <select name="year_level" id="reg_year_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
                                     <option value="1">BSN1</option>
                                     <option value="2" selected>BSN2</option>
                                     <option value="3">BSN3</option>
@@ -504,7 +511,7 @@
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Section</label>
-                                <select name="section" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
+                                <select name="section" id="reg_section_select" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
                                     <option value="A" selected>A</option>
                                     <option value="B">B</option>
                                     <option value="C">C</option>
@@ -512,14 +519,14 @@
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester (Triggers Subjects)</label>
-                                <select id="reg_sem_select" <%= selectedStudent ? 'disabled' : 'required' %> class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800 cursor-pointer">
+                                <select id="reg_sem_select" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800 cursor-pointer">
                                     <option value="1">1st Semester</option>
                                     <option value="2">2nd Semester</option>
                                 </select>
                             </div>
                         </div>
                     
-                        <input type="hidden" name="term" id="reg_term_hidden" value="" <%= selectedStudent ? 'disabled' : '' %>>
+                        <input type="hidden" name="term" id="reg_term_hidden" value="">
                     
                         <div class="pt-2">
                             <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Subjects & Assign Instructors (Optional)</label>
@@ -527,8 +534,8 @@
                         </div>
 
                         <div class="flex gap-3">
-                            <button type="button" data-close-panel="studentPanel" class="cancel-toggle-btn w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer <%= selectedStudent ? 'pointer-events-none opacity-50' : '' %>">Cancel</button>
-                            <button type="submit" <%= selectedStudent ? 'disabled' : '' %> class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">
+                            <button type="button" data-close-panel="studentPanel" class="cancel-toggle-btn w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">Cancel</button>
+                            <button type="submit" class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">
                                 + Register Account & Enroll Student in Checked Subjects
                             </button>
                         </div>
@@ -946,23 +953,6 @@
             }
         }
 
-        function autoMatchRemark(selectElement, index) {
-            const grade = selectElement.value;
-            const remarkInput = document.getElementById('remark_' + index);
-            if (!remarkInput) return;
-
-            const passedGrades = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
-
-            if (passedGrades.includes(grade)) remarkInput.value = 'PASSED';
-            else if (grade === '4.00') remarkInput.value = 'CONDITIONAL';
-            else if (grade === '5.00') remarkInput.value = 'FAILED';
-            else if (grade === 'X') remarkInput.value = 'DROPPED';
-            else if (grade === 'INC') remarkInput.value = 'INCOMPLETE';
-            else if (grade === 'W') remarkInput.value = 'WITHDRAWN';
-            else if (grade === 'NG') remarkInput.value = 'NO GRADE';
-            else remarkInput.value = '';
-        }
-
         const searchInput = document.getElementById('studentSearchInput');
         if (searchInput) {
             searchInput.addEventListener('click', function() {
@@ -998,53 +988,76 @@
                 });
             });
 
-            const resetPassForm = document.getElementById('resetStudentPasswordForm');
-            if (resetPassForm) {
-                resetPassForm.addEventListener('submit', (e) => {
-                    const studentId = resetPassForm.getAttribute('data-student-id');
-                    if (!confirmPasswordReset(resetPassForm, studentId)) {
-                        e.preventDefault();
-                    }
-                });
-            }
-
-            const addFacBtn = document.getElementById('addFacultySlotBtn');
-            if (addFacBtn) {
-                addFacBtn.addEventListener('click', () => addFacultySubjectDropdown('facultySubjectDropdownsContainer'));
-            }
-            const addEditFacBtn = document.getElementById('addEditFacultySlotBtn');
-            if (addEditFacBtn) {
-                addEditFacBtn.addEventListener('click', () => addFacultySubjectDropdown('editFacultyDropdownsContainer'));
-            }
-
-            document.addEventListener('click', (e) => {
-                if (e.target && e.target.classList.contains('remove-slot-btn')) {
-                    e.target.parentElement.remove();
-                }
-            });
-
-            document.querySelectorAll('.grade-select-box').forEach(sel => {
-                sel.addEventListener('change', () => {
-                    autoMatchRemark(sel, sel.getAttribute('data-index'));
-                });
-            });
-
-            // Wire up lookup button in Register Student tab to query the student record via GET /registrar
-            const lookupBtn = document.getElementById('lookupStudentBtn');
+            // Asynchronous Student Lookup for Register / Enroll Form
+            const lookupApiBtn = document.getElementById('lookupStudentApiBtn');
             const studentIdInput = document.getElementById('regStudentIdInput');
+            const firstNameInput = document.getElementById('regFirstNameInput');
+            const middleNameInput = document.getElementById('regMiddleNameInput');
+            const lastNameInput = document.getElementById('regLastNameInput');
+            const yearLevelSelect = document.getElementById('reg_year_select');
+            const sectionSelect = document.getElementById('reg_section_select');
+            const msgContainer = document.getElementById('lookupMessageContainer');
+            const immContainer = document.getElementById('registerImmunizationContainer');
+            const immGrid = document.getElementById('registerImmunizationGrid');
 
-            if (lookupBtn && studentIdInput) {
-                const triggerLookup = () => {
-                    const idVal = studentIdInput.value.trim();
-                    if (idVal) {
-                        window.location.href = `/registrar?student_id=${encodeURIComponent(idVal)}`;
+            async function performAsyncLookup() {
+                const idVal = studentIdInput ? studentIdInput.value.trim() : '';
+                if (!idVal) return;
+
+                try {
+                    const response = await fetch(`/registrar/api/lookup-student?student_id=${encodeURIComponent(idVal)}`);
+                    const data = await response.json();
+
+                    msgContainer.classList.remove('hidden');
+                    if (data && data.exists) {
+                        firstNameInput.value = data.student.first_name || '';
+                        middleNameInput.value = data.student.middle_name || '';
+                        lastNameInput.value = data.student.last_name || '';
+                        yearLevelSelect.value = data.student.year_level || '1';
+                        sectionSelect.value = data.student.section || 'A';
+                        updateSubjectChecklist();
+
+                        msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-emerald-100 text-emerald-800 border border-emerald-300';
+                        msgContainer.textContent = `✅ Student found: ${data.student.last_name}, ${data.student.first_name}. Details and immunization status loaded below. You may promote/re-enroll.`;
+
+                        // Render Immunization Status on Register Form
+                        if (data.immunization && data.immunization.length > 0) {
+                            immContainer.classList.remove('hidden');
+                            let immHtml = '';
+                            data.immunization.forEach(v => {
+                                immHtml += `
+                                    <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-1 text-xs">
+                                        <div class="flex justify-between items-center font-bold">
+                                            <span>${escapeHtml(v.name)}</span>
+                                            <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
+                                        </div>
+                                        <p class="text-slate-600 text-[11px]">Dose ${v.dose_number} of ${v.doses_required} (Last: ${v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None'})</p>
+                                    </div>
+                                `;
+                            });
+                            immGrid.innerHTML = immHtml;
+                        } else {
+                            immContainer.classList.add('hidden');
+                        }
+                    } else {
+                        msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-amber-100 text-amber-800 border border-amber-300';
+                        msgContainer.textContent = '⚠️ No student record. Please enroll the student.';
+                        immContainer.classList.add('hidden');
+                        firstNameInput.value = '';
+                        middleNameInput.value = '';
+                        lastNameInput.value = '';
                     }
-                };
-                lookupBtn.addEventListener('click', triggerLookup);
+                } catch (err) {
+                    console.error('Lookup fetch error:', err);
+                }
+            }
+
+            if (lookupApiBtn && studentIdInput) {
+                lookupApiBtn.addEventListener('click', performAsyncLookup);
                 studentIdInput.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
-                        triggerLookup();
+                        performAsyncLookup();
                     }
                 });
             }
@@ -1137,16 +1150,6 @@
                 [pass[i], pass[j]] = [pass[j], pass[i]];
             }
             return firstChar + pass.join('');
-        }
-        
-        function confirmPasswordReset(form, studentId) {
-            const newPass = generateRandomPassword();
-            form.querySelector('.reset-pass-field').value = newPass;
-            
-            const msg = `You are about to reset the password for Student ID: ${studentId}.\n\n` +
-                        `The NEW temporary password is:\n\n${newPass}\n\n` + 
-                        `Please COPY or WRITE DOWN this password before clicking OK, as it will be securely hashed in the database.`;
-            return confirm(msg);
         }
     </script>
 </body>
