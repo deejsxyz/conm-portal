@@ -131,8 +131,8 @@
             <div id="studentPanel" class="space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div role="tablist" aria-label="Student tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage Student</button>
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register / Enroll Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register / Enroll Student</button>
                     </div>
                     <% if (selectedStudent) { %>
                         <a href="/registrar" class="text-xs font-bold text-slate-600 hover:text-slate-900 underline">Close student record</a>
@@ -327,7 +327,7 @@
                                 </div>
                         
                                 <div class="flex gap-2 w-full sm:w-auto">
-                                    <a href="/registrar" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
+                                    <a href="/registrar?student_id=<%= selectedStudent.student_id %>" class="flex-1 sm:flex-initial flex items-center justify-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</a>
                                     <button type="submit" class="flex-1 sm:flex-initial py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors whitespace-nowrap cursor-pointer">
                                         + Enroll Subject
                                     </button>
@@ -433,7 +433,7 @@
 
                                 <!-- SAVE & CANCEL BUTTONS -->
                                 <div class="pt-4 flex justify-end gap-3">
-                                    <a href="/registrar" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
+                                    <a href="/registrar?student_id=<%= selectedStudent.student_id %>" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center justify-center">
                                         Cancel
                                     </a>
                                     <button type="submit" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer">
@@ -448,7 +448,7 @@
                 </div>
 
                 <!-- Register / Enroll Student Form -->
-                <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <div id="studentRegSection" class="<%= studentPanelOpen ? 'hidden' : '' %> bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
                     
                     <!-- Notification / Message Box for Lookup -->
@@ -547,8 +547,8 @@
             <div id="facultyPanel" class="<%= facultyPanelOpen ? '' : 'hidden' %> space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div role="tablist" aria-label="Faculty tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyManageSection" aria-selected="<%= facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= facultyPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">👥 Manage Faculty</button>
-                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyRegSection" aria-selected="<%= !facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !facultyPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register Faculty</button>
+                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyManageSection" aria-selected="true" aria-controls="facultyManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer bg-white text-indigo-900 shadow">👥 Manage Faculty</button>
+                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyRegSection" aria-selected="false" aria-controls="facultyRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Register Faculty</button>
                     </div>
                 </div>
 
@@ -1020,37 +1020,37 @@
                         msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-emerald-100 text-emerald-800 border border-emerald-300';
                         msgContainer.textContent = `✅ Student found: ${data.student.last_name}, ${data.student.first_name}. Details and immunization status loaded below. You may promote/re-enroll.`;
 
-// Render Immunization Status on Register Form
-if (data.immunization && data.immunization.length > 0) {
-    immContainer.classList.remove('hidden');
-    let immHtml = '';
-    data.immunization.forEach(v => {
-        immHtml += `
-            <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs flex flex-col justify-between">
-                <div class="space-y-1">
-                    <div class="flex justify-between items-center font-bold">
-                        <span>${escapeHtml(v.name)}</span>
-                        <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
-                    </div>
-                    <p class="text-slate-600 text-[11px]">Progress: <strong>Dose ${v.dose_number} of ${v.doses_required}</strong></p>
-                    <p class="text-slate-500 text-[10px]">Last Dose: ${v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None'}</p>
-                </div>
-                <form action="/registrar/record-vaccine" method="POST" class="pt-2 border-t border-slate-100 space-y-1.5">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <input type="hidden" name="student_id" value="${escapeHtml(data.student.student_id)}">
-                    <input type="hidden" name="vaccine_id" value="${v.vaccine_id}">
-                    <div class="flex gap-1">
-                        <input type="date" name="date_given" required class="px-2 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] flex-grow">
-                        <button type="submit" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold whitespace-nowrap cursor-pointer">+ Dose</button>
-                    </div>
-                </form>
-            </div>
-        `;
-    });
-    immGrid.innerHTML = immHtml;
-} else {
-    immContainer.classList.add('hidden');
-}
+                        // Render Immunization Status on Register Form
+                        if (data.immunization && data.immunization.length > 0) {
+                            immContainer.classList.remove('hidden');
+                            let immHtml = '';
+                            data.immunization.forEach(v => {
+                                immHtml += `
+                                    <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs flex flex-col justify-between">
+                                        <div class="space-y-1">
+                                            <div class="flex justify-between items-center font-bold">
+                                                <span>${escapeHtml(v.name)}</span>
+                                                <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
+                                            </div>
+                                            <p class="text-slate-600 text-[11px]">Progress: <strong>Dose ${v.dose_number} of ${v.doses_required}</strong></p>
+                                            <p class="text-slate-500 text-[10px]">Last Dose: ${v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None'}</p>
+                                        </div>
+                                        <form action="/registrar/record-vaccine" method="POST" class="pt-2 border-t border-slate-100 space-y-1.5">
+                                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                            <input type="hidden" name="student_id" value="${escapeHtml(data.student.student_id)}">
+                                            <input type="hidden" name="vaccine_id" value="${v.vaccine_id}">
+                                            <div class="flex gap-1">
+                                                <input type="date" name="date_given" required class="px-2 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] flex-grow">
+                                                <button type="submit" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold whitespace-nowrap cursor-pointer">+ Dose</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                `;
+                            });
+                            immGrid.innerHTML = immHtml;
+                        } else {
+                            immContainer.classList.add('hidden');
+                        }
                     } else {
                         msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-amber-100 text-amber-800 border border-amber-300';
                         msgContainer.textContent = '⚠️ No student record. Please enroll the student.';
