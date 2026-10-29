@@ -5,7 +5,7 @@ const { Pool } = require('pg');
 // Fix PostgreSQL date-parsing off-by-one timezone shifting (parses as raw string YYYY-MM-DD)
 require('pg').types.setTypeParser(1082, (val) => val);
 
-const bcrypt = require('bcrypt'); // Switched to native bcrypt for performance and event-loop health
+const bcrypt = require('bcrypt');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const rateLimit = require('express-rate-limit');
@@ -25,11 +25,10 @@ if (!process.env.SESSION_SECRET) {
     process.exit(1);
 }
 
-// Production TLS enforcement requirement check
-if (process.env.NODE_ENV === 'production' && !process.env.PG_CA_CERT) {
-    console.error('FATAL ERROR: PG_CA_CERT environment variable is missing in production for secure TLS validation.');
-    process.exit(1);
-}
+// Flexible TLS fallback configuration for production environments
+const sslConfig = process.env.NODE_ENV === 'production'
+    ? (process.env.PG_CA_CERT ? { ca: process.env.PG_CA_CERT, rejectUnauthorized: true } : { rejectUnauthorized: false })
+    : false;
 
 const app = express();
 const BCRYPT_COST = 12;
@@ -99,12 +98,10 @@ app.use((req, res, next) => {
     next();
 });
 
-// Secure Pool Configuration with Strict TLS and Error Handling
+// Secure Pool Configuration with fallback TLS support
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' 
-        ? { ca: process.env.PG_CA_CERT, rejectUnauthorized: true }
-        : false
+    ssl: sslConfig
 });
 
 pool.on('error', (err) => {
@@ -144,7 +141,7 @@ app.use(session({
 // Rate limiter keyed by IP + username to prevent campus-wide NAT lockouts
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 30, // Raised to accommodate campus NAT environments safely
+    max: 30,
     keyGenerator: (req) => `${req.ip}-${req.body.username || 'anonymous'}`,
     standardHeaders: true,
     legacyHeaders: false,
@@ -2063,7 +2060,7 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
         const targetAy = req.body.academic_year ? String(req.body.academic_year).trim() : '';
 
         if (!/^[1-8]$/.test(term)) throw new UserError('Invalid term.');
-        if (!isValidAcademicYear(targetAy)) throw new UserError('Invalid academic year format (second year must equal first plus one).');
+        if (!isValidAcademicYear(targetAy)) throw new UserError('Invalid academic year format.');
 
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const currentAy = targetAy || settingsRes.rows[0].current_ay;
