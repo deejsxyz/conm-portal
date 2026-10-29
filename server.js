@@ -1285,7 +1285,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             lockedAccounts: lockedRes.rows,
             selectedFaculty: selectedFaculty,
             facultyAssignedCourses: facultyAssignedCourses,
-            hasBatchFilePath: Boolean(req.session.lastBatchFilePath && fs.existsSync(req.session.lastBatchFilePath))
+            hasBatchCredentials: Boolean(req.session.lastBatchFilePath && fs.existsSync(req.session.lastBatchFilePath))
         });
     } catch (err) {
         console.error('Registrar load error:', err);
@@ -1571,7 +1571,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
             await client.query(`
                 INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-                VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
+                VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
             `, [cleanId, hashedPassword, fName, mName, lName]);
         }
 
@@ -2095,8 +2095,6 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             const facRes = await pool.query(`SELECT first_name, middle_name, last_name FROM users WHERE username = $1 AND role = 'faculty'`, [facUser]);
             if (facRes.rows.length > 0) {
                 facFormalName = formatFormalFacultyName(facRes.rows[0]);
-            } else {
-                throw new UserError('Selected instructor is not a valid faculty account.');
             }
         }
 
@@ -2400,6 +2398,7 @@ app.post('/faculty/update-grades-sheet', isAuthenticated, async (req, res) => {
         const systemSettings = settingsRes.rows[0];
 
         if (req.session.user.role === 'faculty' && systemSettings.faculty_portal_locked) {
+            client.release();
             return req.session.destroy(() => {
                 res.redirect('/?locked=1');
             });
