@@ -1,262 +1,333 @@
-<main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
-    
-    <% 
-        let termNames = {
-            "1": "BSN1 - 1st Semester", "2": "BSN1 - 2nd Semester", 
-            "3": "BSN2 - 1st Semester", "4": "BSN2 - 2nd Semester", 
-            "5": "BSN3 - 1st Semester", "6": "BSN3 - 2nd Semester",
-            "7": "BSN4 - 1st Semester", "8": "BSN4 - 2nd Semester"
-        };
-        let currentTermLabel = termNames[currentTerm] || "Unknown Term";
-    %>
-
-    <% if (locals.message) { %>
-        <div class="p-4 bg-emerald-100 border border-emerald-400 text-emerald-800 text-xs font-bold rounded-xl shadow-sm text-center">
-            ✅ <%= message %>
-        </div>
-    <% } %>
-
-    <% if (locals.error) { %>
-        <div class="p-4 bg-red-100 border border-red-400 text-red-700 text-xs font-bold rounded-xl shadow-sm text-center">
-            ⚠️ <%= error %>
-        </div>
-    <% } %>
-
-    <% const lockedList = locals.lockedAccounts || []; %>
-    <% const studentPanelOpen = !!selectedStudent; %>
-    <% const facultyPanelOpen = !!locals.selectedFaculty && !studentPanelOpen; %>
-
-    <div id="settingsPanel" class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div>
-            <div class="flex items-center gap-2.5">
-                <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
-                <% if (systemSettings.faculty_portal_locked) { %>
-                    <span class="px-2.5 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                        🔒 Faculty Portal Locked
-                    </span>
-                <% } else { %>
-                    <span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                        🔓 Faculty Portal Open
-                    </span>
-                <% } %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CONM Registrar Portal</title>
+    <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div>
+                <h2 class="text-base font-bold">College of Nursing and School of Midwifery</h2>
+                <p class="text-xs text-pink-300">Registrar Portal</p>
             </div>
-            <p class="text-xs text-indigo-700 mt-1">Set the active Academic Year, Semester, and control whether clinical instructors are allowed to access the Faculty Portal to encode grades.</p>
+            <div class="flex items-center space-x-3">
+                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
+                    <%= currentUser.fullName || currentUser.username %>
+                </span>
+                <% if (currentUser.role === 'admin') { %>
+                    <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
+                    <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Open Grade Editor</a>
+                <% } %>
+                <a href="/registrar/grade-logs" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-medium">Grade Logs</a>
+                <a href="/registrar/security-log" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded font-medium">Security Log</a>
+                <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
+                <form action="/logout" method="POST" class="inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium cursor-pointer">Log Out</button>
+                </form>
+            </div>
         </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
         
-        <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-            <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white cursor-pointer">
-                    <option value="2025-2026" <%= systemSettings.current_ay === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
-                    <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                    <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                    <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                    <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                </select>
-                <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white cursor-pointer">
-                    <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
-                    <option value="2" <%= systemSettings.current_semester === 2 ? 'selected' : '' %>>2nd Semester</option>
-                </select>
-                <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap cursor-pointer">
-                    Apply System-Wide
-                </button>
-            </form>
+        <% 
+            let termNames = {
+                "1": "BSN1 - 1st Semester", "2": "BSN1 - 2nd Semester", 
+                "3": "BSN2 - 1st Semester", "4": "BSN2 - 2nd Semester", 
+                "5": "BSN3 - 1st Semester", "6": "BSN3 - 2nd Semester",
+                "7": "BSN4 - 1st Semester", "8": "BSN4 - 2nd Semester"
+            };
+            let currentTermLabel = termNames[currentTerm] || "Unknown Term";
+        %>
 
-            <% const lockConfirmText = systemSettings.faculty_portal_locked ? '' : 'Lock the Faculty Portal? Instructors will be prevented from logging in or encoding grades until you unlock it.'; %>
-            <form action="/registrar/toggle-faculty-lock" method="POST" class="inline confirm-form" data-confirm-msg="<%= lockConfirmText %>">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <button type="submit" class="px-4 py-2 <%= systemSettings.faculty_portal_locked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700' %> text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
-                    <%= systemSettings.faculty_portal_locked ? '🔓 Unlock Faculty Portal' : '🔒 Lock Faculty Portal' %>
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <nav class="flex flex-wrap items-center justify-center gap-3" aria-label="Registrar sections">
-        <button type="button" data-target-section="studentPanel" aria-expanded="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentPanel" class="nav-toggle-btn px-5 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
-            <span>👤 STUDENT</span>
-            <span class="toggle-arrow text-[10px]"><%= studentPanelOpen ? '▲' : '▼' %></span>
-        </button>
-        <button type="button" data-target-section="facultyPanel" aria-expanded="<%= facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyPanel" class="nav-toggle-btn px-5 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
-            <span>👨‍🏫 FACULTY</span>
-            <span class="toggle-arrow text-[10px]"><%= facultyPanelOpen ? '▲' : '▼' %></span>
-        </button>
-        <button type="button" data-target-section="batchUploadSection" aria-expanded="false" aria-controls="batchUploadSection" class="nav-toggle-btn px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
-            <span>📁 BATCH UPLOAD</span>
-            <% if (locals.hasBatchCredentials) { %><span class="px-2 py-0.5 bg-amber-300 text-amber-900 rounded-full text-[10px]">⬇ Credentials ready</span><% } %>
-            <span class="toggle-arrow text-[10px]">▼</span>
-        </button>
-        <button type="button" id="lockedAccountsToggleBtn" data-target-section="lockedAccountsPanel" aria-expanded="false" aria-controls="lockedAccountsPanel" class="nav-toggle-btn px-5 py-3 <%= lockedList.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-500 hover:bg-slate-600' %> text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
-            <span>🔒 LOCKED ACCOUNTS</span>
-            <span class="px-2 py-0.5 bg-white/25 rounded-full text-[10px]"><%= lockedList.length %></span>
-            <span class="toggle-arrow text-[10px]">▼</span>
-        </button>
-    </nav>
-
-    <div class="space-y-4">
-
-        <div id="studentPanel" class="space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div role="tablist" aria-label="Student tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                    <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage Student</button>
-                    <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register / Enroll Student</button>
-                </div>
-                <% if (selectedStudent) { %>
-                    <a href="/registrar" class="text-xs font-bold text-slate-600 hover:text-slate-900 underline">Close student record</a>
-                <% } %>
+        <% if (locals.message) { %>
+            <div class="p-4 bg-emerald-100 border border-emerald-400 text-emerald-800 text-xs font-bold rounded-xl shadow-sm text-center">
+                ✅ <%= message %>
             </div>
+        <% } %>
 
-            <div id="studentManageSection" class="space-y-4">
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
-                        <div class="flex-grow w-full">
-                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
-                            <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                        <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors cursor-pointer">Search Student</button>
-                    </form>
+        <% if (locals.error) { %>
+            <div class="p-4 bg-red-100 border border-red-400 text-red-700 text-xs font-bold rounded-xl shadow-sm text-center">
+                ⚠️ <%= error %>
+            </div>
+        <% } %>
+
+        <% const lockedList = locals.lockedAccounts || []; %>
+        <% const studentPanelOpen = !!selectedStudent; %>
+        <% const facultyPanelOpen = !!locals.selectedFaculty && !studentPanelOpen; %>
+
+        <div id="settingsPanel" class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2.5">
+                    <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
+                    <% if (systemSettings.faculty_portal_locked) { %>
+                        <span class="px-2.5 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                            🔒 Faculty Portal Locked
+                        </span>
+                    <% } else { %>
+                        <span class="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                            🔓 Faculty Portal Open
+                        </span>
+                    <% } %>
+                </div>
+                <p class="text-xs text-indigo-700 mt-1">Set the active Academic Year, Semester, and control whether clinical instructors are allowed to access the Faculty Portal to encode grades.</p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white cursor-pointer">
+                        <option value="2025-2026" <%= systemSettings.current_ay === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
+                        <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                        <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                        <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                        <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                    </select>
+                    <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white cursor-pointer">
+                        <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
+                        <option value="2" <%= systemSettings.current_semester === 2 ? 'selected' : '' %>>2nd Semester</option>
+                    </select>
+                    <button type="submit" class="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap cursor-pointer">
+                        Apply System-Wide
+                    </button>
+                </form>
+
+                <% const lockConfirmText = systemSettings.faculty_portal_locked ? '' : 'Lock the Faculty Portal? Instructors will be prevented from logging in or encoding grades until you unlock it.'; %>
+                <form action="/registrar/toggle-faculty-lock" method="POST" class="inline confirm-form" data-confirm-msg="<%= lockConfirmText %>">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="px-4 py-2 <%= systemSettings.faculty_portal_locked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700' %> text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+                        <%= systemSettings.faculty_portal_locked ? '🔓 Unlock Faculty Portal' : '🔒 Lock Faculty Portal' %>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <nav class="flex flex-wrap items-center justify-center gap-3" aria-label="Registrar sections">
+            <button type="button" data-target-section="studentPanel" aria-expanded="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentPanel" class="nav-toggle-btn px-5 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
+                <span>👤 STUDENT</span>
+                <span class="toggle-arrow text-[10px]"><%= studentPanelOpen ? '▲' : '▼' %></span>
+            </button>
+            <button type="button" data-target-section="facultyPanel" aria-expanded="<%= facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyPanel" class="nav-toggle-btn px-5 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
+                <span>👨‍🏫 FACULTY</span>
+                <span class="toggle-arrow text-[10px]"><%= facultyPanelOpen ? '▲' : '▼' %></span>
+            </button>
+            <button type="button" data-target-section="batchUploadSection" aria-expanded="false" aria-controls="batchUploadSection" class="nav-toggle-btn px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
+                <span>📁 BATCH UPLOAD</span>
+                <% if (locals.hasBatchCredentials) { %><span class="px-2 py-0.5 bg-amber-300 text-amber-900 rounded-full text-[10px]">⬇ Credentials ready</span><% } %>
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+            <button type="button" id="lockedAccountsToggleBtn" data-target-section="lockedAccountsPanel" aria-expanded="false" aria-controls="lockedAccountsPanel" class="nav-toggle-btn px-5 py-3 <%= lockedList.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-500 hover:bg-slate-600' %> text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
+                <span>🔒 LOCKED ACCOUNTS</span>
+                <span class="px-2 py-0.5 bg-white/25 rounded-full text-[10px]"><%= lockedList.length %></span>
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+        </nav>
+
+        <div class="space-y-4">
+
+            <div id="studentPanel" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div role="tablist" aria-label="Student tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register / Enroll Student</button>
+                    </div>
+                    <% if (selectedStudent) { %>
+                        <a href="/registrar" class="text-xs font-bold text-slate-600 hover:text-slate-900 underline">Close student record</a>
+                    <% } %>
                 </div>
 
-            <% if (selectedStudent) { %>
-                <!-- IMMUNIZATION STATUS PANEL -->
-                <% if (locals.immunizationReport) { %>
-                    <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 space-y-4">
-                        <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
-                                <span>🛡️ Student Health &amp; Immunization Status</span>
-                                <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-normal">Data Privacy Act (RA 10173) Protected</span>
-                            </h3>
-                        </div>
+                <div id="studentManageSection" class="<%= !studentPanelOpen ? 'hidden' : '' %> space-y-4">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                        <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
+                            <div class="flex-grow w-full">
+                                <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student by ID Number:</label>
+                                <input type="text" id="studentSearchInput" name="student_id" value="<%= selectedStudent ? selectedStudent.student_id : '' %>" required placeholder="xxxx-xxxxxx" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <button type="submit" class="w-full sm:w-auto px-8 py-2 h-10 whitespace-nowrap bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-sm font-bold shadow transition-colors cursor-pointer">Search Student</button>
+                        </form>
+                    </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <% immunizationReport.forEach(v => { %>
-                                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 flex flex-col justify-between">
-                                    <div class="space-y-1">
-                                        <div class="flex justify-between items-start">
-                                            <h4 class="font-bold text-xs text-slate-900"><%= v.name %></h4>
-                                            <span class="px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase tracking-wider <%= v.status_cls %>"><%= v.status %></span>
+                <% if (selectedStudent) { %>
+                    <!-- IMMUNIZATION STATUS PANEL -->
+                    <% if (locals.immunizationReport) { %>
+                        <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 space-y-4">
+                            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                                    <span>🛡️ Student Health &amp; Immunization Status</span>
+                                    <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-normal">Data Privacy Act (RA 10173) Protected</span>
+                                </h3>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <% immunizationReport.forEach(v => { %>
+                                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+                                        <div class="space-y-1">
+                                            <div class="flex justify-between items-start">
+                                                <h4 class="font-bold text-xs text-slate-900"><%= v.name %></h4>
+                                                <span class="px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase tracking-wider <%= v.status_cls %>"><%= v.status %></span>
+                                            </div>
+                                            <p class="text-[11px] text-slate-600">
+                                                Progress: <strong>Dose <%= v.dose_number %> of <%= v.doses_required %></strong>
+                                            </p>
+                                            <p class="text-[11px] text-slate-500">
+                                                Last Dose: <%= v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None' %>
+                                                <% if (v.next_due_date) { %>
+                                                    <br>Next Due / Expiry: <%= new Date(v.next_due_date).toLocaleDateString() %>
+                                                <% } %>
+                                            </p>
                                         </div>
-                                        <p class="text-[11px] text-slate-600">
-                                            Progress: <strong>Dose <%= v.dose_number %> of <%= v.doses_required %></strong>
-                                        </p>
-                                        <p class="text-[11px] text-slate-500">
-                                            Last Dose: <%= v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None' %>
-                                            <% if (v.next_due_date) { %>
-                                                <br>Next Due / Expiry: <%= new Date(v.next_due_date).toLocaleDateString() %>
-                                            <% } %>
-                                        </p>
+
+                                        <form action="/registrar/record-vaccine" method="POST" class="pt-3 border-t border-slate-200 space-y-2">
+                                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                            <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                            <input type="hidden" name="vaccine_id" value="<%= v.vaccine_id %>">
+                                            <div class="flex gap-1.5">
+                                                <input type="date" name="date_given" required class="px-2 py-1 bg-white border border-slate-300 rounded text-[11px] flex-grow">
+                                                <button type="submit" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold whitespace-nowrap cursor-pointer">+ Dose</button>
+                                            </div>
+                                        </form>
                                     </div>
-
-                                    <form action="/registrar/record-vaccine" method="POST" class="pt-3 border-t border-slate-200 space-y-2">
-                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                                        <input type="hidden" name="vaccine_id" value="<%= v.vaccine_id %>">
-                                        <div class="flex gap-1.5">
-                                            <input type="date" name="date_given" required class="px-2 py-1 bg-white border border-slate-300 rounded text-[11px] flex-grow">
-                                            <button type="submit" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold whitespace-nowrap cursor-pointer">+ Dose</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            <% }) %>
+                                <% }) %>
+                            </div>
                         </div>
-                    </div>
-                <% } %>
+                    <% } %>
 
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-bold uppercase text-slate-500">Viewing Term Record:</span>
-                        <span class="px-3 py-1 bg-indigo-100 text-indigo-900 rounded-lg text-xs font-bold"><%= currentTermLabel %> (<%= currentViewAy %>)</span>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold uppercase text-slate-500">Viewing Term Record:</span>
+                            <span class="px-3 py-1 bg-indigo-100 text-indigo-900 rounded-lg text-xs font-bold"><%= currentTermLabel %> (<%= currentViewAy %>)</span>
+                        </div>
+                        <form method="GET" action="/registrar" class="flex flex-wrap items-center gap-2">
+                            <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                            <select name="view_ay" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50 cursor-pointer">
+                                <option value="2025-2026" <%= currentViewAy === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
+                                <option value="2026-2027" <%= currentViewAy === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                                <option value="2027-2028" <%= currentViewAy === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                                <option value="2028-2029" <%= currentViewAy === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                                <option value="2029-2030" <%= currentViewAy === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                            </select>
+                            <select name="view_term" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50 cursor-pointer">
+                                <% Object.keys(termNames).forEach(tKey => { %>
+                                    <option value="<%= tKey %>" <%= String(currentTerm) === String(tKey) ? 'selected' : '' %>><%= termNames[tKey] %></option>
+                                <% }) %>
+                            </select>
+                            <button type="submit" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-xs font-bold cursor-pointer">Switch Term</button>
+                        </form>
                     </div>
-                    <form method="GET" action="/registrar" class="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                        <select name="view_ay" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50 cursor-pointer">
-                            <option value="2025-2026" <%= currentViewAy === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
-                            <option value="2026-2027" <%= currentViewAy === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                            <option value="2027-2028" <%= currentViewAy === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                            <option value="2028-2029" <%= currentViewAy === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                            <option value="2029-2030" <%= currentViewAy === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                        </select>
-                        <select name="view_term" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50 cursor-pointer">
-                            <% Object.keys(termNames).forEach(tKey => { %>
-                                <option value="<%= tKey %>" <%= String(currentTerm) === String(tKey) ? 'selected' : '' %>><%= termNames[tKey] %></option>
-                            <% }) %>
-                        </select>
-                        <button type="submit" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-xs font-bold cursor-pointer">Switch Term</button>
-                    </form>
-                </div>
 
-                <details open class="group">
-                    <summary class="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center justify-between px-4 py-2.5 mb-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider">
-                        <span>Edit Subjects Enrolled</span>
-                        <span class="text-[10px] font-semibold normal-case text-slate-300">click to collapse / expand</span>
-                    </summary>
-                <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5 space-y-4">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-indigo-200 pb-3">
-                        <div>
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900">
-                                Edit Subject Enrolled 
-                                <span class="text-[10px] font-bold bg-indigo-200 text-indigo-800 px-2 py-1 rounded ml-2">A.Y. <%= currentViewAy %> — <%= currentTermLabel %></span>
+                    <details open class="group">
+                        <summary class="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center justify-between px-4 py-2.5 mb-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider">
+                            <span>Term Enrollment & Grade Management</span>
+                            <span class="text-[10px] font-semibold normal-case text-slate-300">click to collapse / expand</span>
+                        </summary>
+                    
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+                        <div class="border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 flex items-center flex-wrap gap-2">
+                                <span>Record For:</span>
+                                <span class="text-pink-600">
+                                    <%= selectedStudent.last_name + ', ' + selectedStudent.first_name + ' (' + selectedStudent.student_id + ')' %>
+                                </span>
+                                <span class="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+                                    BSN<%= selectedStudent.year_level %> - <%= selectedStudent.section || 'A' %>
+                                </span>
+                                <span class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">A.Y. <%= currentViewAy %> — <%= currentTermLabel %></span>
                             </h3>
-                        </div>
-                
-                        <div class="flex flex-wrap items-center gap-2">
-                            <form action="/registrar/update-student-year-section" method="POST" class="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-indigo-300 shadow-sm">
+                    
+                            <form action="/registrar/reset-student-password" method="POST" class="inline-block">
                                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                                <span class="text-[10px] font-bold uppercase text-slate-500">Class:</span>
-                                <select name="year_level" class="text-xs font-bold text-indigo-900 bg-transparent focus:outline-none cursor-pointer">
-                                    <option value="1" <%= Number(selectedStudent.year_level) === 1 ? 'selected' : '' %>>BSN1</option>
-                                    <option value="2" <%= Number(selectedStudent.year_level) === 2 ? 'selected' : '' %>>BSN2</option>
-                                    <option value="3" <%= Number(selectedStudent.year_level) === 3 ? 'selected' : '' %>>BSN3</option>
-                                    <option value="4" <%= Number(selectedStudent.year_level) === 4 ? 'selected' : '' %>>BSN4</option>
-                                </select>
-                                <span class="text-xs font-bold text-slate-400">-</span>
-                                <select name="section" class="text-xs font-bold text-indigo-900 bg-transparent focus:outline-none cursor-pointer">
-                                    <option value="A" <%= (selectedStudent.section || 'A') === 'A' ? 'selected' : '' %>>A</option>
-                                    <option value="B" <%= selectedStudent.section === 'B' ? 'selected' : '' %>>B</option>
-                                    <option value="C" <%= selectedStudent.section === 'C' ? 'selected' : '' %>>C</option>
-                                </select>
-                                <button type="submit" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-bold cursor-pointer">Update</button>
+                                <input type="hidden" name="new_password" class="reset-pass-field">
+                                <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-md transition-colors cursor-pointer">
+                                    🔑 Reset Student Password
+                                </button>
                             </form>
-
-                            <span class="text-xs font-bold bg-white border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg shadow-sm">
-                                Auto-Matched Standard Curriculum Set
-                            </span>
-                    
-                            <% if (grades.length > 0) { %>
-                                <form action="/registrar/unenroll-term" method="POST" class="inline confirm-form" data-confirm-msg="WARNING: Are you sure you want to unenroll this student from ALL subjects in <%= currentTermLabel %> (<%= currentViewAy %>)?">
-                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                    <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                                    <input type="hidden" name="term" value="<%= currentTerm %>">
-                                    <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
-                                    <button type="submit" class="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs shadow transition-colors flex items-center gap-1 cursor-pointer">
-                                        ⚠️ Unenroll Student from Term
-                                    </button>
-                                </form>
-                            <% } %>
                         </div>
-                    </div>
 
-                    <!-- GRADES & SUBJECT MANAGEMENT -->
-                    <div class="pt-2">
-                        <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
-                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                            <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                            <input type="hidden" name="enrolled_term" value="<%= currentTerm %>">
-                            <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
-
-                            <% if (grades.length === 0) { %>
-                                <div class="text-center py-8 text-slate-400 text-xs">
-                                    No subjects recorded for this student in this term.
+                        <% if (grades.length === 0) { %>
+                            <!-- CHECKLIST ENROLLMENT VIEW FOR NEW TERM -->
+                            <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                <input type="hidden" name="enrolled_term" value="<%= currentTerm %>">
+                                <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
+                                
+                                <div class="p-4 bg-indigo-50 border border-indigo-200 rounded-xl mb-4">
+                                    <p class="text-sm font-bold text-indigo-900 mb-1">Student is not officially enrolled in <%= currentTermLabel %></p>
+                                    <p class="text-xs text-indigo-700">Select subjects below to officially enroll them for this term.</p>
                                 </div>
-                            <% } else { %>
+
+                                <div class="space-y-2">
+                                    <% 
+                                    const termCourses = allCoursesRaw.filter(c => String(c.term_id) === String(currentTerm));
+                                    if (termCourses.length > 0) {
+                                        termCourses.forEach(c => { 
+                                    %>
+                                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg bg-white border border-slate-200 gap-3">
+                                            <label class="flex items-center space-x-3 cursor-pointer flex-grow">
+                                                <input type="checkbox" name="course_codes" value="<%= c.course_code %>" checked class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                                <input type="hidden" name="final_grades" value="">
+                                                <div>
+                                                    <span class="text-xs font-bold text-slate-800">[<%= c.course_code %>]</span>
+                                                    <span class="text-xs text-slate-600 ml-1"><%= c.descriptive_title %></span>
+                                                </div>
+                                            </label>
+                                            <div class="w-full sm:w-64">
+                                                <select name="instructor__<%= c.course_code %>" class="w-full px-2 py-1.5 rounded border border-slate-300 bg-slate-50 text-xs font-medium text-slate-700 cursor-pointer">
+                                                    <option value="" style="font-style: italic;">-- Select Instructor (Optional) --</option>
+                                                    <% facultyList.forEach(fac => { 
+                                                        const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                                                    %>
+                                                        <option value="<%= fac.username %>"><%= facName %></option>
+                                                    <% }) %>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    <% 
+                                        });
+                                    } else {
+                                    %>
+                                        <p class="text-xs text-slate-500 italic">No standard subjects found for this term.</p>
+                                    <% } %>
+                                </div>
+
+                                <!-- Extra Subject Button inside the Checklist -->
+                                <div class="pt-3 mt-3 border-t border-indigo-100">
+                                    <div id="extraEnrollmentSubjectsContainer" class="space-y-2 mb-2"></div>
+                                    <button type="button" onclick="addExtraEnrollmentDropdown()" class="text-xs font-bold bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-200 transition-colors cursor-pointer">
+                                        + Add Another Subject
+                                    </button>
+                                </div>
+
+                                <div class="pt-4 flex justify-end gap-3 border-t border-slate-200 mt-4">
+                                    <button type="submit" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer">
+                                        ✅ Enroll Student in Checked Subjects
+                                    </button>
+                                </div>
+                            </form>
+                        <% } else { %>
+                            <!-- GRADE EDITING VIEW FOR ALREADY ENROLLED TERM -->
+                            <div class="flex items-center gap-2 mb-4 bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
+                                <span class="text-[10px] font-bold uppercase text-emerald-700">Status:</span>
+                                <span class="text-xs font-bold text-emerald-900">Officially Enrolled in this Term</span>
+                            </div>
+
+                            <form action="/registrar/update-grades-batch" method="POST" class="space-y-4">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                <input type="hidden" name="enrolled_term" value="<%= currentTerm %>">
+                                <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
+
                                 <div class="space-y-2">
                                     <% grades.forEach((g, index) => { %>
-                                        <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-center bg-white p-3 rounded-lg border border-indigo-200 text-sm">
+                                        <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 items-center bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm">
                                             <input type="hidden" name="course_codes" value="<%= g.course_code %>">
 
                                             <div>
-                                                <span class="text-[10px] uppercase text-slate-400 block font-bold">Code</span>
+                                                <span class="text-[10px] uppercase text-slate-400 block font-bold">Code (<%= g.academic_year %>)</span>
                                                 <span class="font-mono font-bold text-indigo-900"><%= g.course_code %></span>
                                             </div>
                                             <div class="sm:col-span-2">
@@ -301,7 +372,7 @@
                                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Remarks</span>
                                                     <input type="text" id="remark_<%= index %>" value="<%= g.remarks || '' %>" readonly class="w-full px-2 py-1.5 rounded border border-slate-200 text-xs bg-slate-100 font-bold text-slate-700">
                                                 </div>
-                                                <button type="submit" form="delete_grade_form_<%= g.course_code %>" class="mt-4 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow cursor-pointer">Delete</button>
+                                                <button type="button" onclick="if(confirm('Remove <%= g.course_code %> from student record?')) document.getElementById('delete_grade_form_<%= g.course_code %>').submit();" class="mt-4 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow cursor-pointer">Delete</button>
                                             </div>
                                         </div>
                                     <% }) %>
@@ -312,763 +383,803 @@
                                         Cancel
                                     </a>
                                     <button type="submit" class="px-6 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer">
-                                        💾 Save All Changes
+                                        💾 Save Grades
                                     </button>
                                 </div>
-                            <% } %>
-                        </form>
-
-                        <!-- Hidden forms for deleting individual grades safely -->
-                        <% grades.forEach(g => { %>
-                            <form id="delete_grade_form_<%= g.course_code %>" action="/registrar/delete-grade" method="POST" class="hidden confirm-form" data-confirm-msg="Remove <%= g.course_code %> from student record?">
-                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                                <input type="hidden" name="course_code" value="<%= g.course_code %>">
-                                <input type="hidden" name="term" value="<%= currentTerm %>">
-                                <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
                             </form>
-                        <% }) %>
-                    </div>
 
-                    <!-- ADD ADDITIONAL SUBJECT ON TOP OF STANDARD SET -->
-                    <div class="pt-3 border-t border-indigo-200">
-                        <label class="block text-[10px] uppercase font-bold text-indigo-800 mb-1">Add Another Subject on Top of Standard Set</label>
-                        <form action="/registrar/add-single-course" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
-                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                            <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                            <input type="hidden" name="term" value="<%= currentTerm %>">
-                            <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
-                    
-                            <div class="flex-grow w-full">
-                                <select id="extraCourseSelect" name="course_code" required class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium cursor-pointer">
-                                    <option value="" style="font-style: italic;">--Select Subject to Add--</option>
-                                    <% if (availableCourses.length > 0) { %>
-                                        <% availableCourses.forEach(c => { %>
-                                            <option value="<%= c.course_code %>">[<%= c.course_code %>] <%= c.descriptive_title %></option>
-                                        <% }) %>
-                                    <% } %>
-                                </select>
-                            </div>
-                            <div class="w-full sm:w-64">
-                                <select name="instructor" class="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-medium text-slate-700 cursor-pointer">
-                                    <option value="" style="font-style: italic;">-- Select Instructor (Optional) --</option>
-                                    <% facultyList.forEach(fac => { 
-                                        const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-                                    %>
-                                        <option value="<%= fac.username %>"><%= facName %></option>
-                                    <% }) %>
-                                </select>
-                            </div>
-                    
-                            <div class="flex gap-2 w-full sm:w-auto">
-                                <button type="submit" class="flex-1 sm:flex-initial py-2 px-6 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow transition-colors whitespace-nowrap cursor-pointer">
-                                    + Add Subject
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-                </details>
-            <% } %>
-            </div>
-
-            <!-- Register / Enroll Student Form -->
-            <div id="studentRegSection" class="<%= studentPanelOpen ? 'hidden' : '' %> bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
-                
-                <div id="lookupMessageContainer" class="hidden mb-3 p-3 text-xs font-bold rounded-lg text-center"></div>
-
-                <div id="registerImmunizationContainer" class="hidden mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-900">🛡️ Existing Student Immunization Status</h4>
-                    <div id="registerImmunizationGrid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
-                </div>
-
-                <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
-                            <div class="flex">
-                                <input type="text" id="regStudentIdInput" name="student_id" placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-l-lg border border-slate-300 bg-slate-50 text-xs font-mono">
-                                <button type="button" id="lookupStudentApiBtn" class="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-lg text-xs font-bold flex items-center justify-center cursor-pointer" title="Search Student">
-                                    🔍
-                                </button>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
-                            <input type="text" id="regFirstNameInput" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
-                            <input type="text" id="regMiddleNameInput" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
-                            <input type="text" id="regLastNameInput" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
-                            <input type="text" id="regStudentTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 border-t border-slate-100 pt-3">
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Enrollment Academic Year</label>
-                            <select name="academic_year" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium cursor-pointer">
-                                <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                                <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                                <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                                <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Year Level</label>
-                            <select name="year_level" id="reg_year_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
-                                <option value="1">BSN1</option>
-                                <option value="2" selected>BSN2</option>
-                                <option value="3">BSN3</option>
-                                <option value="4">BSN4</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Section</label>
-                            <select name="section" id="reg_section_select" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
-                                <option value="A" selected>A</option>
-                                <option value="B">B</option>
-                                <option value="C">C</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester (Triggers Subjects)</label>
-                            <select id="reg_sem_select" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800 cursor-pointer">
-                                <option value="1">1st Semester</option>
-                                <option value="2">2nd Semester</option>
-                            </select>
-                        </div>
-                    </div>
-                
-                    <input type="hidden" name="term" id="reg_term_hidden" value="">
-                
-                    <div class="pt-2">
-                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Standard Curriculum Subjects & Assign Instructors</label>
-                        <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200"></div>
-                    </div>
-
-                    <div class="flex gap-3">
-                        <button type="button" data-close-panel="studentPanel" class="cancel-toggle-btn w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">Cancel</button>
-                        <button type="submit" class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">
-                            + Register Account & Enroll Student in Checked Subjects
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- FACULTY (Manage + Register) -->
-        <div id="facultyPanel" class="<%= facultyPanelOpen ? '' : 'hidden' %> space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div role="tablist" aria-label="Faculty tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                    <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyManageSection" aria-selected="true" aria-controls="facultyManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer bg-white text-indigo-900 shadow">👥 Manage Faculty</button>
-                    <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyRegSection" aria-selected="false" aria-controls="facultyRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Register Faculty</button>
-                </div>
-            </div>
-
-            <div id="facultyManageSection" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-5">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                    <div>
-                        <h4 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Manage Registered Faculty Members (<%= facultyList.length %>)</h4>
-                        <p class="text-xs text-slate-500">Select a faculty member to edit their profile, reset their password, archive their account, or update their assigned subjects.</p>
-                    </div>
-
-                    <form method="GET" action="/registrar" class="w-full sm:w-80">
-                        <select name="faculty_user" id="facultySelectDropdown" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
-                            <option value="">-- Select Faculty Member --</option>
-                            <% facultyList.forEach(fac => { 
-                                const formalName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-                            %>
-                                <option value="<%= fac.username %>" <%= (locals.selectedFaculty && selectedFaculty.username === fac.username) ? 'selected' : '' %>>
-                                    <%= formalName %> (<%= fac.username %>)
-                                </option>
+                            <!-- Hidden forms for deleting individual grades safely -->
+                            <% grades.forEach(g => { %>
+                                <form id="delete_grade_form_<%= g.course_code %>" action="/registrar/delete-grade" method="POST" class="hidden">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                    <input type="hidden" name="course_code" value="<%= g.course_code %>">
+                                    <input type="hidden" name="term" value="<%= currentTerm %>">
+                                    <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
+                                </form>
                             <% }) %>
-                        </select>
+
+                            <!-- ADD ADDITIONAL SUBJECT AFTER ENROLLMENT -->
+                            <div class="pt-4 border-t border-slate-200 mt-4">
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-2">Add Another Subject to this Term</label>
+                                <form action="/registrar/add-single-course" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                    <input type="hidden" name="term" value="<%= currentTerm %>">
+                                    <input type="hidden" name="academic_year" value="<%= currentViewAy %>">
+                            
+                                    <div class="flex-grow w-full">
+                                        <select name="course_code" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-white text-xs font-medium cursor-pointer">
+                                            <option value="" style="font-style: italic;">--Select Subject to Add--</option>
+                                            <% if (availableCourses.length > 0) { %>
+                                                <% availableCourses.forEach(c => { %>
+                                                    <option value="<%= c.course_code %>">[<%= c.course_code %>] <%= c.descriptive_title %></option>
+                                                <% }) %>
+                                            <% } %>
+                                        </select>
+                                    </div>
+                                    <div class="w-full sm:w-64">
+                                        <select name="instructor" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 cursor-pointer">
+                                            <option value="" style="font-style: italic;">-- Select Instructor (Optional) --</option>
+                                            <% facultyList.forEach(fac => { 
+                                                const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                                            %>
+                                                <option value="<%= fac.username %>"><%= facName %></option>
+                                            <% }) %>
+                                        </select>
+                                    </div>
+                            
+                                    <div class="flex gap-2 w-full sm:w-auto">
+                                        <button type="submit" class="flex-1 sm:flex-initial py-2.5 px-6 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-xs shadow transition-colors whitespace-nowrap cursor-pointer">
+                                            + Add Subject
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        <% } %>
+                    </div>
+                    </details>
+                <% } %>
+                </div>
+
+                <!-- Register / Enroll Student Form -->
+                <div id="studentRegSection" class="<%= !studentPanelOpen ? 'hidden' : '' %> bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
+                    
+                    <div id="lookupMessageContainer" class="hidden mb-3 p-3 text-xs font-bold rounded-lg text-center"></div>
+
+                    <div id="registerImmunizationContainer" class="hidden mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-900">🛡️ Existing Student Immunization Status</h4>
+                        <div id="registerImmunizationGrid" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+                    </div>
+
+                    <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
+                                <div class="flex">
+                                    <input type="text" id="regStudentIdInput" name="student_id" placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-l-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                                    <button type="button" id="lookupStudentApiBtn" class="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-lg text-xs font-bold flex items-center justify-center cursor-pointer" title="Search Student">
+                                        🔍
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
+                                <input type="text" id="regFirstNameInput" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
+                                <input type="text" id="regMiddleNameInput" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
+                                <input type="text" id="regLastNameInput" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
+                                <input type="text" id="regStudentTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 border-t border-slate-100 pt-3">
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Enrollment Academic Year</label>
+                                <select name="academic_year" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium cursor-pointer">
+                                    <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
+                                    <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
+                                    <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
+                                    <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Year Level</label>
+                                <select name="year_level" id="reg_year_select" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
+                                    <option value="1">BSN1</option>
+                                    <option value="2" selected>BSN2</option>
+                                    <option value="3">BSN3</option>
+                                    <option value="4">BSN4</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Section</label>
+                                <select name="section" id="reg_section_select" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-900 cursor-pointer">
+                                    <option value="A" selected>A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester (Triggers Subjects)</label>
+                                <select id="reg_sem_select" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800 cursor-pointer">
+                                    <option value="1">1st Semester</option>
+                                    <option value="2">2nd Semester</option>
+                                </select>
+                            </div>
+                        </div>
+                    
+                        <input type="hidden" name="term" id="reg_term_hidden" value="">
+                    
+                        <div class="pt-2">
+                            <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Select Standard Curriculum Subjects & Assign Instructors</label>
+                            <div id="subjectChecklist" class="p-4 bg-slate-50 rounded-lg border border-slate-200"></div>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <button type="button" data-close-panel="studentPanel" class="cancel-toggle-btn w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">Cancel</button>
+                            <button type="submit" class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">
+                                + Register Account & Enroll Student in Checked Subjects
+                            </button>
+                        </div>
                     </form>
                 </div>
+            </div>
 
-                <% if (locals.selectedFaculty) { %>
-                    <% 
-                        const editingFormalName = [selectedFaculty.last_name, [selectedFaculty.first_name, selectedFaculty.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-                    %>
-                    <div class="bg-indigo-50/70 rounded-xl border border-indigo-200 p-5 space-y-4">
-                        <div class="flex flex-wrap justify-between items-center gap-2">
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold uppercase text-indigo-900">Editing Faculty:</span>
-                                <span class="font-bold text-xs bg-indigo-900 text-white px-2.5 py-0.5 rounded"><%= editingFormalName %></span>
-                            </div>
+            <!-- FACULTY (Manage + Register) -->
+            <div id="facultyPanel" class="<%= facultyPanelOpen ? '' : 'hidden' %> space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div role="tablist" aria-label="Faculty tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
+                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyManageSection" aria-selected="true" aria-controls="facultyManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer bg-white text-indigo-900 shadow">👥 Manage Faculty</button>
+                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyRegSection" aria-selected="false" aria-controls="facultyRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Register Faculty</button>
+                    </div>
+                </div>
 
-                            <form action="/registrar/delete-faculty" method="POST" class="inline confirm-form" data-confirm-msg="Archive faculty account <%= editingFormalName %>?">
-                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                <input type="hidden" name="username" value="<%= selectedFaculty.username %>">
-                                <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">
-                                    Archive Faculty
-                                </button>
-                            </form>
+                <div id="facultyManageSection" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                        <div>
+                            <h4 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Manage Registered Faculty Members (<%= facultyList.length %>)</h4>
+                            <p class="text-xs text-slate-500">Select a faculty member to edit their profile, reset their password, archive their account, or update their assigned subjects.</p>
                         </div>
 
-                        <form action="/registrar/edit-faculty" method="POST" class="space-y-4 pt-2 border-t border-indigo-200/60">
-                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                            <input type="hidden" name="original_username" value="<%= selectedFaculty.username %>">
-                            
-                            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                                <div>
-                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Username / ID</label>
-                                    <input type="text" name="username" required value="<%= selectedFaculty.username %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs font-mono font-bold text-indigo-950">
+                        <form method="GET" action="/registrar" class="w-full sm:w-80">
+                            <select name="faculty_user" id="facultySelectDropdown" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                                <option value="">-- Select Faculty Member --</option>
+                                <% facultyList.forEach(fac => { 
+                                    const formalName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                                %>
+                                    <option value="<%= fac.username %>" <%= (locals.selectedFaculty && selectedFaculty.username === fac.username) ? 'selected' : '' %>>
+                                        <%= formalName %> (<%= fac.username %>)
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </form>
+                    </div>
+
+                    <% if (locals.selectedFaculty) { %>
+                        <% 
+                            const editingFormalName = [selectedFaculty.last_name, [selectedFaculty.first_name, selectedFaculty.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                        %>
+                        <div class="bg-indigo-50/70 rounded-xl border border-indigo-200 p-5 space-y-4">
+                            <div class="flex flex-wrap justify-between items-center gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold uppercase text-indigo-900">Editing Faculty:</span>
+                                    <span class="font-bold text-xs bg-indigo-900 text-white px-2.5 py-0.5 rounded"><%= editingFormalName %></span>
                                 </div>
-                                <div>
-                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">First Name</label>
-                                    <input type="text" name="first_name" required value="<%= selectedFaculty.first_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Middle Name</label>
-                                    <input type="text" name="middle_name" value="<%= selectedFaculty.middle_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Last Name</label>
-                                    <input type="text" name="last_name" required value="<%= selectedFaculty.last_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
-                                    <div class="flex">
-                                        <input type="text" name="temp_password" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded border border-amber-300 bg-amber-50 text-[11px] font-mono">
+
+                                <form action="/registrar/delete-faculty" method="POST" class="inline confirm-form" data-confirm-msg="Archive faculty account <%= editingFormalName %>?">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <input type="hidden" name="username" value="<%= selectedFaculty.username %>">
+                                    <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">
+                                        Archive Faculty
+                                    </button>
+                                </form>
+                            </div>
+
+                            <form action="/registrar/edit-faculty" method="POST" class="space-y-4 pt-2 border-t border-indigo-200/60">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="original_username" value="<%= selectedFaculty.username %>">
+                                
+                                <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                                    <div>
+                                        <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Username / ID</label>
+                                        <input type="text" name="username" required value="<%= selectedFaculty.username %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs font-mono font-bold text-indigo-950">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">First Name</label>
+                                        <input type="text" name="first_name" required value="<%= selectedFaculty.first_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Middle Name</label>
+                                        <input type="text" name="middle_name" value="<%= selectedFaculty.middle_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] uppercase font-bold text-indigo-900 mb-1">Last Name</label>
+                                        <input type="text" name="last_name" required value="<%= selectedFaculty.last_name || '' %>" class="w-full px-2.5 py-1.5 rounded border border-indigo-300 bg-white text-xs">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
+                                        <div class="flex">
+                                            <input type="text" name="temp_password" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded border border-amber-300 bg-amber-50 text-[11px] font-mono">
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div class="pt-2">
-                                <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Assigned Subjects Taught</label>
-                                <div id="editFacultyDropdownsContainer" class="space-y-2"></div>
-                                <button type="button" id="addEditFacultySlotBtn" class="mt-3 px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg text-xs font-bold transition-colors cursor-pointer">
-                                    Add Subject Slot
-                                </button>
-                            </div>
+                                <div class="pt-2">
+                                    <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Assigned Subjects Taught</label>
+                                    <div id="editFacultyDropdownsContainer" class="space-y-2"></div>
+                                    <button type="button" id="addEditFacultySlotBtn" class="mt-3 px-4 py-2 bg-indigo-200 hover:bg-indigo-300 text-indigo-800 rounded-lg text-xs font-bold transition-colors cursor-pointer">
+                                        Add Subject Slot
+                                    </button>
+                                </div>
 
-                            <div class="flex justify-end gap-2 pt-2 border-t border-indigo-200/60">
-                                <a href="/registrar" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm flex items-center">Cancel</a>
-                                <button type="submit" class="px-6 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded font-bold text-xs shadow-sm cursor-pointer">
-                                    💾 Save Faculty Profile
-                                </button>
+                                <div class="flex justify-end gap-2 pt-2 border-t border-indigo-200/60">
+                                    <a href="/registrar" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm flex items-center">Cancel</a>
+                                    <button type="submit" class="px-6 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded font-bold text-xs shadow-sm cursor-pointer">
+                                        💾 Save Faculty Profile
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    <% } %>
+                </div>
+
+                <div id="facultyRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1">Register New Faculty Account & Assign Subjects</h3>
+                    <form action="/registrar/add-faculty" method="POST" class="space-y-4 text-sm">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
+                                <input type="text" name="username" required placeholder="e.g. prof.dizon" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                             </div>
-                        </form>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
+                                <input type="text" id="regFacultyTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
+                                <input type="text" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
+                                <input type="text" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
+                                <input type="text" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100">
+                            <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Assign Subjects Taught (Up to 5 Default + Add More)</label>
+                            <div id="facultySubjectDropdownsContainer" class="space-y-2"></div>
+                            <button type="button" id="addFacultySlotBtn" class="mt-3 px-4 py-2 bg-pink-100 hover:bg-pink-200 text-pink-700 rounded-lg text-xs font-bold transition-colors cursor-pointer">
+                                Add Subject Slot
+                            </button>
+                        </div>
+
+                        <div class="flex gap-3 pt-3 border-t border-slate-100">
+                            <button type="button" data-close-panel="facultyPanel" class="cancel-toggle-btn w-1/4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">Cancel</button>
+                            <button type="submit" class="w-3/4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">
+                                + Register Faculty & Save Assigned Subjects
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- BATCH UPLOAD CSV FORM -->
+            <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6 space-y-4">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Batch Upload & Enroll Students</h3>
+                <p class="text-xs text-slate-500 mb-2">Export your Google Form responses as a <strong>.csv</strong> file (max 300 rows per upload). Include <code class="text-pink-600 font-bold">section</code> (A, B, or C) and an optional <code class="text-pink-600 font-bold">instructor</code> column.</p>
+                
+                <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
+                    <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
+                    <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, section, semester, academic_year, subjects, instructor</code>
+                </div>
+
+                <form action="/registrar/batch-upload?_csrf=<%= encodeURIComponent(csrfToken) %>" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
+                    
+                    <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors cursor-pointer">
+                        Upload & Process CSV
+                    </button>
+                </form>
+
+                <% if (locals.hasBatchCredentials) { %>
+                    <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <span class="text-xs font-bold text-emerald-900">✅ New student passwords generated! (One-time download for security)</span>
+                        <a href="/registrar/export-batch-credentials" class="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap">
+                            📥 Download Passwords CSV
+                        </a>
                     </div>
                 <% } %>
             </div>
 
-            <div id="facultyRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1">Register New Faculty Account & Assign Subjects</h3>
-                <form action="/registrar/add-faculty" method="POST" class="space-y-4 text-sm">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Username</label>
-                            <input type="text" name="username" required placeholder="e.g. prof.dizon" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
-                            <input type="text" id="regFacultyTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-indigo-400 bg-indigo-50 text-xs font-mono font-bold text-indigo-900">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">First Name</label>
-                            <input type="text" name="first_name" required placeholder="First Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Middle Name</label>
-                            <input type="text" name="middle_name" placeholder="Middle Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
-                            <input type="text" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
-                        </div>
-                    </div>
-
-                    <div class="pt-2 border-t border-slate-100">
-                        <label class="block text-[11px] uppercase font-bold text-indigo-900 mb-2">Assign Subjects Taught (Up to 5 Default + Add More)</label>
-                        <div id="facultySubjectDropdownsContainer" class="space-y-2"></div>
-                        <button type="button" id="addFacultySlotBtn" class="mt-3 px-4 py-2 bg-pink-100 hover:bg-pink-200 text-pink-700 rounded-lg text-xs font-bold transition-colors cursor-pointer">
-                            Add Subject Slot
-                        </button>
-                    </div>
-
-                    <div class="flex gap-3 pt-3 border-t border-slate-100">
-                        <button type="button" data-close-panel="facultyPanel" class="cancel-toggle-btn w-1/4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">Cancel</button>
-                        <button type="submit" class="w-3/4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">
-                            + Register Faculty & Save Assigned Subjects
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- BATCH UPLOAD CSV FORM -->
-        <div id="batchUploadSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 p-6 space-y-4">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 mb-1">Batch Upload & Enroll Students</h3>
-            <p class="text-xs text-slate-500 mb-2">Export your Google Form responses as a <strong>.csv</strong> file (max 300 rows per upload). Include <code class="text-pink-600 font-bold">section</code> (A, B, or C) and an optional <code class="text-pink-600 font-bold">instructor</code> column.</p>
-            
-            <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
-                <strong class="text-emerald-900 uppercase tracking-wider">Required Form/CSV Column Headers:</strong><br>
-                <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, section, semester, academic_year, subjects, instructor</code>
-            </div>
-
-            <form action="/registrar/batch-upload?_csrf=<%= encodeURIComponent(csrfToken) %>" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
-                
-                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors cursor-pointer">
-                    Upload & Process CSV
-                </button>
-            </form>
-
-            <% if (locals.hasBatchCredentials) { %>
-                <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <span class="text-xs font-bold text-emerald-900">✅ New student passwords generated! (One-time download for security)</span>
-                    <a href="/registrar/export-batch-credentials" class="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap">
-                        📥 Download Passwords CSV
-                    </a>
-                </div>
-            <% } %>
-        </div>
-
-        <div id="lockedAccountsPanel" class="hidden bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-4">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-red-800 mb-1">Locked Accounts</h3>
-            <p class="text-xs text-slate-500">Accounts are locked after repeated failed sign-ins. Confirm the person's identity in person (or by official means) before resetting. Leave the password blank to generate one; it is shown once.</p>
-            <% if (lockedList.length === 0) { %>
-                <div class="text-center py-6 text-xs text-slate-400 italic border border-dashed border-slate-200 rounded-lg">No locked accounts.</div>
-            <% } else { %>
-                <div class="overflow-x-auto border border-slate-200 rounded-lg">
-                    <table class="w-full text-left text-xs">
-                        <thead>
-                            <tr class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider">
-                                <th class="p-2.5">Username</th>
-                                <th class="p-2.5">Name</th>
-                                <th class="p-2.5">Role</th>
-                                <th class="p-2.5">Locked At</th>
-                                <th class="p-2.5">Reset &amp; Unlock</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200">
-                            <% lockedList.forEach(acc => { %>
-                                <tr>
-                                    <td class="p-2.5 font-mono font-bold"><%= acc.username %></td>
-                                    <td class="p-2.5"><%= [acc.last_name, [acc.first_name, acc.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '---' %></td>
-                                    <td class="p-2.5 uppercase font-bold text-slate-500"><%= acc.role %></td>
-                                    <td class="p-2.5 text-slate-500"><%= acc.locked_at ? new Date(acc.locked_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : '---' %></td>
-                                    <td class="p-2.5">
-                                        <form action="/registrar/unlock-account" method="POST" class="flex flex-col lg:flex-row lg:items-center gap-2">
-                                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                            <input type="hidden" name="username" value="<%= acc.username %>">
-                                            <input type="text" name="temp_password" placeholder="New temp password (optional)" autocomplete="off" class="px-2 py-1.5 rounded border border-slate-300 text-xs font-mono w-full lg:w-52">
-                                            <label class="flex items-center gap-1.5 text-[11px] text-slate-600 whitespace-nowrap">
-                                                <input type="checkbox" name="verified" value="yes" required> Identity verified
-                                            </label>
-                                            <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold cursor-pointer whitespace-nowrap">Reset &amp; Unlock</button>
-                                        </form>
-                                    </td>
+            <div id="lockedAccountsPanel" class="hidden bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-4">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-red-800 mb-1">Locked Accounts</h3>
+                <p class="text-xs text-slate-500">Accounts are locked after repeated failed sign-ins. Confirm the person's identity in person (or by official means) before resetting. Leave the password blank to generate one; it is shown once.</p>
+                <% if (lockedList.length === 0) { %>
+                    <div class="text-center py-6 text-xs text-slate-400 italic border border-dashed border-slate-200 rounded-lg">No locked accounts.</div>
+                <% } else { %>
+                    <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider">
+                                    <th class="p-2.5">Username</th>
+                                    <th class="p-2.5">Name</th>
+                                    <th class="p-2.5">Role</th>
+                                    <th class="p-2.5">Locked At</th>
+                                    <th class="p-2.5">Reset &amp; Unlock</th>
                                 </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } %>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                <% lockedList.forEach(acc => { %>
+                                    <tr>
+                                        <td class="p-2.5 font-mono font-bold"><%= acc.username %></td>
+                                        <td class="p-2.5"><%= [acc.last_name, [acc.first_name, acc.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '---' %></td>
+                                        <td class="p-2.5 uppercase font-bold text-slate-500"><%= acc.role %></td>
+                                        <td class="p-2.5 text-slate-500"><%= acc.locked_at ? new Date(acc.locked_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : '---' %></td>
+                                        <td class="p-2.5">
+                                            <form action="/registrar/unlock-account" method="POST" class="flex flex-col lg:flex-row lg:items-center gap-2">
+                                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                                <input type="hidden" name="username" value="<%= acc.username %>">
+                                                <input type="text" name="temp_password" placeholder="New temp password (optional)" autocomplete="off" class="px-2 py-1.5 rounded border border-slate-300 text-xs font-mono w-full lg:w-52">
+                                                <label class="flex items-center gap-1.5 text-[11px] text-slate-600 whitespace-nowrap">
+                                                    <input type="checkbox" name="verified" value="yes" required> Identity verified
+                                                </label>
+                                                <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold cursor-pointer whitespace-nowrap">Reset &amp; Unlock</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } %>
+            </div>
         </div>
-    </div>
 
-</main>
+    </main>
 
-<!-- XSS-SAFE JSON SCRIPT BLOCKS WITH NONCE -->
-<script id="courses-data" type="application/json" nonce="<%= cspNonce %>">
-    <%- JSON.stringify(locals.allCoursesRaw || []).replace(/</g, '\\u003c') %>
-</script>
-<script id="faculty-list-data" type="application/json" nonce="<%= cspNonce %>">
-    <%- JSON.stringify(locals.facultyList || []).replace(/</g, '\\u003c') %>
-</script>
-<script id="faculty-assigned-data" type="application/json" nonce="<%= cspNonce %>">
-    <%- JSON.stringify(locals.facultyAssignedCourses || []).replace(/</g, '\\u003c') %>
-</script>
-<script nonce="<%= cspNonce %>">
-    const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
-    const facultyListData = JSON.parse(document.getElementById('faculty-list-data').textContent);
-    const facultyAssignedData = JSON.parse(document.getElementById('faculty-assigned-data').textContent);
-    
-    function escapeHtml(str) {
-        return String(str ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
+    <!-- XSS-SAFE JSON SCRIPT BLOCKS WITH NONCE -->
+    <script id="courses-data" type="application/json" nonce="<%= cspNonce %>">
+        <%- JSON.stringify(locals.allCoursesRaw || []).replace(/</g, '\\u003c') %>
+    </script>
+    <script id="faculty-list-data" type="application/json" nonce="<%= cspNonce %>">
+        <%- JSON.stringify(locals.facultyList || []).replace(/</g, '\\u003c') %>
+    </script>
+    <script id="faculty-assigned-data" type="application/json" nonce="<%= cspNonce %>">
+        <%- JSON.stringify(locals.facultyAssignedCourses || []).replace(/</g, '\\u003c') %>
+    </script>
+    <script nonce="<%= cspNonce %>">
+        const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
+        const facultyListData = JSON.parse(document.getElementById('faculty-list-data').textContent);
+        const facultyAssignedData = JSON.parse(document.getElementById('faculty-assigned-data').textContent);
+        
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
-    const PANEL_IDS = ['settingsPanel', 'studentPanel', 'facultyPanel', 'batchUploadSection', 'lockedAccountsPanel'];
-    const SUB_PANELS = {
-        studentPanel: ['studentManageSection', 'studentRegSection'],
-        facultyPanel: ['facultyManageSection', 'facultyRegSection']
-    };
-    const NAV_OPEN_CLASSES = ['ring-2', 'ring-offset-2', 'ring-slate-700'];
-    const TAB_ACTIVE = ['bg-white', 'text-indigo-900', 'shadow'];
-    const TAB_INACTIVE = ['text-slate-600', 'hover:text-slate-900'];
+        const PANEL_IDS = ['settingsPanel', 'studentPanel', 'facultyPanel', 'batchUploadSection', 'lockedAccountsPanel'];
+        const SUB_PANELS = {
+            studentPanel: ['studentManageSection', 'studentRegSection'],
+            facultyPanel: ['facultyManageSection', 'facultyRegSection']
+        };
+        const NAV_OPEN_CLASSES = ['ring-2', 'ring-offset-2', 'ring-slate-700'];
+        const TAB_ACTIVE = ['bg-white', 'text-indigo-900', 'shadow'];
+        const TAB_INACTIVE = ['text-slate-600', 'hover:text-slate-900'];
 
-    function syncToggleButtons() {
-        document.querySelectorAll('.nav-toggle-btn').forEach(btn => {
-            const panel = document.getElementById(btn.getAttribute('data-target-section'));
-            if (!panel) return;
-            const open = !panel.classList.contains('hidden');
-            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            NAV_OPEN_CLASSES.forEach(c => btn.classList.toggle(c, open));
-            const arrow = btn.querySelector('.toggle-arrow');
-            if (arrow) arrow.textContent = open ? '▲' : '▼';
-        });
-    }
+        function syncToggleButtons() {
+            document.querySelectorAll('.nav-toggle-btn').forEach(btn => {
+                const panel = document.getElementById(btn.getAttribute('data-target-section'));
+                if (!panel) return;
+                const open = !panel.classList.contains('hidden');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                NAV_OPEN_CLASSES.forEach(c => btn.classList.toggle(c, open));
+                const arrow = btn.querySelector('.toggle-arrow');
+                if (arrow) arrow.textContent = open ? '▲' : '▼';
+            });
+        }
 
-    function showTab(parentId, subId) {
-        const subs = SUB_PANELS[parentId];
-        if (!subs) return;
-        const target = subs.includes(subId) ? subId : subs[0];
-        subs.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.classList.toggle('hidden', id !== target);
-        });
-        document.querySelectorAll('[data-tab-parent="' + parentId + '"]').forEach(tab => {
-            const active = tab.getAttribute('data-tab-target') === target;
-            tab.setAttribute('aria-selected', active ? 'true' : 'false');
-            TAB_ACTIVE.forEach(c => tab.classList.toggle(c, active));
-            TAB_INACTIVE.forEach(c => tab.classList.toggle(c, !active));
-        });
-    }
+        function showTab(parentId, subId) {
+            const subs = SUB_PANELS[parentId];
+            if (!subs) return;
+            const target = subs.includes(subId) ? subId : subs[0];
+            subs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', id !== target);
+            });
+            document.querySelectorAll('[data-tab-parent="' + parentId + '"]').forEach(tab => {
+                const active = tab.getAttribute('data-tab-target') === target;
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                TAB_ACTIVE.forEach(c => tab.classList.toggle(c, active));
+                TAB_INACTIVE.forEach(c => tab.classList.toggle(c, !active));
+            });
+        }
 
-    function showSection(sectionId, subId) {
-        PANEL_IDS.forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            if (id === sectionId) el.classList.remove('hidden');
-            else el.classList.add('hidden');
-        });
-        if (subId && SUB_PANELS[sectionId]) showTab(sectionId, subId);
-        syncToggleButtons();
-    }
-
-    function toggleSection(sectionId) {
-        const el = document.getElementById(sectionId);
-        if (!el) return;
-        if (el.classList.contains('hidden')) {
-            showSection(sectionId);
-        } else {
-            el.classList.add('hidden');
+        function showSection(sectionId, subId) {
+            PANEL_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (id === sectionId) el.classList.remove('hidden');
+                else el.classList.add('hidden');
+            });
+            if (subId && SUB_PANELS[sectionId]) showTab(sectionId, subId);
             syncToggleButtons();
         }
-    }
 
-    function rememberPanel(id, sub) {
-        try { sessionStorage.setItem('reopenRegistrarPanel', JSON.stringify({ id: id, sub: sub || null, t: Date.now() })); } catch (e) {}
-    }
-
-    function updateSubjectChecklist() {
-        const yearSelect = document.getElementById('reg_year_select');
-        const semSelect = document.getElementById('reg_sem_select');
-        const container = document.getElementById('subjectChecklist');
-        const hiddenTerm = document.getElementById('reg_term_hidden');
-        
-        if (!yearSelect || !semSelect || !yearSelect.value || !semSelect.value) return;
-
-        const year = parseInt(yearSelect.value);
-        const sem = parseInt(semSelect.value);
-        const selectedTerm = (year - 1) * 2 + sem;
-        
-        if (hiddenTerm) hiddenTerm.value = selectedTerm;
-
-        const termNames = {
-            "1": "BSN1 - 1st Sem", "2": "BSN1 - 2nd Sem", 
-            "3": "BSN2 - 1st Sem", "4": "BSN2 - 2nd Sem", 
-            "5": "BSN3 - 1st Sem", "6": "BSN3 - 2nd Sem",
-            "7": "BSN4 - 1st Sem", "8": "BSN4 - 2nd Sem"
-        };
-
-        let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Instructor (Optional) --</option>';
-        facultyListData.forEach(fac => {
-            const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-            facultyOptionsHtml += `<option value="${escapeHtml(fac.username)}">${escapeHtml(facName)}</option>`;
-        });
-
-        let html = '<div class="max-h-[400px] overflow-y-auto pr-2 space-y-4">';
-        for (let i = 1; i <= 8; i++) {
-            const termCourses = allCoursesData.filter(c => String(c.term_id) === String(i));
-            if (termCourses.length === 0) continue;
-
-            const isCurrentTermGroup = String(i) === String(selectedTerm);
-            html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'} shadow-sm">`;
-            html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${escapeHtml(termNames[i])} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
-            html += `<div class="space-y-2">`;
-            
-            termCourses.forEach(c => {
-                const isAutoChecked = isCurrentTermGroup ? 'checked' : '';
-                html += `
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded hover:bg-slate-100 gap-2 border border-slate-100">
-                        <label class="flex items-center space-x-2 cursor-pointer flex-grow">
-                            <input type="checkbox" name="course_codes" value="${escapeHtml(c.course_code)}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                            <span class="text-[11px] font-semibold text-slate-700">[${escapeHtml(c.course_code)}] ${escapeHtml(c.descriptive_title)}</span>
-                        </label>
-                        <div class="w-full sm:w-64">
-                            <select name="instructor__${escapeHtml(c.course_code)}" class="w-full px-2 py-1 rounded border border-slate-300 bg-white text-[11px] font-medium text-slate-700 cursor-pointer">
-                                ${facultyOptionsHtml}
-                            </select>
-                        </div>
-                    </div>
-                `;
-            });
-            html += `</div></div>`;
-        }
-        html += '</div>';
-        container.innerHTML = html;
-    }
-
-    function addFacultySubjectDropdown(containerId, selectedValue = '') {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-
-        const div = document.createElement('div');
-        div.className = 'flex items-center gap-2';
-
-        let optionsHtml = '<option value="" style="font-style: italic;">--Select Subject--</option>';
-        allCoursesData.forEach(c => {
-            const selected = c.course_code === selectedValue ? 'selected' : '';
-            optionsHtml += `<option value="${escapeHtml(c.course_code)}" ${selected}>[${escapeHtml(c.course_code)}] ${escapeHtml(c.descriptive_title)}</option>`;
-        });
-
-        div.innerHTML = `
-            <select name="course_codes" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 cursor-pointer">
-                ${optionsHtml}
-            </select>
-            <button type="button" class="remove-slot-btn px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-bold transition-colors cursor-pointer">X</button>
-        `;
-        container.appendChild(div);
-    }
-
-    function initFacultySubjectDropdowns() {
-        const regContainer = document.getElementById('facultySubjectDropdownsContainer');
-        if (regContainer) {
-            regContainer.innerHTML = '';
-            for (let i = 0; i < 5; i++) {
-                addFacultySubjectDropdown('facultySubjectDropdownsContainer');
-            }
-        }
-
-        const editContainer = document.getElementById('editFacultyDropdownsContainer');
-        if (editContainer && facultyAssignedData) {
-            editContainer.innerHTML = '';
-            if (facultyAssignedData.length > 0) {
-                facultyAssignedData.forEach(code => {
-                    addFacultySubjectDropdown('editFacultyDropdownsContainer', code);
-                });
+        function toggleSection(sectionId) {
+            const el = document.getElementById(sectionId);
+            if (!el) return;
+            if (el.classList.contains('hidden')) {
+                showSection(sectionId);
             } else {
+                el.classList.add('hidden');
+                syncToggleButtons();
+            }
+        }
+
+        function rememberPanel(id, sub) {
+            try { sessionStorage.setItem('reopenRegistrarPanel', JSON.stringify({ id: id, sub: sub || null, t: Date.now() })); } catch (e) {}
+        }
+
+        function updateSubjectChecklist() {
+            const yearSelect = document.getElementById('reg_year_select');
+            const semSelect = document.getElementById('reg_sem_select');
+            const container = document.getElementById('subjectChecklist');
+            const hiddenTerm = document.getElementById('reg_term_hidden');
+            
+            if (!yearSelect || !semSelect || !yearSelect.value || !semSelect.value) return;
+
+            const year = parseInt(yearSelect.value);
+            const sem = parseInt(semSelect.value);
+            const selectedTerm = (year - 1) * 2 + sem;
+            
+            if (hiddenTerm) hiddenTerm.value = selectedTerm;
+
+            const termNames = {
+                "1": "BSN1 - 1st Sem", "2": "BSN1 - 2nd Sem", 
+                "3": "BSN2 - 1st Sem", "4": "BSN2 - 2nd Sem", 
+                "5": "BSN3 - 1st Sem", "6": "BSN3 - 2nd Sem",
+                "7": "BSN4 - 1st Sem", "8": "BSN4 - 2nd Sem"
+            };
+
+            let facultyOptionsHtml = '<option value="" style="font-style: italic;">-- Select Instructor (Optional) --</option>';
+            facultyListData.forEach(fac => {
+                const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                facultyOptionsHtml += `<option value="${escapeHtml(fac.username)}">${escapeHtml(facName)}</option>`;
+            });
+
+            let html = '<div class="max-h-[400px] overflow-y-auto pr-2 space-y-4">';
+            for (let i = 1; i <= 8; i++) {
+                const termCourses = allCoursesData.filter(c => String(c.term_id) === String(i));
+                if (termCourses.length === 0) continue;
+
+                const isCurrentTermGroup = String(i) === String(selectedTerm);
+                html += `<div class="bg-white p-3 rounded-lg border ${isCurrentTermGroup ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'} shadow-sm">`;
+                html += `<h4 class="text-[11px] font-bold uppercase tracking-wider ${isCurrentTermGroup ? 'text-indigo-800' : 'text-slate-500'} mb-2 border-b ${isCurrentTermGroup ? 'border-indigo-200' : 'border-slate-100'} pb-1">${escapeHtml(termNames[i])} ${isCurrentTermGroup ? '(Standard Set)' : ''}</h4>`;
+                html += `<div class="space-y-2">`;
+                
+                termCourses.forEach(c => {
+                    const isAutoChecked = isCurrentTermGroup ? 'checked' : '';
+                    html += `
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded hover:bg-slate-100 gap-2 border border-slate-100">
+                            <label class="flex items-center space-x-2 cursor-pointer flex-grow">
+                                <input type="checkbox" name="course_codes" value="${escapeHtml(c.course_code)}" ${isAutoChecked} class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-[11px] font-semibold text-slate-700">[${escapeHtml(c.course_code)}] ${escapeHtml(c.descriptive_title)}</span>
+                            </label>
+                            <div class="w-full sm:w-64">
+                                <select name="instructor__${escapeHtml(c.course_code)}" class="w-full px-2 py-1 rounded border border-slate-300 bg-white text-[11px] font-medium text-slate-700 cursor-pointer">
+                                    ${facultyOptionsHtml}
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div></div>`;
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        // Dedicated function for dynamically adding EXTRA subjects during checklist enrollment
+        function addExtraEnrollmentDropdown() {
+            const container = document.getElementById('extraEnrollmentSubjectsContainer');
+            if (!container) return;
+
+            const div = document.createElement('div');
+            div.className = 'flex flex-col sm:flex-row gap-2 mt-2';
+            
+            let optionsHtml = '<option value="">--Select Subject--</option>';
+            allCoursesData.forEach(c => {
+                optionsHtml += `<option value="${escapeHtml(c.course_code)}">[${escapeHtml(c.course_code)}] ${escapeHtml(c.descriptive_title)}</option>`;
+            });
+
+            let facHtml = '<option value="">--Select Instructor (Optional)--</option>';
+            facultyListData.forEach(fac => {
+                const facName = [fac.last_name, [fac.first_name, fac.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                facHtml += `<option value="${escapeHtml(fac.username)}">${escapeHtml(facName)}</option>`;
+            });
+
+            div.innerHTML = `
+                <select name="course_codes" required class="flex-grow px-2 py-1.5 rounded border border-slate-300 text-xs">
+                    ${optionsHtml}
+                </select>
+                <input type="hidden" name="final_grades" value="">
+                <select class="w-full sm:w-64 px-2 py-1.5 rounded border border-slate-300 text-xs">
+                    ${facHtml}
+                </select>
+                <button type="button" onclick="this.parentElement.remove()" class="px-2.5 py-1.5 bg-red-100 text-red-700 font-bold rounded text-xs">X</button>
+            `;
+            
+            const courseSelect = div.querySelector('select[name="course_codes"]');
+            const instSelect = div.querySelectorAll('select')[1];
+            courseSelect.addEventListener('change', function() {
+                instSelect.name = 'instructor__' + this.value;
+            });
+            
+            container.appendChild(div);
+        }
+
+        function addFacultySubjectDropdown(containerId, selectedValue = '') {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-2';
+
+            let optionsHtml = '<option value="" style="font-style: italic;">--Select Subject--</option>';
+            allCoursesData.forEach(c => {
+                const selected = c.course_code === selectedValue ? 'selected' : '';
+                optionsHtml += `<option value="${escapeHtml(c.course_code)}" ${selected}>[${escapeHtml(c.course_code)}] ${escapeHtml(c.descriptive_title)}</option>`;
+            });
+
+            div.innerHTML = `
+                <select name="course_codes" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                    ${optionsHtml}
+                </select>
+                <button type="button" class="remove-slot-btn px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-bold transition-colors cursor-pointer">X</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function initFacultySubjectDropdowns() {
+            const regContainer = document.getElementById('facultySubjectDropdownsContainer');
+            if (regContainer) {
+                regContainer.innerHTML = '';
                 for (let i = 0; i < 5; i++) {
-                    addFacultySubjectDropdown('editFacultyDropdownsContainer');
+                    addFacultySubjectDropdown('facultySubjectDropdownsContainer');
+                }
+            }
+
+            const editContainer = document.getElementById('editFacultyDropdownsContainer');
+            if (editContainer && facultyAssignedData) {
+                editContainer.innerHTML = '';
+                if (facultyAssignedData.length > 0) {
+                    facultyAssignedData.forEach(code => {
+                        addFacultySubjectDropdown('editFacultyDropdownsContainer', code);
+                    });
+                } else {
+                    for (let i = 0; i < 5; i++) {
+                        addFacultySubjectDropdown('editFacultyDropdownsContainer');
+                    }
                 }
             }
         }
-    }
 
-    const searchInput = document.getElementById('studentSearchInput');
-    if (searchInput) {
-        searchInput.addEventListener('click', function() {
-            this.value = '';
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.nav-toggle-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                toggleSection(btn.getAttribute('data-target-section'));
+        const searchInput = document.getElementById('studentSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('click', function() {
+                this.value = '';
             });
-        });
+        }
 
-        document.querySelectorAll('.cancel-toggle-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                toggleSection(btn.getAttribute('data-close-panel'));
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.nav-toggle-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toggleSection(btn.getAttribute('data-target-section'));
+                });
             });
-        });
 
-        document.querySelectorAll('.sub-tab-btn').forEach(tab => {
-            tab.addEventListener('click', () => {
-                showTab(tab.getAttribute('data-tab-parent'), tab.getAttribute('data-tab-target'));
+            document.querySelectorAll('.cancel-toggle-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toggleSection(btn.getAttribute('data-close-panel'));
+                });
             });
-        });
 
-        document.querySelectorAll('.confirm-form').forEach(form => {
-            form.addEventListener('submit', (e) => {
-                const msg = form.getAttribute('data-confirm-msg');
-                if (msg && !confirm(msg)) {
-                    e.preventDefault();
-                }
+            document.querySelectorAll('.sub-tab-btn').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    showTab(tab.getAttribute('data-tab-parent'), tab.getAttribute('data-tab-target'));
+                });
             });
-        });
 
-        const lookupApiBtn = document.getElementById('lookupStudentApiBtn');
-        const studentIdInput = document.getElementById('regStudentIdInput');
-        const firstNameInput = document.getElementById('regFirstNameInput');
-        const middleNameInput = document.getElementById('regMiddleNameInput');
-        const lastNameInput = document.getElementById('regLastNameInput');
-        const yearLevelSelect = document.getElementById('reg_year_select');
-        const sectionSelect = document.getElementById('reg_section_select');
-        const msgContainer = document.getElementById('lookupMessageContainer');
-        const immContainer = document.getElementById('registerImmunizationContainer');
-        const immGrid = document.getElementById('registerImmunizationGrid');
+            document.querySelectorAll('.confirm-form').forEach(form => {
+                form.addEventListener('submit', (e) => {
+                    const msg = form.getAttribute('data-confirm-msg');
+                    if (msg && !confirm(msg)) {
+                        e.preventDefault();
+                    }
+                });
+            });
 
-        async function performAsyncLookup() {
-            const idVal = studentIdInput ? studentIdInput.value.trim() : '';
-            if (!idVal) return;
+            const lookupApiBtn = document.getElementById('lookupStudentApiBtn');
+            const studentIdInput = document.getElementById('regStudentIdInput');
+            const firstNameInput = document.getElementById('regFirstNameInput');
+            const middleNameInput = document.getElementById('regMiddleNameInput');
+            const lastNameInput = document.getElementById('regLastNameInput');
+            const yearLevelSelect = document.getElementById('reg_year_select');
+            const sectionSelect = document.getElementById('reg_section_select');
+            const msgContainer = document.getElementById('lookupMessageContainer');
+            const immContainer = document.getElementById('registerImmunizationContainer');
+            const immGrid = document.getElementById('registerImmunizationGrid');
 
-            try {
-                const response = await fetch(`/registrar/api/lookup-student?student_id=${encodeURIComponent(idVal)}`);
-                const data = await response.json();
+            async function performAsyncLookup() {
+                const idVal = studentIdInput ? studentIdInput.value.trim() : '';
+                if (!idVal) return;
 
-                msgContainer.classList.remove('hidden');
-                if (data && data.exists) {
-                    firstNameInput.value = data.student.first_name || '';
-                    middleNameInput.value = data.student.middle_name || '';
-                    lastNameInput.value = data.student.last_name || '';
-                    yearLevelSelect.value = data.student.year_level || '1';
-                    sectionSelect.value = data.student.section || 'A';
-                    updateSubjectChecklist();
+                try {
+                    const response = await fetch(`/registrar/api/lookup-student?student_id=${encodeURIComponent(idVal)}`);
+                    const data = await response.json();
 
-                    msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-emerald-100 text-emerald-800 border border-emerald-300';
-                    msgContainer.textContent = `✅ Student found: ${data.student.last_name}, ${data.student.first_name}. Details loaded below. You may enroll.`;
+                    msgContainer.classList.remove('hidden');
+                    if (data && data.exists) {
+                        firstNameInput.value = data.student.first_name || '';
+                        middleNameInput.value = data.student.middle_name || '';
+                        lastNameInput.value = data.student.last_name || '';
+                        yearLevelSelect.value = data.student.year_level || '1';
+                        sectionSelect.value = data.student.section || 'A';
+                        updateSubjectChecklist();
 
-                    if (data.immunization && data.immunization.length > 0) {
-                        immContainer.classList.remove('hidden');
-                        let immHtml = '';
-                        data.immunization.forEach(v => {
-                            immHtml += `
-                                <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs flex flex-col justify-between">
-                                    <div class="space-y-1">
-                                        <div class="flex justify-between items-center font-bold">
-                                            <span>${escapeHtml(v.name)}</span>
-                                            <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
+                        msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-emerald-100 text-emerald-800 border border-emerald-300';
+                        msgContainer.textContent = `✅ Student found: ${data.student.last_name}, ${data.student.first_name}. Details loaded below. You may enroll.`;
+
+                        if (data.immunization && data.immunization.length > 0) {
+                            immContainer.classList.remove('hidden');
+                            let immHtml = '';
+                            data.immunization.forEach(v => {
+                                immHtml += `
+                                    <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs flex flex-col justify-between">
+                                        <div class="space-y-1">
+                                            <div class="flex justify-between items-center font-bold">
+                                                <span>${escapeHtml(v.name)}</span>
+                                                <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
+                                            </div>
+                                            <p class="text-slate-600 text-[11px]">Progress: <strong>Dose ${v.dose_number} of ${v.doses_required}</strong></p>
                                         </div>
-                                        <p class="text-slate-600 text-[11px]">Progress: <strong>Dose ${v.dose_number} of ${v.doses_required}</strong></p>
                                     </div>
-                                </div>
-                            `;
-                        });
-                        immGrid.innerHTML = immHtml;
+                                `;
+                            });
+                            immGrid.innerHTML = immHtml;
+                        } else {
+                            immContainer.classList.add('hidden');
+                        }
                     } else {
+                        msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-amber-100 text-amber-800 border border-amber-300';
+                        msgContainer.textContent = '⚠️ No student record. Please register/enroll.';
                         immContainer.classList.add('hidden');
                     }
-                } else {
-                    msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-amber-100 text-amber-800 border border-amber-300';
-                    msgContainer.textContent = '⚠️ No student record. Please register/enroll.';
-                    immContainer.classList.add('hidden');
+                } catch (err) {
+                    console.error('Lookup fetch error:', err);
                 }
-            } catch (err) {
-                console.error('Lookup fetch error:', err);
             }
-        }
 
-        if (lookupApiBtn && studentIdInput) {
-            lookupApiBtn.addEventListener('click', performAsyncLookup);
-            studentIdInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    performAsyncLookup();
+            if (lookupApiBtn && studentIdInput) {
+                lookupApiBtn.addEventListener('click', performAsyncLookup);
+                studentIdInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        performAsyncLookup();
+                    }
+                });
+            }
+
+            const regYear = document.getElementById('reg_year_select');
+            const regSem = document.getElementById('reg_sem_select');
+            if (regYear) regYear.addEventListener('change', updateSubjectChecklist);
+            if (regSem) regSem.addEventListener('change', updateSubjectChecklist);
+
+            const facDropdown = document.getElementById('facultySelectDropdown');
+            if (facDropdown) {
+                facDropdown.addEventListener('change', (e) => {
+                    e.target.form.submit();
+                });
+            }
+
+            const facPass = document.getElementById('regFacultyTempPassword');
+            const stuPass = document.getElementById('regStudentTempPassword');
+            if (facPass && !facPass.value) facPass.value = generateRandomPassword();
+            if (stuPass && !stuPass.disabled && !stuPass.value) stuPass.value = generateRandomPassword();
+            
+            updateSubjectChecklist();
+            initFacultySubjectDropdowns();
+            
+            const facultyManagedOpen = "<%= locals.selectedFaculty ? 'true' : 'false' %>" === "true";
+            const studentManagedOpen = "<%= locals.selectedStudent ? 'true' : 'false' %>" === "true";
+            
+            PANEL_IDS.forEach(id => {
+                const panel = document.getElementById(id);
+                if (!panel) return;
+                const subs = SUB_PANELS[id] || [];
+                const subOf = (node) => subs.find(sid => {
+                    const s = document.getElementById(sid);
+                    return s && s.contains(node);
+                }) || null;
+
+                panel.querySelectorAll('form').forEach(f => {
+                    f.addEventListener('submit', () => rememberPanel(id, subOf(f)));
+                });
+                panel.querySelectorAll('a[href="/registrar"]').forEach(a => {
+                    a.addEventListener('click', () => rememberPanel(id, subs[0] || null));
+                });
+            });
+
+            let pendingPanel = null;
+            let pendingSub = null;
+            try {
+                const raw = sessionStorage.getItem('reopenRegistrarPanel');
+                sessionStorage.removeItem('reopenRegistrarPanel');
+                if (raw) {
+                    const p = JSON.parse(raw);
+                    if (p && (Date.now() - p.t) < 30000) { pendingPanel = p.id; pendingSub = p.sub || null; }
                 }
-            });
-        }
+            } catch (e) {}
 
-        const regYear = document.getElementById('reg_year_select');
-        const regSem = document.getElementById('reg_sem_select');
-        if (regYear) regYear.addEventListener('change', updateSubjectChecklist);
-        if (regSem) regSem.addEventListener('change', updateSubjectChecklist);
-
-        const facDropdown = document.getElementById('facultySelectDropdown');
-        if (facDropdown) {
-            facDropdown.addEventListener('change', (e) => {
-                e.target.form.submit();
-            });
-        }
-
-        const facPass = document.getElementById('regFacultyTempPassword');
-        const stuPass = document.getElementById('regStudentTempPassword');
-        if (facPass && !facPass.value) facPass.value = generateRandomPassword();
-        if (stuPass && !stuPass.disabled && !stuPass.value) stuPass.value = generateRandomPassword();
-        
-        updateSubjectChecklist();
-        initFacultySubjectDropdowns();
-        
-        const facultyManagedOpen = "<%= locals.selectedFaculty ? 'true' : 'false' %>" === "true";
-        const studentManagedOpen = "<%= locals.selectedStudent ? 'true' : 'false' %>" === "true";
-        
-        PANEL_IDS.forEach(id => {
-            const panel = document.getElementById(id);
-            if (!panel) return;
-            const subs = SUB_PANELS[id] || [];
-            const subOf = (node) => subs.find(sid => {
-                const s = document.getElementById(sid);
-                return s && s.contains(node);
-            }) || null;
-
-            panel.querySelectorAll('form').forEach(f => {
-                f.addEventListener('submit', () => rememberPanel(id, subOf(f)));
-            });
-            panel.querySelectorAll('a[href="/registrar"]').forEach(a => {
-                a.addEventListener('click', () => rememberPanel(id, subs[0] || null));
-            });
+            if (!facultyManagedOpen && !studentManagedOpen && pendingPanel && PANEL_IDS.includes(pendingPanel)) {
+                showSection(pendingPanel, pendingSub);
+            }
+            syncToggleButtons();
         });
 
-        let pendingPanel = null;
-        let pendingSub = null;
-        try {
-            const raw = sessionStorage.getItem('reopenRegistrarPanel');
-            sessionStorage.removeItem('reopenRegistrarPanel');
-            if (raw) {
-                const p = JSON.parse(raw);
-                if (p && (Date.now() - p.t) < 30000) { pendingPanel = p.id; pendingSub = p.sub || null; }
+        function secureRandInt(max) {
+            const arr = new Uint32Array(1);
+            window.crypto.getRandomValues(arr);
+            return arr[0] % max;
+        }
+
+        function generateRandomPassword() {
+            const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const lower = 'abcdefghijklmnopqrstuvwxyz';
+            const num = '0123456789';
+            const special = '!@#$%^&*';
+            const all = upper + lower + num + special;
+            
+            const firstChar = secureRandInt(2) === 0 
+                ? upper[secureRandInt(upper.length)] 
+                : lower[secureRandInt(lower.length)];
+            
+            let pass = [
+                upper[secureRandInt(upper.length)],
+                lower[secureRandInt(lower.length)],
+                num[secureRandInt(num.length)],
+                special[secureRandInt(special.length)]
+            ];
+            for (let i = 0; i < 5; i++) {
+                pass.push(all[secureRandInt(all.length)]);
             }
-        } catch (e) {}
-
-        if (!facultyManagedOpen && !studentManagedOpen && pendingPanel && PANEL_IDS.includes(pendingPanel)) {
-            showSection(pendingPanel, pendingSub);
+            for (let i = pass.length - 1; i > 0; i--) {
+                const j = secureRandInt(i + 1);
+                [pass[i], pass[j]] = [pass[j], pass[i]];
+            }
+            return firstChar + pass.join('');
         }
-        syncToggleButtons();
-    });
-
-    function secureRandInt(max) {
-        const arr = new Uint32Array(1);
-        window.crypto.getRandomValues(arr);
-        return arr[0] % max;
-    }
-
-    function generateRandomPassword() {
-        const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        const lower = 'abcdefghijklmnopqrstuvwxyz';
-        const num = '0123456789';
-        const special = '!@#$%^&*';
-        const all = upper + lower + num + special;
-        
-        const firstChar = secureRandInt(2) === 0 
-            ? upper[secureRandInt(upper.length)] 
-            : lower[secureRandInt(lower.length)];
-        
-        let pass = [
-            upper[secureRandInt(upper.length)],
-            lower[secureRandInt(lower.length)],
-            num[secureRandInt(num.length)],
-            special[secureRandInt(special.length)]
-        ];
-        for (let i = 0; i < 5; i++) {
-            pass.push(all[secureRandInt(all.length)]);
-        }
-        for (let i = pass.length - 1; i > 0; i--) {
-            const j = secureRandInt(i + 1);
-            [pass[i], pass[j]] = [pass[j], pass[i]];
-        }
-        return firstChar + pass.join('');
-    }
-</script>
+    </script>
+</body>
+</html>

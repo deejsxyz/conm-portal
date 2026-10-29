@@ -346,6 +346,7 @@ async function seedDatabase() {
             );
         `);
 
+        // Ordered table creation to satisfy dependencies on fresh database boots
         await pool.query(`
             CREATE TABLE IF NOT EXISTS students (
                 student_id VARCHAR(100) PRIMARY KEY,
@@ -361,6 +362,7 @@ async function seedDatabase() {
         `);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_students_year_sec ON students (year_level, section) WHERE is_archived = FALSE;`);
 
+        // ==================== IMMUNIZATION STATUS TABLES ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS vaccine_types (
                 id SERIAL PRIMARY KEY,
@@ -454,6 +456,7 @@ async function seedDatabase() {
 
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_grades_student_term ON grades (student_id, enrolled_term, academic_year);`);
 
+        // Idempotent constraints setup
         await pool.query(`
             DO $$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_grades_student') THEN
@@ -1256,27 +1259,6 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
                 `, [targetStudentId, selectedTerm, selectedAy]);
                 grades = gradesRes.rows;
 
-                // Auto-enroll standard term subjects if none exist for this term yet
-                if (grades.length === 0) {
-                    const standardCourses = allCoursesRaw.filter(c => String(c.term_id) === String(selectedTerm));
-                    for (const sc of standardCourses) {
-                        await client.query(`
-                            INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year)
-                            VALUES ($1, $2, '', '', '', '', $3, $4)
-                            ON CONFLICT (student_id, course_code, academic_year, enrolled_term) DO NOTHING;
-                        `, [targetStudentId, sc.course_code, selectedTerm, selectedAy]);
-                    }
-                    const refetchedGrades = await client.query(`
-                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.instructor_username, g.remarks, g.enrolled_term, g.academic_year,
-                               c.descriptive_title, c.lec_units, c.rle_units, c.total_units
-                        FROM grades g
-                        JOIN courses c ON g.course_code = c.course_code
-                        WHERE g.student_id = $1 AND g.enrolled_term = $2 AND g.academic_year = $3
-                        ORDER BY g.course_code ASC
-                    `, [targetStudentId, selectedTerm, selectedAy]);
-                    grades = refetchedGrades.rows;
-                }
-
                 immunizationReport = await calculateImmunizationStatus(client, targetStudentId);
                 await client.query(
                     'INSERT INTO immunization_access_logs (student_id, accessed_by, action_type) VALUES ($1, $2, $3)',
@@ -1344,6 +1326,7 @@ app.post('/registrar/toggle-faculty-lock', isAuthenticated, async (req, res) => 
     }
 });
 
+// Secure Batch Upload with temporary file credential handling (prevents plaintext storage in session table)
 app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -2166,6 +2149,17 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                         `, [req.session.user.username, req.session.user.role, cleanId, code, academicYear, enrolledTerm, oldGrade, cleanGrade]);
                     }
+                } else {
+                    await client.query(`
+                        INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        ON CONFLICT DO NOTHING
+                    `, [cleanId, code, cleanGrade, facFormalName || '', facUser || '', computedRem, enrolledTerm, academicYear]);
+                    
+                    await client.query(`
+                        INSERT INTO grade_audit_logs (changed_by, changed_by_role, student_id, course_code, academic_year, enrolled_term, old_grade, new_grade)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `, [req.session.user.username, req.session.user.role, cleanId, code, academicYear, enrolledTerm, 'ENROLLED', cleanGrade]);
                 }
             }
         }
