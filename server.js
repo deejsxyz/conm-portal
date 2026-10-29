@@ -630,7 +630,8 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
     const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
     const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-    const sec = ['A', 'B', 'C'].includes((req.body.section || '').trim().toUpperCase()) ? req.body.section.trim().toUpperCase() : 'A';
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
     const pass = req.body.temp_password && String(req.body.temp_password).trim() ? String(req.body.temp_password).trim() : generateSecurePassword();
 
     if (!cleanId || !fName || !lName) {
@@ -780,7 +781,8 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
     const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
     const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-    const sec = ['A', 'B', 'C'].includes((req.body.section || '').trim().toUpperCase()) ? req.body.section.trim().toUpperCase() : 'A';
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
     
     if (!cleanId || !fName || !lName) {
         setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
@@ -1040,7 +1042,7 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
 
                         await client.query(`
                             INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-                            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
+                            VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
                         `, [cleanId, hashedPassword, fName, mName, lName]);
 
                         generatedCredentials.push({
@@ -1142,7 +1144,8 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
     const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
     const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-    const sec = ['A', 'B', 'C'].includes((req.body.section || '').trim().toUpperCase()) ? req.body.section.trim().toUpperCase() : 'A';
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
     const pass = req.body.temp_password && String(req.body.temp_password).trim() ? String(req.body.temp_password).trim() : generateSecurePassword();
 
     if (!cleanId || !fName || !lName) {
@@ -1217,7 +1220,8 @@ app.post('/registrar/update-student-year-section', isAuthenticated, async (req, 
 
     const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
     const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-    const sec = ['A', 'B', 'C'].includes((req.body.section || '').trim().toUpperCase()) ? req.body.section.trim().toUpperCase() : 'A';
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
     try {
         const updateRes = await pool.query(`
             UPDATE students SET year_level = $1, section = $2 WHERE student_id = $3
@@ -1813,9 +1817,6 @@ app.get('/portal', isAuthenticated, async (req, res) => {
     }
 });
 
-app.get('/logout', (req, res) => {
-    req.session.destroy(() => res.redirect('/'));
-});
 
 async function startServer() {
     try {

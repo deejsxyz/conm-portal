@@ -75,7 +75,7 @@
         <p class="text-xs text-emerald-200/70 font-medium">© CONM Academic Information System</p>
     </footer>
 
-    <script>
+    <script nonce="<%= cspNonce %>">
         document.addEventListener('DOMContentLoaded', () => {
             const closeBtn = document.getElementById('closeLockedModalBtn');
             const overlay = document.getElementById('lockedModalOverlay');
