@@ -54,8 +54,76 @@
             </div>
         <% } %>
 
+        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT -->
+        <div class="flex flex-wrap gap-3 pb-2">
+            <button type="button" data-target-section="studentRegSection" class="nav-toggle-btn flex-1 min-w-[10rem] px-4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                👤 Register Student
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+            <button type="button" data-target-section="batchUploadSection" class="nav-toggle-btn flex-1 min-w-[10rem] px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                📁 Batch Upload
+                <% if (locals.hasBatchCredentials) { %><span class="px-2 py-0.5 bg-amber-300 text-amber-900 rounded-full text-[10px]">⬇ Credentials ready</span><% } %>
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+            <button type="button" data-target-section="facultyRegSection" class="nav-toggle-btn flex-1 min-w-[10rem] px-4 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                👨‍🏫 Register Faculty
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+            <button type="button" data-target-section="facultyManageSection" class="nav-toggle-btn flex-1 min-w-[10rem] px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                👥 Manage Faculty
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+            <button type="button" data-target-section="studentManageSection" class="nav-toggle-btn flex-1 min-w-[10rem] px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                ✏️ Manage Student
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+            <button type="button" data-target-section="settingsPanel" aria-expanded="false" aria-controls="settingsPanel" class="nav-toggle-btn flex-1 min-w-[10rem] px-4 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                ⚙️ System Settings
+                <span class="px-2 py-0.5 bg-white/25 rounded-full text-[10px]"><%= systemSettings.faculty_portal_locked ? '🔒 Faculty Locked' : '🔓 Faculty Open' %></span>
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+            <% const lockedList = locals.lockedAccounts || []; %>
+            <button type="button" id="lockedAccountsToggleBtn" data-target-section="lockedAccountsPanel" aria-expanded="false" aria-controls="lockedAccountsPanel" class="nav-toggle-btn flex-1 min-w-[10rem] px-4 py-3 <%= lockedList.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-500 hover:bg-slate-600' %> text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
+                🔒 Locked Accounts
+                <span class="px-2 py-0.5 bg-white/25 rounded-full text-[10px]"><%= lockedList.length %></span>
+                <span class="toggle-arrow text-[10px]">▼</span>
+            </button>
+        </div>
+
+        <!-- LOCKED ACCOUNTS PANEL (hidden until the toggle button is clicked) -->
+        <div id="lockedAccountsPanel" class="hidden bg-red-50 border border-red-300 shadow-sm rounded-xl p-5 space-y-3">
+            <div class="flex items-center gap-2.5">
+                <h3 class="font-bold text-red-900 text-sm uppercase tracking-wider">Locked Accounts &mdash; Password Reset Requests</h3>
+                <span class="px-2.5 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-full text-[10px] font-bold"><%= lockedList.length %></span>
+            </div>
+            <% if (lockedList.length === 0) { %>
+                <p class="text-xs text-red-700">No locked accounts right now.</p>
+            <% } else { %>
+                <p class="text-xs text-red-700">These accounts were locked after 5 incorrect passwords. The user must contact you in person or by phone. <strong>Verify their identity (valid school ID / registrar records) before resetting</strong>, then set a temporary password (leave blank to auto-generate one). They must change it at next login.</p>
+                <div class="space-y-2">
+                    <% lockedList.forEach(acc => { %>
+                        <form action="/registrar/unlock-account" method="POST" class="flex flex-col lg:flex-row lg:items-center gap-2 bg-white border border-red-200 rounded-lg p-3">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <input type="hidden" name="username" value="<%= acc.username %>">
+                            <div class="flex-1 text-xs">
+                                <span class="font-mono font-bold text-slate-900"><%= acc.username %></span>
+                                <span class="ml-2 px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] font-bold uppercase"><%= acc.role %></span>
+                                <span class="ml-2 font-semibold text-slate-700 uppercase"><%= [acc.last_name, [acc.first_name, acc.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ') %></span>
+                                <% if (acc.locked_at) { %>
+                                    <span class="ml-2 text-slate-400">locked <%= new Date(acc.locked_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) %></span>
+                                <% } %>
+                            </div>
+                            <input type="text" name="temp_password" autocomplete="off" placeholder="New temporary password (optional)" class="px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50 lg:w-64">
+                            <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 whitespace-nowrap cursor-pointer"><input type="checkbox" name="verified" value="yes" required class="cursor-pointer"> ID verified</label>
+                            <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow cursor-pointer whitespace-nowrap">Unlock &amp; Reset Password</button>
+                        </form>
+                    <% }) %>
+                </div>
+            <% } %>
+        </div>
+
         <!-- GLOBAL SYSTEM SETTINGS & FACULTY PORTAL LOCK -->
-        <div class="bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div id="settingsPanel" class="hidden bg-indigo-50 border border-indigo-200 shadow-sm rounded-xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div>
                 <div class="flex items-center gap-2.5">
                     <h3 class="font-bold text-indigo-900 text-sm uppercase tracking-wider">Global System Settings</h3>
@@ -105,63 +173,6 @@
                     <% } %>
                 </form>
             </div>
-        </div>
-
-        <!-- TOGGLE BUTTONS FOR REGISTRATION & MANAGEMENT -->
-        <div class="flex flex-row flex-nowrap gap-3 overflow-x-auto pb-2">
-            <button type="button" data-target-section="studentRegSection" class="nav-toggle-btn flex-1 px-4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
-                👤 Register Student
-            </button>
-            <button type="button" data-target-section="batchUploadSection" class="nav-toggle-btn flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
-                📁 Batch Upload
-            </button>
-            <button type="button" data-target-section="facultyRegSection" class="nav-toggle-btn flex-1 px-4 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
-                👨‍🏫 Register Faculty
-            </button>
-            <button type="button" data-target-section="facultyManageSection" class="nav-toggle-btn flex-1 px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
-                👥 Manage Faculty
-            </button>
-            <button type="button" data-target-section="studentManageSection" class="nav-toggle-btn flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
-                ✏️ Manage Student
-            </button>
-            <% const lockedList = locals.lockedAccounts || []; %>
-            <button type="button" id="lockedAccountsToggleBtn" aria-expanded="false" aria-controls="lockedAccountsPanel" class="flex-1 px-4 py-3 <%= lockedList.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-500 hover:bg-slate-600' %> text-white rounded-xl text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer">
-                🔒 Locked Accounts
-                <span class="px-2 py-0.5 bg-white/25 rounded-full text-[10px]"><%= lockedList.length %></span>
-                <span id="lockedToggleArrow" class="text-[10px]">▼</span>
-            </button>
-        </div>
-
-        <!-- LOCKED ACCOUNTS PANEL (hidden until the toggle button is clicked) -->
-        <div id="lockedAccountsPanel" class="hidden bg-red-50 border border-red-300 shadow-sm rounded-xl p-5 space-y-3">
-            <div class="flex items-center gap-2.5">
-                <h3 class="font-bold text-red-900 text-sm uppercase tracking-wider">Locked Accounts &mdash; Password Reset Requests</h3>
-                <span class="px-2.5 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-full text-[10px] font-bold"><%= lockedList.length %></span>
-            </div>
-            <% if (lockedList.length === 0) { %>
-                <p class="text-xs text-red-700">No locked accounts right now.</p>
-            <% } else { %>
-                <p class="text-xs text-red-700">These accounts were locked after 5 incorrect passwords. The user must contact you in person or by phone. <strong>Verify their identity (valid school ID / registrar records) before resetting</strong>, then set a temporary password (leave blank to auto-generate one). They must change it at next login.</p>
-                <div class="space-y-2">
-                    <% lockedList.forEach(acc => { %>
-                        <form action="/registrar/unlock-account" method="POST" class="flex flex-col lg:flex-row lg:items-center gap-2 bg-white border border-red-200 rounded-lg p-3">
-                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                            <input type="hidden" name="username" value="<%= acc.username %>">
-                            <div class="flex-1 text-xs">
-                                <span class="font-mono font-bold text-slate-900"><%= acc.username %></span>
-                                <span class="ml-2 px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] font-bold uppercase"><%= acc.role %></span>
-                                <span class="ml-2 font-semibold text-slate-700 uppercase"><%= [acc.last_name, [acc.first_name, acc.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ') %></span>
-                                <% if (acc.locked_at) { %>
-                                    <span class="ml-2 text-slate-400">locked <%= new Date(acc.locked_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) %></span>
-                                <% } %>
-                            </div>
-                            <input type="text" name="temp_password" autocomplete="off" placeholder="New temporary password (optional)" class="px-3 py-2 rounded-lg border border-slate-300 text-xs bg-slate-50 lg:w-64">
-                            <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 whitespace-nowrap cursor-pointer"><input type="checkbox" name="verified" value="yes" required class="cursor-pointer"> ID verified</label>
-                            <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow cursor-pointer whitespace-nowrap">Unlock &amp; Reset Password</button>
-                        </form>
-                    <% }) %>
-                </div>
-            <% } %>
         </div>
 
         <!-- SECTIONS -->
@@ -446,7 +457,12 @@
                 </form>
             </div>
 
-            <!-- EDIT SUBJECT ENROLLED SECTION -->
+            <!-- EDIT SUBJECT ENROLLED SECTION (collapsible) -->
+            <details open class="group">
+                <summary class="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center justify-between px-4 py-2.5 mb-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider">
+                    <span>Edit Subjects Enrolled</span>
+                    <span class="text-[10px] font-semibold normal-case text-slate-300">click to collapse / expand</span>
+                </summary>
             <div class="bg-indigo-50 rounded-xl shadow-sm border border-indigo-200 p-5 space-y-4">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-indigo-200 pb-3">
                     <div>
@@ -562,7 +578,14 @@
                 </div>
             </div>
 
-            <!-- FULL GRADE MANAGEMENT & EDITING SECTION -->
+            </details>
+
+            <!-- FULL GRADE MANAGEMENT & EDITING SECTION (collapsible) -->
+            <details open class="group">
+                <summary class="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center justify-between px-4 py-2.5 mb-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider">
+                    <span>Grade Management & Editing</span>
+                    <span class="text-[10px] font-semibold normal-case text-slate-300">click to collapse / expand</span>
+                </summary>
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
                 <div class="border-b border-slate-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 flex items-center flex-wrap gap-2">
@@ -663,6 +686,7 @@
                     <% } %>
                 </form>
             </div>
+            </details>
         <% } %>
 
     </main>
@@ -691,17 +715,41 @@
                 .replace(/'/g, '&#39;');
         }
 
-        function toggleSection(sectionId) {
-            const sections = ['studentRegSection', 'facultyRegSection', 'batchUploadSection', 'facultyManageSection', 'studentManageSection'];
-            sections.forEach(id => {
-                const section = document.getElementById(id);
-                if (id === sectionId) {
-                    section.classList.remove('hidden');
-                } else {
-                    section.classList.add('hidden');
-                }
+        const PANEL_IDS = ['settingsPanel', 'studentRegSection', 'facultyRegSection', 'batchUploadSection', 'facultyManageSection', 'studentManageSection', 'lockedAccountsPanel'];
+
+        // Keeps every toggle button's arrow / aria-expanded in step with its panel
+        function syncToggleButtons() {
+            document.querySelectorAll('[data-target-section]').forEach(btn => {
+                const panel = document.getElementById(btn.getAttribute('data-target-section'));
+                if (!panel) return;
+                const open = !panel.classList.contains('hidden');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                const arrow = btn.querySelector('.toggle-arrow');
+                if (arrow) arrow.textContent = open ? '▲' : '▼';
             });
-            sessionStorage.setItem('activeRegistrarSection', sectionId);
+        }
+
+        // Opens one panel and collapses all the others (accordion)
+        function showSection(sectionId) {
+            PANEL_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (id === sectionId) el.classList.remove('hidden');
+                else el.classList.add('hidden');
+            });
+            syncToggleButtons();
+        }
+
+        // Clicking a button opens its panel; clicking it again collapses it
+        function toggleSection(sectionId) {
+            const el = document.getElementById(sectionId);
+            if (!el) return;
+            if (el.classList.contains('hidden')) {
+                showSection(sectionId);
+            } else {
+                el.classList.add('hidden');
+                syncToggleButtons();
+            }
         }
 
         function updateSubjectChecklist() {
@@ -846,18 +894,6 @@
                 });
             });
 
-            // Locked accounts panel: hidden on load, shown only when the toggle button is clicked
-            const lockedToggleBtn = document.getElementById('lockedAccountsToggleBtn');
-            const lockedPanel = document.getElementById('lockedAccountsPanel');
-            if (lockedToggleBtn && lockedPanel) {
-                lockedToggleBtn.addEventListener('click', () => {
-                    const nowHidden = lockedPanel.classList.toggle('hidden');
-                    lockedToggleBtn.setAttribute('aria-expanded', nowHidden ? 'false' : 'true');
-                    const arrow = document.getElementById('lockedToggleArrow');
-                    if (arrow) arrow.textContent = nowHidden ? '▼' : '▲';
-                });
-            }
-
             // CSP-compliant confirmation dialog handler for all forms with .confirm-form
             document.querySelectorAll('.confirm-form').forEach(form => {
                 form.addEventListener('submit', (e) => {
@@ -923,16 +959,33 @@
             const facultyManagedOpen = "<%= locals.selectedFaculty ? 'true' : 'false' %>" === "true";
             const studentManagedOpen = "<%= locals.selectedStudent ? 'true' : 'false' %>" === "true";
             
-            if (facultyManagedOpen) {
-                sessionStorage.setItem('activeRegistrarSection', 'facultyManageSection');
-            } else if (studentManagedOpen) {
-                sessionStorage.setItem('activeRegistrarSection', 'studentManageSection');
-            } else {
-                const savedSection = sessionStorage.getItem('activeRegistrarSection');
-                if (savedSection) {
-                    toggleSection(savedSection);
+            // Remember which panel a form was submitted from so it can reopen ONCE after the redirect
+            PANEL_IDS.forEach(id => {
+                const panel = document.getElementById(id);
+                if (!panel) return;
+                panel.querySelectorAll('form').forEach(f => {
+                    f.addEventListener('submit', () => {
+                        try { sessionStorage.setItem('reopenRegistrarPanel', JSON.stringify({ id: id, t: Date.now() })); } catch (e) {}
+                    });
+                });
+            });
+
+            let pendingPanel = null;
+            try {
+                const raw = sessionStorage.getItem('reopenRegistrarPanel');
+                sessionStorage.removeItem('reopenRegistrarPanel');
+                if (raw) {
+                    const p = JSON.parse(raw);
+                    if (p && (Date.now() - p.t) < 30000) pendingPanel = p.id;
                 }
+            } catch (e) {}
+
+            // The portal opens fully collapsed. Only a student/faculty search result, or a form
+            // that was just submitted, opens a panel.
+            if (!facultyManagedOpen && !studentManagedOpen && pendingPanel && PANEL_IDS.includes(pendingPanel)) {
+                showSection(pendingPanel);
             }
+            syncToggleButtons();
         });
 
         function secureRandInt(max) {
