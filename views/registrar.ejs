@@ -297,7 +297,7 @@
                                 <!-- Extra Subject Button inside the Checklist -->
                                 <div class="pt-3 mt-3 border-t border-indigo-100">
                                     <div id="extraEnrollmentSubjectsContainer" class="space-y-2 mb-2"></div>
-                                    <button type="button" onclick="addExtraEnrollmentDropdown()" class="text-xs font-bold bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-200 transition-colors cursor-pointer">
+                                    <button type="button" id="addExtraSubjectBtn" class="text-xs font-bold bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-200 transition-colors cursor-pointer">
                                         + Add Another Subject
                                     </button>
                                 </div>
@@ -372,7 +372,7 @@
                                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Remarks</span>
                                                     <input type="text" id="remark_<%= index %>" value="<%= g.remarks || '' %>" readonly class="w-full px-2 py-1.5 rounded border border-slate-200 text-xs bg-slate-100 font-bold text-slate-700">
                                                 </div>
-                                                <button type="button" onclick="if(confirm('Remove <%= g.course_code %> from student record?')) document.getElementById('delete_grade_form_<%= g.course_code %>').submit();" class="mt-4 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow cursor-pointer">Delete</button>
+                                                <button type="button" data-delete-form="delete_grade_form_<%= g.course_code %>" data-confirm-msg="Remove <%= g.course_code %> from student record?" class="delete-grade-btn mt-4 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow cursor-pointer">Delete</button>
                                             </div>
                                         </div>
                                     <% }) %>
@@ -689,7 +689,7 @@
                     <code class="block mt-1 font-mono text-pink-600 font-bold bg-white p-2 border border-slate-200 rounded">student_id, first_name, middle_name, last_name, year_level, section, semester, academic_year, subjects, instructor</code>
                 </div>
 
-                <form action="/registrar/batch-upload?_csrf=<%= encodeURIComponent(csrfToken) %>" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
+                <form action="/registrar/batch-upload" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-4">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <input type="file" name="file" accept=".csv" required class="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200">
                     
@@ -931,9 +931,12 @@
                         ${facHtml}
                     </select>
                 </div>
-                <button type="button" onclick="this.parentElement.remove()" class="px-2.5 py-1.5 bg-red-100 text-red-700 font-bold rounded hover:bg-red-200 text-xs cursor-pointer">X</button>
+                <button type="button" class="remove-extra-row-btn px-2.5 py-1.5 bg-red-100 text-red-700 font-bold rounded hover:bg-red-200 text-xs cursor-pointer">X</button>
             `;
             
+            const removeRowBtn = div.querySelector('.remove-extra-row-btn');
+            if (removeRowBtn) removeRowBtn.addEventListener('click', () => div.remove());
+
             // Link the course select to the instructor select name attribute dynamically
             const courseSelect = div.querySelector('select[name="course_codes"]');
             const instSelect = div.querySelectorAll('select')[1];
@@ -1027,6 +1030,24 @@
                         e.preventDefault();
                     }
                 });
+            });
+
+            const addExtraBtn = document.getElementById('addExtraSubjectBtn');
+            if (addExtraBtn) addExtraBtn.addEventListener('click', addExtraEnrollmentDropdown);
+
+            document.querySelectorAll('.delete-grade-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (confirm(btn.getAttribute('data-confirm-msg'))) {
+                        const delForm = document.getElementById(btn.getAttribute('data-delete-form'));
+                        if (delForm) delForm.submit();
+                    }
+                });
+            });
+
+            // Remove buttons on dynamically added faculty subject slots
+            document.addEventListener('click', (e) => {
+                const slotBtn = e.target && e.target.closest ? e.target.closest('.remove-slot-btn') : null;
+                if (slotBtn && slotBtn.parentElement) slotBtn.parentElement.remove();
             });
 
             const lookupApiBtn = document.getElementById('lookupStudentApiBtn');

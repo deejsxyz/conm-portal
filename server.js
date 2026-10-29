@@ -44,32 +44,6 @@ class UserError extends Error {}
 function safeMsg(err, fallback) { return err instanceof UserError ? err.message : fallback; }
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_COST);
-const unknownLoginFailures = new Map();
-const UNKNOWN_TTL_MS = LOCKOUT_MINUTES * 60 * 1000;
-const UNKNOWN_MAX_ENTRIES = 5000;
-
-function unknownKey(name) { return String(name || '').toLowerCase().slice(0, 100); }
-
-function isUnknownLocked(name) {
-    const e = unknownLoginFailures.get(unknownKey(name));
-    return !!e && (Date.now() - e.last) <= UNKNOWN_TTL_MS && e.count >= MAX_FAILED_LOGINS;
-}
-
-function recordUnknownFailure(name) {
-    const key = unknownKey(name);
-    const now = Date.now();
-    let e = unknownLoginFailures.get(key);
-    if (!e || (now - e.last) > UNKNOWN_TTL_MS) e = { count: 0, last: now };
-    e.count += 1;
-    e.last = now;
-    unknownLoginFailures.delete(key);
-    unknownLoginFailures.set(key, e);
-    while (unknownLoginFailures.size > UNKNOWN_MAX_ENTRIES) {
-        unknownLoginFailures.delete(unknownLoginFailures.keys().next().value);
-    }
-    return e.count;
-}
-
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('query parser', 'simple');
@@ -138,19 +112,32 @@ app.use(session({
     }
 }));
 
-// Rate limiter keyed by IP + username to prevent campus-wide NAT lockouts
+const tooManyLogins = (req, res) => {
+    res.status(429).render('login', {
+        error: 'Too many failed login attempts from this connection. Please try again later.',
+        popupMessage: null
+    });
+};
+
+// Per IP + username: slows guessing against a single account without punishing a whole campus NAT
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
-    keyGenerator: (req) => `${req.ip}-${req.body.username || 'anonymous'}`,
+    keyGenerator: (req) => `${req.ip}-${String((req.body && req.body.username) || 'anonymous').slice(0, 100)}`,
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => {
-        res.status(429).render('login', {
-            error: 'Too many failed login attempts from this connection. Please try again later.',
-            popupMessage: null
-        });
-    }
+    handler: tooManyLogins
+});
+
+// Per IP only (failed attempts): stops one address spraying many usernames and tying up bcrypt
+const loginIpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => req.ip,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: tooManyLogins
 });
 
 function generateSecurePassword() {
@@ -333,6 +320,11 @@ async function seedDatabase() {
             );
         `);
         await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT DEFAULT 0;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_at TIMESTAMPTZ;`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ DEFAULT NOW();`);
 
         await pool.query(`
@@ -388,6 +380,12 @@ async function seedDatabase() {
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
         `);
+
+        try {
+            await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_student_vaccine_dose ON student_vaccinations (student_id, vaccine_id, cycle_number, dose_number);`);
+        } catch (idxErr) {
+            console.warn('[SEED] Could not create unique vaccine-dose index (duplicate dose rows exist?):', idxErr.message);
+        }
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS immunization_access_logs (
@@ -599,7 +597,7 @@ app.get('/', (req, res) => {
     res.render('login', { error: res.locals.error || sessionExpired, popupMessage: lockedPopup });
 });
 
-app.post('/login', loginLimiter, async (req, res) => {
+app.post('/login', loginIpLimiter, loginLimiter, async (req, res) => {
     try {
         const username = req.body.username ? String(req.body.username).trim() : '';
         const password = req.body.password ? String(req.body.password) : '';
@@ -608,26 +606,28 @@ app.post('/login', loginLimiter, async (req, res) => {
 
         if (userQuery.rows.length === 0) {
             await bcrypt.compare(password, DUMMY_HASH);
-            if (isUnknownLocked(username)) {
-                return res.status(401).render('login', { error: GENERIC_LOGIN_ERROR, popupMessage: null });
-            }
-            recordUnknownFailure(username);
-            return res.status(401).render('login', {
-                error: GENERIC_LOGIN_ERROR,
-                popupMessage: null
-            });
+            return res.status(401).render('login', { error: GENERIC_LOGIN_ERROR, popupMessage: null });
         }
 
         const user = userQuery.rows[0];
 
         if (user.is_locked) {
             const lockedAt = new Date(user.locked_at).getTime();
-            if (Date.now() - lockedAt > LOCKOUT_MINUTES * 60 * 1000) {
+            const lockElapsedMs = Date.now() - lockedAt;
+            if (lockElapsedMs > LOCKOUT_MINUTES * 60 * 1000) {
                 await pool.query('UPDATE users SET is_locked = FALSE, failed_login_attempts = 0, locked_at = NULL WHERE username = $1', [user.username]);
                 user.is_locked = false;
                 user.failed_login_attempts = 0;
             } else {
-                await bcrypt.compare(password, DUMMY_HASH);
+                // Only someone who knows the correct password is told the account is locked
+                const knowsPassword = await bcrypt.compare(password, user.password_hash);
+                if (knowsPassword) {
+                    const minsLeft = Math.max(1, Math.ceil((LOCKOUT_MINUTES * 60 * 1000 - lockElapsedMs) / 60000));
+                    return res.status(401).render('login', {
+                        error: `This account is temporarily locked after too many incorrect attempts. Try again in about ${minsLeft} minute${minsLeft === 1 ? '' : 's'}, or contact the College Registrar in person or by phone${REGISTRAR_CONTACT}.`,
+                        popupMessage: null
+                    });
+                }
                 return res.status(401).render('login', { error: GENERIC_LOGIN_ERROR, popupMessage: null });
             }
         }
@@ -762,6 +762,10 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
 });
 
 app.post('/logout', isAuthenticated, (req, res) => {
+    const pendingFile = req.session.lastBatchFilePath;
+    if (pendingFile) {
+        try { if (fs.existsSync(pendingFile)) fs.unlinkSync(pendingFile); } catch (e) {}
+    }
     req.session.destroy(() => res.redirect('/'));
 });
 
@@ -1224,7 +1228,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         const lockedRes = await client.query(`
             SELECT username, role, first_name, middle_name, last_name, locked_at
             FROM users
-            WHERE COALESCE(is_locked, FALSE) = TRUE AND COALESCE(is_archived, FALSE) = FALSE AND role = ANY($1::text[])
+            WHERE COALESCE(is_locked, FALSE) = TRUE AND locked_at > NOW() - INTERVAL '${LOCKOUT_MINUTES} minutes' AND COALESCE(is_archived, FALSE) = FALSE AND role = ANY($1::text[])
             ORDER BY locked_at DESC NULLS LAST
         `, [lockedRoles]);
 
@@ -1293,8 +1297,12 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
 
 app.post('/registrar/update-settings', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-    const ay = isValidAcademicYear(req.body.current_ay) ? req.body.current_ay : '2026-2027';
+    const ay = String(req.body.current_ay || '').trim();
     const sem = parseInt(req.body.current_semester, 10) === 2 ? 2 : 1;
+    if (!isValidAcademicYear(ay)) {
+        setFlash(req, 'err', 'Invalid academic year. Use the format YYYY-YYYY, for example 2026-2027.');
+        return res.redirect('/registrar');
+    }
     try {
         await pool.query('UPDATE settings SET current_ay = $1, current_semester = $2 WHERE id = 1', [ay, sem]);
         setFlash(req, 'msg', 'Active Academic Year and Semester updated system-wide.');
@@ -1427,7 +1435,7 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
 
                         await client.query(`
                             INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-                            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, TRUE, FALSE)
+                            VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
                         `, [cleanId, hashedPassword, fName, mName, lName]);
 
                         generatedCredentials.push({
@@ -1555,12 +1563,15 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         client = await pool.connect();
         await client.query('BEGIN');
         
-        const existingUser = await client.query('SELECT username FROM users WHERE username = $1', [cleanId]);
+        const existingUser = await client.query('SELECT username, role FROM users WHERE username = $1', [cleanId]);
+        if (existingUser.rows.length > 0 && existingUser.rows[0].role !== 'student') {
+            throw new UserError(`Student ID '${cleanId}' conflicts with a staff account.`);
+        }
         if (existingUser.rows.length === 0) {
             const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
             await client.query(`
                 INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-                VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
+                VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
             `, [cleanId, hashedPassword, fName, mName, lName]);
         }
 
@@ -1587,6 +1598,8 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
                     const facRes = await client.query(`SELECT first_name, middle_name, last_name FROM users WHERE username = $1 AND role = 'faculty'`, [facUser]);
                     if (facRes.rows.length > 0) {
                         facFormalName = formatFormalFacultyName(facRes.rows[0]);
+                    } else {
+                        throw new UserError('Selected instructor is not a valid faculty account.');
                     }
                 }
 
@@ -1631,6 +1644,13 @@ app.post('/registrar/record-vaccine', isAuthenticated, async (req, res) => {
             setFlash(req, 'err', 'Student ID, Vaccine, and Date Given are required.');
             return res.redirect(`/registrar?student_id=${encodeURIComponent(studentId)}`);
         }
+
+        const parsedDate = new Date(`${dateGiven}T00:00:00Z`);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateGiven) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== dateGiven) {
+            throw new UserError('Please enter a valid date.');
+        }
+        const todayPh = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10); // Philippine time (UTC+8)
+        if (dateGiven > todayPh) throw new UserError('Date given cannot be in the future.');
 
         client = await pool.connect();
         await client.query('BEGIN');
@@ -1683,8 +1703,11 @@ app.post('/registrar/record-vaccine', isAuthenticated, async (req, res) => {
     } catch (err) {
         if (client) await client.query('ROLLBACK');
         console.error('Record vaccine error:', err);
-        setFlash(req, 'err', safeMsg(err, 'Failed to record vaccine dose.'));
-        res.redirect('/registrar');
+        const backId = String(req.body.student_id || '').trim();
+        setFlash(req, 'err', err && err.code === '23505'
+            ? 'That dose was already recorded (possible double submit). Please check the record.'
+            : safeMsg(err, 'Failed to record vaccine dose.'));
+        res.redirect(backId ? `/registrar?student_id=${encodeURIComponent(backId)}` : '/registrar');
     } finally {
         if (client) client.release();
     }
@@ -2072,6 +2095,8 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             const facRes = await pool.query(`SELECT first_name, middle_name, last_name FROM users WHERE username = $1 AND role = 'faculty'`, [facUser]);
             if (facRes.rows.length > 0) {
                 facFormalName = formatFormalFacultyName(facRes.rows[0]);
+            } else {
+                throw new UserError('Selected instructor is not a valid faculty account.');
             }
         }
 
@@ -2110,6 +2135,10 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
         const codes = Array.isArray(course_codes) ? course_codes : (course_codes ? [course_codes] : []);
         const grades = Array.isArray(final_grades) ? final_grades : (final_grades !== undefined ? [final_grades] : []);
 
+        if (codes.length !== grades.length) {
+            throw new UserError('The submitted grades did not match the subject list. Please reload the page and try again. No changes were saved.');
+        }
+
         for (let i = 0; i < codes.length; i++) {
             const code = codes[i];
             const cleanGrade = normalizeGrade(grades[i]);
@@ -2122,7 +2151,7 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
                 if (facRes.rows.length > 0) {
                     facFormalName = formatFormalFacultyName(facRes.rows[0]);
                 } else {
-                    facFormalName = facUser;
+                    throw new UserError('Selected instructor is not a valid faculty account.');
                 }
             }
 
@@ -2180,66 +2209,86 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
 app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    try {
-        const cleanId = String(req.body.student_id || '').trim();
-        const courseCode = String(req.body.course_code || '').trim();
-        const term = String(req.body.term || '').trim();
-        const ay = String(req.body.academic_year || '').trim();
+    const cleanId = String(req.body.student_id || '').trim();
+    const courseCode = String(req.body.course_code || '').trim();
+    const term = String(req.body.term || '').trim();
+    const ay = String(req.body.academic_year || '').trim();
 
-        const gradeRes = await pool.query(`
-            SELECT * FROM grades 
+    let client;
+    try {
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        const gradeRes = await client.query(`
+            SELECT * FROM grades
             WHERE student_id = $1 AND course_code = $2 AND enrolled_term = $3 AND academic_year = $4
+            FOR UPDATE
         `, [cleanId, courseCode, term, ay]);
 
         if (gradeRes.rows.length > 0) {
             const oldGrade = gradeRes.rows[0].final_grade || '';
-            await pool.query(`DELETE FROM grades WHERE id = $1`, [gradeRes.rows[0].id]);
-            await pool.query(`
+            await client.query('DELETE FROM grades WHERE id = $1', [gradeRes.rows[0].id]);
+            await client.query(`
                 INSERT INTO grade_audit_logs (changed_by, changed_by_role, student_id, course_code, academic_year, enrolled_term, old_grade, new_grade)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'DELETED')
             `, [req.session.user.username, req.session.user.role, cleanId, courseCode, ay, term, oldGrade]);
+            await client.query('COMMIT');
             setFlash(req, 'msg', `Subject ${courseCode} removed from student record.`);
         } else {
+            await client.query('ROLLBACK');
             setFlash(req, 'err', 'Subject record not found.');
         }
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}&view_term=${encodeURIComponent(term)}&view_ay=${encodeURIComponent(ay)}`);
     } catch (err) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
         console.error('Delete grade error:', err);
         setFlash(req, 'err', 'Could not remove subject.');
         res.redirect('/registrar');
+    } finally {
+        if (client) client.release();
     }
 });
 
 app.post('/registrar/unenroll-term', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
-    try {
-        const cleanId = String(req.body.student_id || '').trim();
-        const term = String(req.body.term || '').trim();
-        const ay = String(req.body.academic_year || '').trim();
+    const cleanId = String(req.body.student_id || '').trim();
+    const term = String(req.body.term || '').trim();
+    const ay = String(req.body.academic_year || '').trim();
 
-        const gradesRes = await pool.query(`
-            SELECT * FROM grades 
+    let client;
+    try {
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        const gradesRes = await client.query(`
+            SELECT * FROM grades
             WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3
+            FOR UPDATE
         `, [cleanId, term, ay]);
 
         if (gradesRes.rows.length > 0) {
-            await pool.query(`DELETE FROM grades WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3`, [cleanId, term, ay]);
+            await client.query('DELETE FROM grades WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3', [cleanId, term, ay]);
             for (const g of gradesRes.rows) {
-                await pool.query(`
+                await client.query(`
                     INSERT INTO grade_audit_logs (changed_by, changed_by_role, student_id, course_code, academic_year, enrolled_term, old_grade, new_grade)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, 'UNENROLLED')
                 `, [req.session.user.username, req.session.user.role, cleanId, g.course_code, ay, term, g.final_grade || '']);
             }
+            await client.query('COMMIT');
             setFlash(req, 'msg', 'Student successfully unenrolled from all subjects for this term.');
         } else {
+            await client.query('ROLLBACK');
             setFlash(req, 'err', 'No subjects found for this term.');
         }
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}&view_term=${encodeURIComponent(term)}&view_ay=${encodeURIComponent(ay)}`);
     } catch (err) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
         console.error('Unenroll term error:', err);
         setFlash(req, 'err', 'Failed to unenroll student from term.');
         res.redirect('/registrar');
+    } finally {
+        if (client) client.release();
     }
 });
 
@@ -2351,7 +2400,6 @@ app.post('/faculty/update-grades-sheet', isAuthenticated, async (req, res) => {
         const systemSettings = settingsRes.rows[0];
 
         if (req.session.user.role === 'faculty' && systemSettings.faculty_portal_locked) {
-            client.release();
             return req.session.destroy(() => {
                 res.redirect('/?locked=1');
             });
@@ -2500,9 +2548,30 @@ app.get('/portal', isAuthenticated, async (req, res) => {
     }
 });
 
+// Temp uploads and one-time credential files must never linger on disk
+function cleanupStaleTempFiles() {
+    try {
+        const dir = 'uploads';
+        if (!fs.existsSync(dir)) return;
+        const cutoff = Date.now() - 30 * 60 * 1000;
+        for (const f of fs.readdirSync(dir)) {
+            if (f.startsWith('.')) continue;
+            const p = path.join(dir, f);
+            try {
+                const st = fs.statSync(p);
+                if (st.isFile() && st.mtimeMs < cutoff) fs.unlinkSync(p);
+            } catch (e) {}
+        }
+    } catch (err) {
+        console.error('Temp file cleanup error:', err.message);
+    }
+}
+
 async function startServer() {
     try {
         await seedDatabase();
+        cleanupStaleTempFiles();
+        setInterval(cleanupStaleTempFiles, 5 * 60 * 1000).unref();
         
         const PORT = process.env.PORT || 10000;
         app.listen(PORT, () => {
