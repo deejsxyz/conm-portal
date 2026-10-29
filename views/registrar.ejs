@@ -105,21 +105,21 @@
             </div>
         </div>
 
-        <nav class="flex flex-wrap gap-3" aria-label="Registrar sections">
-            <button type="button" data-target-section="studentPanel" aria-expanded="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentPanel" class="nav-toggle-btn px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer">
+        <nav class="flex flex-wrap items-center justify-center gap-3" aria-label="Registrar sections">
+            <button type="button" data-target-section="studentPanel" aria-expanded="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentPanel" class="nav-toggle-btn px-5 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
                 <span>👤 STUDENT</span>
                 <span class="toggle-arrow text-[10px]"><%= studentPanelOpen ? '▲' : '▼' %></span>
             </button>
-            <button type="button" data-target-section="facultyPanel" aria-expanded="<%= facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyPanel" class="nav-toggle-btn px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer">
+            <button type="button" data-target-section="facultyPanel" aria-expanded="<%= facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyPanel" class="nav-toggle-btn px-5 py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
                 <span>👨‍🏫 FACULTY</span>
                 <span class="toggle-arrow text-[10px]"><%= facultyPanelOpen ? '▲' : '▼' %></span>
             </button>
-            <button type="button" data-target-section="batchUploadSection" aria-expanded="false" aria-controls="batchUploadSection" class="nav-toggle-btn px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition-colors flex flex-wrap items-center justify-center gap-2 cursor-pointer">
+            <button type="button" data-target-section="batchUploadSection" aria-expanded="false" aria-controls="batchUploadSection" class="nav-toggle-btn px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
                 <span>📁 BATCH UPLOAD</span>
                 <% if (locals.hasBatchCredentials) { %><span class="px-2 py-0.5 bg-amber-300 text-amber-900 rounded-full text-[10px]">⬇ Credentials ready</span><% } %>
                 <span class="toggle-arrow text-[10px]">▼</span>
             </button>
-            <button type="button" id="lockedAccountsToggleBtn" data-target-section="lockedAccountsPanel" aria-expanded="false" aria-controls="lockedAccountsPanel" class="nav-toggle-btn px-4 py-2 <%= lockedList.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-500 hover:bg-slate-600' %> text-white rounded-lg text-xs font-bold shadow-md transition-colors flex items-center justify-center gap-2 cursor-pointer">
+            <button type="button" id="lockedAccountsToggleBtn" data-target-section="lockedAccountsPanel" aria-expanded="false" aria-controls="lockedAccountsPanel" class="nav-toggle-btn px-5 py-3 <%= lockedList.length > 0 ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-500 hover:bg-slate-600' %> text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
                 <span>🔒 LOCKED ACCOUNTS</span>
                 <span class="px-2 py-0.5 bg-white/25 rounded-full text-[10px]"><%= lockedList.length %></span>
                 <span class="toggle-arrow text-[10px]">▼</span>
@@ -151,6 +151,50 @@
                     </div>
 
                 <% if (selectedStudent) { %>
+                    <!-- IMMUNIZATION STATUS PANEL -->
+                    <% if (locals.immunizationReport) { %>
+                        <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 space-y-4">
+                            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                                <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                                    <span>🛡️ Student Health &amp; Immunization Status</span>
+                                    <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-normal">Data Privacy Act (RA 10173) Protected</span>
+                                </h3>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <% immunizationReport.forEach(v => { %>
+                                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 flex flex-col justify-between">
+                                        <div class="space-y-1">
+                                            <div class="flex justify-between items-start">
+                                                <h4 class="font-bold text-xs text-slate-900"><%= v.name %></h4>
+                                                <span class="px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase tracking-wider <%= v.status_cls %>"><%= v.status %></span>
+                                            </div>
+                                            <p class="text-[11px] text-slate-600">
+                                                Progress: <strong>Dose <%= v.dose_number %> of <%= v.doses_required %></strong>
+                                            </p>
+                                            <p class="text-[11px] text-slate-500">
+                                                Last Dose: <%= v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None' %>
+                                                <% if (v.next_due_date) { %>
+                                                    <br>Next Due / Expiry: <%= new Date(v.next_due_date).toLocaleDateString() %>
+                                                <% } %>
+                                            </p>
+                                        </div>
+
+                                        <form action="/registrar/record-vaccine" method="POST" class="pt-3 border-t border-slate-200 space-y-2">
+                                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                            <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                            <input type="hidden" name="vaccine_id" value="<%= v.vaccine_id %>">
+                                            <div class="flex gap-1.5">
+                                                <input type="date" name="date_given" required class="px-2 py-1 bg-white border border-slate-300 rounded text-[11px] flex-grow">
+                                                <button type="submit" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold whitespace-nowrap cursor-pointer">+ Dose</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </div>
+                    <% } %>
+
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-bold uppercase text-slate-500">Viewing Term Record:</span>
@@ -1049,7 +1093,6 @@
             const special = '!@#$%^&*';
             const all = upper + lower + num + special;
             
-            // First char MUST be a letter to prevent Excel CSV formula injection
             const firstChar = secureRandInt(2) === 0 
                 ? upper[secureRandInt(upper.length)] 
                 : lower[secureRandInt(lower.length)];

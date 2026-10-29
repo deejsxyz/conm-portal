@@ -24,13 +24,12 @@ const app = express();
 const BCRYPT_COST = 12;
 const BCRYPT_BATCH_COST = 10;
 const MAX_FAILED_LOGINS = 5;
-const IDLE_TIMEOUT_MS = 10 * 60 * 1000;            // auto sign-out after 10 minutes of no activity
-const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;    // hard limit per login
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const LOCKOUT_MINUTES = 15;
 const REGISTRAR_CONTACT = process.env.REGISTRAR_CONTACT ? ` (${process.env.REGISTRAR_CONTACT})` : '';
 const LOCKED_MESSAGE = `Account locked due to too many failed attempts. Please contact the College Registrar${REGISTRAR_CONTACT} to reset your password.`;
 
-// Errors thrown on purpose for the user to read (validation). Anything else (DB errors etc.) is hidden behind a generic message.
 class UserError extends Error {}
 function safeMsg(err, fallback) { return err instanceof UserError ? err.message : fallback; }
 
@@ -84,7 +83,6 @@ app.use(helmet({
 
 app.use(express.urlencoded({ extended: false }));
 
-// Never let the browser cache pages: stops the Back button from showing grades after logout.
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
@@ -114,7 +112,7 @@ app.use(session({
         pool: pool,
         tableName: 'user_sessions',
         createTableIfMissing: true,
-        ttl: 8 * 60 * 60   // seconds; expired sessions are purged from the database
+        ttl: 8 * 60 * 60
     }),
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -123,7 +121,6 @@ app.use(session({
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
-        // No maxAge: this is a browser-session cookie, deleted when the browser is closed.
     }
 }));
 
@@ -225,11 +222,9 @@ function setFlash(req, type, text) {
 
 app.use((req, res, next) => {
     if (req.path === '/favicon.ico') return next();
-    
     if (!req.session.csrfToken && req.method === 'GET') {
         req.session.csrfToken = crypto.randomBytes(32).toString('hex');
     }
-    
     res.locals.csrfToken = req.session.csrfToken || '';
     res.locals.generateSecurePassword = generateSecurePassword;
 
@@ -325,6 +320,58 @@ async function seedDatabase() {
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
         `);
+
+        // ==================== IMMUNIZATION STATUS TABLES ====================
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS vaccine_types (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) UNIQUE NOT NULL,
+                doses_required INT NOT NULL DEFAULT 1,
+                validity_months INT DEFAULT 12,
+                min_days_between INT DEFAULT 30,
+                restart_when_expired BOOLEAN DEFAULT FALSE
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS student_vaccinations (
+                id SERIAL PRIMARY KEY,
+                student_id VARCHAR(100) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+                vaccine_id INT NOT NULL REFERENCES vaccine_types(id) ON DELETE CASCADE,
+                dose_number INT NOT NULL,
+                cycle_number INT DEFAULT 1,
+                date_given DATE NOT NULL,
+                administered_at VARCHAR(250),
+                recorded_by VARCHAR(100) NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS immunization_access_logs (
+                id SERIAL PRIMARY KEY,
+                student_id VARCHAR(100) NOT NULL,
+                accessed_by VARCHAR(100) NOT NULL,
+                action_type VARCHAR(30) NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+
+        // Seed initial vaccine rules (#2)
+        const initialVaccines = [
+            ['Tetanus Toxoid', 5, 12, 28, true],
+            ['Hepatitis B', 3, 60, 30, false],
+            ['Flu vaccine', 1, 12, 365, true]
+        ];
+        for (const v of initialVaccines) {
+            await pool.query(`
+                INSERT INTO vaccine_types (name, doses_required, validity_months, min_days_between, restart_when_expired)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (name) DO UPDATE SET 
+                    doses_required = $2, validity_months = $3, min_days_between = $4, restart_when_expired = $5;
+            `, v);
+        }
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS students (
@@ -680,7 +727,6 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
         `, [hashedNewPassword, req.session.user.username]);
 
         req.session.user.mustChangePassword = false;
-        // Use the DB's own timestamp so app/DB clock drift cannot log the user out.
         req.session.user.login_time = new Date(pwUpdate.rows[0].password_changed_at).getTime();
 
         if (req.session.user.role === 'admin') return res.redirect('/admin');
@@ -1009,28 +1055,103 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     }
 });
 
+// ==================== IMMUNIZATION HELPER ====================
+async function calculateImmunizationStatus(client, studentId) {
+    const vaccinesRes = await client.query('SELECT * FROM vaccine_types ORDER BY id');
+    const vaccines = vaccinesRes.rows;
+    const report = [];
+
+    for (const v of vaccines) {
+        const dosesRes = await client.query(`
+            SELECT * FROM student_vaccinations 
+            WHERE student_id = $1 AND vaccine_id = $2 
+            ORDER BY cycle_number DESC, dose_number DESC, date_given DESC
+        `, [studentId, v.id]);
+
+        const doses = dosesRes.rows;
+        if (doses.length === 0) {
+            report.push({
+                vaccine_id: v.id,
+                name: v.name,
+                doses_required: v.doses_required,
+                last_dose_date: null,
+                dose_number: 0,
+                status: 'Not started',
+                status_cls: 'bg-slate-100 text-slate-700 border-slate-300',
+                next_due_date: null,
+                must_restart: false,
+                doses_history: []
+            });
+            continue;
+        }
+
+        const latest = doses[0];
+        const lastDate = new Date(latest.date_given);
+        const validityMonths = v.validity_months || 12;
+        
+        const expiryDate = new Date(lastDate);
+        expiryDate.setMonth(expiryDate.getMonth() + validityMonths);
+
+        const now = new Date();
+        let status = 'Valid';
+        let statusCls = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+        let mustRestart = false;
+
+        if (now > expiryDate) {
+            if (v.restart_when_expired && latest.dose_number < v.doses_required) {
+                status = 'Expired (restart at 1st dose)';
+                statusCls = 'bg-red-100 text-red-800 border-red-300';
+                mustRestart = true;
+            } else {
+                status = 'Expired';
+                statusCls = 'bg-amber-100 text-amber-800 border-amber-300';
+            }
+        } else if (latest.dose_number < v.doses_required) {
+            status = 'In progress';
+            statusCls = 'bg-indigo-100 text-indigo-800 border-indigo-300';
+        }
+
+        report.push({
+            vaccine_id: v.id,
+            name: v.name,
+            doses_required: v.doses_required,
+            last_dose_date: latest.date_given,
+            dose_number: latest.dose_number,
+            status: status,
+            status_cls: statusCls,
+            next_due_date: expiryDate.toISOString().split('T')[0],
+            must_restart: mustRestart,
+            doses_history: doses
+        });
+    }
+    return report;
+}
+
 // ==================== REGISTRAR PORTAL ROUTES ====================
 app.get('/registrar', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') {
         return res.redirect('/portal');
     }
 
+    let client;
     try {
+        client = await pool.connect();
         const targetStudentId = req.query.student_id ? String(req.query.student_id).trim() : '';
         const selectedFacultyUser = req.query.faculty_user ? String(req.query.faculty_user).trim() : '';
         let selectedTerm = '1'; 
 
-        const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
+        const settingsRes = await client.query('SELECT * FROM settings WHERE id = 1');
         const systemSettings = settingsRes.rows[0];
 
         let student = null;
         let grades = [];
+        let immunizationReport = [];
         let selectedAy = req.query.view_ay ? String(req.query.view_ay).trim() : systemSettings.current_ay;
 
-        const allCoursesRes = await pool.query('SELECT * FROM courses WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY term_id, course_code');
+        const allCoursesRes = await client.query('SELECT * FROM courses WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY term_id, course_code');
         const allCoursesRaw = allCoursesRes.rows;
 
-        const facultyListRes = await pool.query(`
+        const facultyListRes = await client.query(`
             SELECT username, first_name, middle_name, last_name 
             FROM users 
             WHERE role = 'faculty' AND COALESCE(is_archived, FALSE) = FALSE
@@ -1039,7 +1160,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         const facultyList = facultyListRes.rows;
 
         const lockedRoles = req.session.user.role === 'admin' ? ['student', 'faculty', 'registrar'] : ['student', 'faculty'];
-        const lockedRes = await pool.query(`
+        const lockedRes = await client.query(`
             SELECT username, role, first_name, middle_name, last_name, locked_at
             FROM users
             WHERE COALESCE(is_locked, FALSE) = TRUE AND COALESCE(is_archived, FALSE) = FALSE AND role = ANY($1::text[])
@@ -1052,7 +1173,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         if (selectedFacultyUser) {
             selectedFaculty = facultyList.find(f => f.username === selectedFacultyUser) || null;
             if (selectedFaculty) {
-                const facCoursesRes = await pool.query(`
+                const facCoursesRes = await client.query(`
                     SELECT course_code FROM faculty_courses WHERE username = $1
                 `, [selectedFacultyUser]);
                 facultyAssignedCourses = facCoursesRes.rows.map(fc => fc.course_code);
@@ -1060,14 +1181,14 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         }
 
         if (targetStudentId) {
-            const studentRes = await pool.query('SELECT * FROM students WHERE student_id = $1 AND COALESCE(is_archived, FALSE) = FALSE', [targetStudentId]);
+            const studentRes = await client.query('SELECT * FROM students WHERE student_id = $1 AND COALESCE(is_archived, FALSE) = FALSE', [targetStudentId]);
             student = studentRes.rows[0] || null;
 
             if (student) {
                 const defaultTerm = ((parseInt(student.year_level, 10) - 1) * 2 + parseInt(systemSettings.current_semester, 10)).toString();
                 selectedTerm = req.query.view_term && /^[1-8]$/.test(req.query.view_term) ? String(req.query.view_term) : defaultTerm;
 
-                const gradesRes = await pool.query(`
+                const gradesRes = await client.query(`
                     SELECT g.id, g.course_code, g.final_grade, g.instructor, g.instructor_username, g.remarks, g.enrolled_term, g.academic_year,
                            c.descriptive_title, c.lec_units, c.rle_units, c.total_units
                     FROM grades g
@@ -1076,6 +1197,13 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
                     ORDER BY g.course_code ASC
                 `, [targetStudentId, selectedTerm, selectedAy]);
                 grades = gradesRes.rows;
+
+                // Calculate Immunization Status & Log Access (RA 10173)
+                immunizationReport = await calculateImmunizationStatus(client, targetStudentId);
+                await client.query(
+                    'INSERT INTO immunization_access_logs (student_id, accessed_by, action_type) VALUES ($1, $2, $3)',
+                    [targetStudentId, req.session.user.username, 'VIEW']
+                );
             }
         }
 
@@ -1084,6 +1212,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             systemSettings: systemSettings,
             selectedStudent: student,
             grades: grades,
+            immunizationReport: immunizationReport,
             availableCourses: allCoursesRaw,
             allCoursesRaw: allCoursesRaw,
             currentTerm: selectedTerm,
@@ -1097,6 +1226,8 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
     } catch (err) {
         console.error('Registrar load error:', err);
         res.status(500).send('Error loading registrar dashboard.');
+    } finally {
+        if (client) client.release();
     }
 });
 
@@ -1411,6 +1542,81 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
+// ==================== RECORD VACCINE DOSE ====================
+app.post('/registrar/record-vaccine', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    let client;
+    try {
+        const studentId = req.body.student_id ? String(req.body.student_id).trim() : '';
+        const vaccineId = parseInt(req.body.vaccine_id, 10);
+        const dateGiven = req.body.date_given ? String(req.body.date_given).trim() : '';
+        const administeredAt = req.body.administered_at ? String(req.body.administered_at).trim() : '';
+        const notes = req.body.notes ? String(req.body.notes).trim() : '';
+
+        if (!studentId || !vaccineId || !dateGiven) {
+            setFlash(req, 'err', 'Student ID, Vaccine, and Date Given are required.');
+            return res.redirect(`/registrar?student_id=${encodeURIComponent(studentId)}`);
+        }
+
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        const vRes = await client.query('SELECT * FROM vaccine_types WHERE id = $1', [vaccineId]);
+        if (vRes.rows.length === 0) throw new UserError('Invalid vaccine type.');
+        const vaccine = vRes.rows[0];
+
+        const lastDoseRes = await client.query(`
+            SELECT * FROM student_vaccinations 
+            WHERE student_id = $1 AND vaccine_id = $2 
+            ORDER BY cycle_number DESC, dose_number DESC LIMIT 1
+        `, [studentId, vaccineId]);
+
+        let nextDoseNum = 1;
+        let cycleNum = 1;
+
+        if (lastDoseRes.rows.length > 0) {
+            const last = lastDoseRes.rows[0];
+            const lastDate = new Date(last.date_given);
+            const validityMonths = vaccine.validity_months || 12;
+            const expiryDate = new Date(lastDate);
+            expiryDate.setMonth(expiryDate.getMonth() + validityMonths);
+
+            if (new Date() > expiryDate && vaccine.restart_when_expired && last.dose_number < vaccine.doses_required) {
+                cycleNum = last.cycle_number + 1;
+                nextDoseNum = 1;
+            } else if (last.dose_number < vaccine.doses_required) {
+                nextDoseNum = last.dose_number + 1;
+                cycleNum = last.cycle_number;
+            } else {
+                cycleNum = last.cycle_number + 1;
+                nextDoseNum = 1;
+            }
+        }
+
+        await client.query(`
+            INSERT INTO student_vaccinations (student_id, vaccine_id, dose_number, cycle_number, date_given, administered_at, recorded_by, notes)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [studentId, vaccineId, nextDoseNum, cycleNum, dateGiven, administeredAt, req.session.user.username, notes]);
+
+        await client.query(
+            'INSERT INTO immunization_access_logs (student_id, accessed_by, action_type) VALUES ($1, $2, $3)',
+            [studentId, req.session.user.username, 'EDIT']
+        );
+
+        await client.query('COMMIT');
+        setFlash(req, 'msg', `Successfully recorded Dose ${nextDoseNum} for ${vaccine.name}.`);
+        res.redirect(`/registrar?student_id=${encodeURIComponent(studentId)}`);
+    } catch (err) {
+        if (client) await client.query('ROLLBACK');
+        console.error('Record vaccine error:', err);
+        setFlash(req, 'err', safeMsg(err, 'Failed to record vaccine dose.'));
+        res.redirect('/registrar');
+    } finally {
+        if (client) client.release();
+    }
+});
+
 app.post('/registrar/update-student-year-section', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -1465,7 +1671,7 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
         await client.query(`
             INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'faculty', $3, $4, $5, TRUE, FALSE)
+            VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5, FALSE)
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
         if (req.body.course_codes) {
@@ -1612,7 +1818,6 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
     }
 });
 
-// ==================== ACCOUNT SECURITY LOG ====================
 const SECURITY_EVENTS = ['ACCOUNT_LOCKED', 'PASSWORD_RESET_UNLOCK', 'PASSWORD_RESET', 'ADMIN_RECOVERY'];
 
 app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
@@ -1676,7 +1881,6 @@ app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
     }
 });
 
-// ==================== GRADE AUDIT LOG ====================
 app.get('/registrar/grade-logs', isAuthenticated, async (req, res) => {
     const role = req.session.user.role;
     if (role !== 'registrar' && role !== 'admin') return res.redirect('/portal');
@@ -1951,7 +2155,6 @@ app.post('/registrar/unenroll-term', isAuthenticated, async (req, res) => {
     }
 });
 
-// ==================== FACULTY PORTAL ROUTES ====================
 async function getFacultyAssignedCourses(facultyUsername, facultyFullName, role) {
     if (role === 'admin') {
         const allC = await pool.query('SELECT course_code, descriptive_title, term_id FROM courses WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY course_code');
@@ -2151,7 +2354,6 @@ app.post('/faculty/update-grades-sheet', isAuthenticated, async (req, res) => {
     }
 });
 
-// ==================== STUDENT PORTAL ROUTES ====================
 app.get('/portal', isAuthenticated, async (req, res) => {
     const user = req.session.user;
     
