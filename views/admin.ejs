@@ -221,11 +221,11 @@
                             </div>
                         </div>
 
-                        <form id="bulkArchiveForm" action="/admin/bulk-archive-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <form id="bulkArchiveForm" action="/admin/bulk-archive-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CONFIRMATION REQUIRED: Are you sure you want to archive the selected accounts? They will be removed from active class lists, but their details, grades, and enrollment data will be safely retained.">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
                                 <button type="button" id="archiveSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
-                                <button type="submit" onclick="return confirm('Are you sure you want to archive the selected accounts? All accounts will be removed from active lists, but their details, grades, and enrollment data will be retained.')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">📦 Archive Selected Accounts</button>
+                                <button type="submit" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">📦 Archive Selected Accounts</button>
                             </div>
                             <div class="max-h-96 overflow-y-auto">
                                 <table class="w-full text-left text-xs">
@@ -266,11 +266,11 @@
                             </div>
                         </div>
 
-                        <form id="bulkDeleteForm" action="/admin/bulk-delete-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <form id="bulkDeleteForm" action="/admin/bulk-delete-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CRITICAL WARNING: Are you sure you want to PERMANENTLY DELETE the selected accounts? ALL data (personal details, grades, audit logs, and vaccine records) will be WIPED COMPLETELY. This action CANNOT be undone.">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
                                 <button type="button" id="deleteSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
-                                <button type="submit" onclick="return confirm('Are you sure you want to PERMANENTLY DELETE the selected accounts? ALL data (details, grades, logs) will be wiped completely and cannot be undone.')" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">🗑️ Permanently Delete Selected</button>
+                                <button type="submit" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">🗑️ Permanently Delete Selected</button>
                             </div>
                             <div class="max-h-96 overflow-y-auto">
                                 <table class="w-full text-left text-xs">
@@ -467,6 +467,11 @@
 
     </main>
 
+    <!-- XSS-SAFE JSON SCRIPT BLOCKS WITH NONCE -->
+    <script id="all-active-students-data" type="application/json" nonce="<%= cspNonce %>">
+        <%- JSON.stringify(locals.allActiveStudents || []).replace(/</g, '\\u003c') %>
+    </script>
+
     <script nonce="<%= cspNonce %>">
         // Safe HTML output
         function escapeHtml(str) {
@@ -535,7 +540,7 @@
                 });
             });
 
-            // Standard form confirmations
+            // Standard individual form confirmations
             document.querySelectorAll('.confirm-form').forEach(form => {
                 form.addEventListener('submit', (e) => {
                     const msg = form.getAttribute('data-confirm-msg');
@@ -543,6 +548,25 @@
                         e.preventDefault();
                     }
                 });
+            });
+
+            // Secure Bulk Action Handlers (Bypasses CSP limits and validates empty selections)
+            ['archive', 'delete'].forEach(mode => {
+                const form = document.getElementById(mode === 'archive' ? 'bulkArchiveForm' : 'bulkDeleteForm');
+                if (form) {
+                    form.addEventListener('submit', (e) => {
+                        const selectedBoxes = form.querySelectorAll(`.${mode}-checkbox:checked`);
+                        if (selectedBoxes.length === 0) {
+                            e.preventDefault();
+                            alert(`Please select at least one account to ${mode}.`);
+                            return;
+                        }
+                        const msg = form.getAttribute('data-confirm-msg');
+                        if (msg && !confirm(msg)) {
+                            e.preventDefault();
+                        }
+                    });
+                }
             });
 
             document.querySelectorAll('.gen-pass-btn').forEach(btn => {
@@ -594,7 +618,7 @@
             }
 
             // Client-Side Bulk Table Rendering for Archive and Delete Tabs
-            const allActiveStudents = <%- JSON.stringify(locals.allActiveStudents || []) %>;
+            const allActiveStudents = JSON.parse(document.getElementById('all-active-students-data').textContent);
 
             function renderBulkList(mode) {
                 const yearSel = document.getElementById(`${mode}YearFilter`);
