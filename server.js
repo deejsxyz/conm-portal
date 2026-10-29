@@ -22,11 +22,14 @@ if (!process.env.SESSION_SECRET) {
 
 const app = express();
 const BCRYPT_COST = 12;
+const MAX_FAILED_LOGINS = 5; // account locks after this many consecutive wrong passwords (admin exempt)
+const LOCKED_MESSAGE = 'This account has been locked after 5 incorrect password attempts. Please request a password reset from the College Registrar.';
 
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('query parser', 'simple');
 
+// Cryptographic Nonce Middleware for Strict CSP
 app.use((req, res, next) => {
     res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
     next();
@@ -48,8 +51,8 @@ app.use(express.urlencoded({ extended: false }));
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' 
-        ? (process.env.PG_CA_CERT ? { ca: process.env.PG_CA_CERT } : { rejectUnauthorized: false })
+    ssl: process.env.NODE_ENV === 'production' || (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost'))
+        ? { rejectUnauthorized: false }
         : false
 });
 
@@ -157,6 +160,18 @@ function sanitizeCsvCell(val) {
     return `"${str}"`;
 }
 
+// Records account lock / password reset events (best effort; always called outside transactions)
+async function logSecurityEvent(username, event, performedBy) {
+    try {
+        await pool.query(
+            'INSERT INTO account_security_logs (username, event, performed_by) VALUES ($1, $2, $3)',
+            [username, event, performedBy]
+        );
+    } catch (err) {
+        console.error('Security log write failed:', err.message);
+    }
+}
+
 function setFlash(req, type, text) {
     req.session.flash = { type, text };
 }
@@ -208,7 +223,7 @@ async function isAuthenticated(req, res, next) {
         next();
     } catch (err) {
         console.error('Auth guard error:', err);
-        return res.status(503).send('Database connection error. Please try again later.');
+        res.redirect('/');
     }
 }
 
@@ -227,9 +242,18 @@ async function seedDatabase() {
             );
         `);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;`);
-
-        await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
-        await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT DEFAULT 0;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;`);
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS account_security_logs (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) NOT NULL,
+                event VARCHAR(50) NOT NULL,
+                performed_by VARCHAR(100),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS students (
@@ -247,8 +271,6 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS section VARCHAR(10) DEFAULT 'A';`);
         await pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;`);
         await pool.query(`UPDATE students SET section = 'A' WHERE section IS NULL OR TRIM(section) = '';`);
-
-        await pool.query(`CREATE INDEX IF NOT EXISTS idx_students_year_sec ON students (year_level, section) WHERE is_archived = FALSE;`);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS courses (
@@ -283,7 +305,9 @@ async function seedDatabase() {
                 instructor_username VARCHAR(100) DEFAULT '',
                 remarks VARCHAR(50) DEFAULT '',
                 enrolled_term VARCHAR(10) NOT NULL,
-                academic_year VARCHAR(20) DEFAULT '2026-2027'
+                academic_year VARCHAR(20) DEFAULT '2026-2027',
+                CONSTRAINT fk_grades_student FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+                CONSTRAINT fk_grades_course FOREIGN KEY (course_code) REFERENCES courses(course_code) ON DELETE CASCADE
             );
         `);
 
@@ -294,30 +318,11 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS enrolled_term VARCHAR(10);`);
         await pool.query(`ALTER TABLE grades ADD COLUMN IF NOT EXISTS academic_year VARCHAR(20) DEFAULT '2026-2027';`);
 
-        // Clean up duplicates before unique index
         await pool.query(`ALTER TABLE grades DROP CONSTRAINT IF EXISTS grades_student_id_course_code_key;`);
-        await pool.query(`
-            DELETE FROM grades a USING grades b
-            WHERE a.id < b.id
-              AND a.student_id = b.student_id
-              AND a.course_code = b.course_code
-              AND COALESCE(a.academic_year, '') = COALESCE(b.academic_year, '')
-              AND COALESCE(a.enrolled_term, '') = COALESCE(b.enrolled_term, '');
-        `);
         await pool.query(`
             CREATE UNIQUE INDEX IF NOT EXISTS grades_stu_course_ay_term_idx 
             ON grades (student_id, course_code, academic_year, enrolled_term);
         `);
-
-        await pool.query(`CREATE INDEX IF NOT EXISTS idx_grades_student_term ON grades (student_id, enrolled_term, academic_year);`);
-
-        // Foreign keys cleanup and creation
-        await pool.query(`DELETE FROM grades WHERE student_id NOT IN (SELECT student_id FROM students);`);
-        await pool.query(`DELETE FROM grades WHERE course_code NOT IN (SELECT course_code FROM courses);`);
-        await pool.query(`ALTER TABLE grades DROP CONSTRAINT IF EXISTS fk_grades_student;`);
-        await pool.query(`ALTER TABLE grades ADD CONSTRAINT fk_grades_student FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE;`);
-        await pool.query(`ALTER TABLE grades DROP CONSTRAINT IF EXISTS fk_grades_course;`);
-        await pool.query(`ALTER TABLE grades ADD CONSTRAINT fk_grades_course FOREIGN KEY (course_code) REFERENCES courses(course_code) ON DELETE CASCADE;`);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS grade_audit_logs (
@@ -422,7 +427,6 @@ async function seedDatabase() {
     }
 }
 
-// ==================== AUTH ROUTES ====================
 app.get('/', (req, res) => {
     if (req.session.user) return res.redirect('/portal');
     const lockedPopup = req.query.locked === '1' 
@@ -442,9 +446,45 @@ app.post('/login', loginLimiter, async (req, res) => {
         }
 
         const user = userQuery.rows[0];
+
+        // Locked accounts are rejected even with the correct password until the Registrar resets them
+        if (user.is_locked) {
+            return res.render('login', { error: LOCKED_MESSAGE, popupMessage: null });
+        }
+
         const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
-            return res.render('login', { error: 'Invalid username or password.', popupMessage: null });
+            // Admin is exempt from lockout (otherwise nobody could reset it); the IP rate limiter still applies
+            if (user.role === 'admin') {
+                return res.render('login', { error: 'Invalid username or password.', popupMessage: null });
+            }
+
+            // Atomic increment so parallel guesses cannot slip past the limit
+            const failRes = await pool.query(`
+                UPDATE users
+                SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
+                    is_locked = (COALESCE(failed_login_attempts, 0) + 1 >= $2),
+                    locked_at = CASE WHEN COALESCE(failed_login_attempts, 0) + 1 >= $2 THEN NOW() ELSE locked_at END
+                WHERE username = $1
+                RETURNING failed_login_attempts, is_locked
+            `, [user.username, MAX_FAILED_LOGINS]);
+
+            const result = failRes.rows[0];
+            if (result && result.is_locked) {
+                await logSecurityEvent(user.username, 'ACCOUNT_LOCKED', 'system');
+                return res.render('login', { error: LOCKED_MESSAGE, popupMessage: null });
+            }
+
+            const remaining = MAX_FAILED_LOGINS - (result ? result.failed_login_attempts : 0);
+            return res.render('login', {
+                error: `Invalid username or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before this account is locked.`,
+                popupMessage: null
+            });
+        }
+
+        // Correct password: clear the failed-attempt counter
+        if (user.failed_login_attempts > 0) {
+            await pool.query('UPDATE users SET failed_login_attempts = 0 WHERE username = $1', [user.username]);
         }
 
         if (user.role === 'faculty') {
@@ -647,22 +687,22 @@ app.post('/admin/add-staff', isAuthenticated, async (req, res) => {
 app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
+    const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
+    const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
+    const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
+    const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
+    const pass = req.body.temp_password && String(req.body.temp_password).trim() ? String(req.body.temp_password).trim() : generateSecurePassword();
+
+    if (!cleanId || !fName || !lName) {
+        setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
+        return res.redirect('/admin');
+    }
+
     const client = await pool.connect();
     try {
-        const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
-        const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
-        const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
-        const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
-        const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-        const secRaw = req.body.section ? String(req.body.section).trim().toUpperCase() : '';
-        const sec = ['A', 'B', 'C'].includes(secRaw) ? secRaw : 'A';
-        const pass = req.body.temp_password && String(req.body.temp_password).trim() ? String(req.body.temp_password).trim() : generateSecurePassword();
-
-        if (!cleanId || !fName || !lName) {
-            setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
-            return res.redirect('/admin');
-        }
-
         await client.query('BEGIN');
         const existing = await client.query('SELECT username FROM users WHERE username = $1', [cleanId]);
         if (existing.rows.length > 0) {
@@ -674,8 +714,8 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
 
         await client.query(`
-            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name, is_archived) 
+            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await client.query(`
@@ -699,16 +739,15 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
 app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const username = req.body.username ? String(req.body.username).trim() : '';
+    const action = req.body.action === 'restore' ? 'restore' : 'archive';
+    if (!username || username === 'admin') {
+        setFlash(req, 'err', 'Cannot modify the primary system administrator.');
+        return res.redirect('/admin');
+    }
+
     const client = await pool.connect();
     try {
-        const username = req.body.username ? String(req.body.username).trim() : '';
-        const action = req.body.action === 'restore' ? 'restore' : 'archive';
-        
-        if (!username || username === 'admin') {
-            setFlash(req, 'err', 'Cannot modify the primary system administrator.');
-            return res.redirect('/admin');
-        }
-
         await client.query('BEGIN');
         const userRes = await client.query('SELECT role FROM users WHERE username = $1', [username]);
         if (userRes.rows.length === 0) {
@@ -744,19 +783,19 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
 app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const origUser = req.body.original_username ? String(req.body.original_username).trim() : '';
+    const cleanUser = req.body.username ? String(req.body.username).trim() : '';
+    const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
+    const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
+    const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
+
+    if (!origUser || !cleanUser || !fName || !lName) {
+        setFlash(req, 'err', 'Username, First Name, and Last Name are required.');
+        return res.redirect('/admin');
+    }
+
     const client = await pool.connect();
     try {
-        const origUser = req.body.original_username ? String(req.body.original_username).trim() : '';
-        const cleanUser = req.body.username ? String(req.body.username).trim() : '';
-        const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
-        const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
-        const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
-
-        if (!origUser || !cleanUser || !fName || !lName) {
-            setFlash(req, 'err', 'Username, First Name, and Last Name are required.');
-            return res.redirect('/admin');
-        }
-
         await client.query('BEGIN');
         const updateRes = await client.query(`
             UPDATE users 
@@ -778,19 +817,20 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
             const hashedPassword = await bcrypt.hash(String(req.body.temp_password).trim(), BCRYPT_COST);
             await client.query(`
                 UPDATE users 
-                SET password_hash = $1, must_change_password = TRUE 
+                SET password_hash = $1, must_change_password = TRUE, failed_login_attempts = 0, is_locked = FALSE, locked_at = NULL 
                 WHERE username = $2
             `, [hashedPassword, cleanUser]);
         }
 
         await client.query('COMMIT');
+        if (req.body.temp_password && String(req.body.temp_password).trim() !== '') await logSecurityEvent(cleanUser, 'PASSWORD_RESET', req.session.user.username);
         setFlash(req, 'msg', 'Staff profile updated successfully.');
         res.redirect(`/admin?staff_user=${encodeURIComponent(cleanUser)}`);
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Admin edit staff error:', err);
         setFlash(req, 'err', 'Failed to update staff profile.');
-        res.redirect('/admin');
+        res.redirect(`/admin?staff_user=${encodeURIComponent(origUser)}`);
     } finally {
         client.release();
     }
@@ -799,21 +839,21 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
 app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
+    const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
+    const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
+    const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
+    const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
+    
+    if (!cleanId || !fName || !lName) {
+        setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
+        return res.redirect('/admin');
+    }
+
     const client = await pool.connect();
     try {
-        const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
-        const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
-        const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
-        const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
-        const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-        const secRaw = req.body.section ? String(req.body.section).trim().toUpperCase() : '';
-        const sec = ['A', 'B', 'C'].includes(secRaw) ? secRaw : 'A';
-        
-        if (!cleanId || !fName || !lName) {
-            setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
-            return res.redirect('/admin');
-        }
-
         await client.query('BEGIN');
         const stuUpdate = await client.query(`
             UPDATE students 
@@ -837,19 +877,20 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
             const hashedPassword = await bcrypt.hash(String(req.body.temp_password).trim(), BCRYPT_COST);
             await client.query(`
                 UPDATE users 
-                SET password_hash = $1, must_change_password = TRUE 
+                SET password_hash = $1, must_change_password = TRUE, failed_login_attempts = 0, is_locked = FALSE, locked_at = NULL 
                 WHERE username = $2 AND role = 'student'
             `, [hashedPassword, cleanId]);
         }
 
         await client.query('COMMIT');
+        if (req.body.temp_password && String(req.body.temp_password).trim() !== '') await logSecurityEvent(cleanId, 'PASSWORD_RESET', req.session.user.username);
         setFlash(req, 'msg', 'Student profile updated successfully.');
         res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}`);
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Admin edit student error:', err);
         setFlash(req, 'err', 'Failed to update student profile.');
-        res.redirect('/admin');
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}`);
     } finally {
         client.release();
     }
@@ -884,6 +925,14 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
         `);
         const facultyList = facultyListRes.rows;
 
+        const lockedRoles = req.session.user.role === 'admin' ? ['student', 'faculty', 'registrar'] : ['student', 'faculty'];
+        const lockedRes = await pool.query(`
+            SELECT username, role, first_name, middle_name, last_name, locked_at
+            FROM users
+            WHERE COALESCE(is_locked, FALSE) = TRUE AND COALESCE(is_archived, FALSE) = FALSE AND role = ANY($1::text[])
+            ORDER BY locked_at DESC NULLS LAST
+        `, [lockedRoles]);
+
         let selectedFaculty = null;
         let facultyAssignedCourses = [];
 
@@ -903,7 +952,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
 
             if (student) {
                 const defaultTerm = ((parseInt(student.year_level, 10) - 1) * 2 + parseInt(systemSettings.current_semester, 10)).toString();
-                selectedTerm = req.query.view_term && /^[1-8]$/.test(req.query.view_term) ? String(req.query.view_term) : defaultTerm;
+                selectedTerm = req.query.view_term && /^[1-8]$/.test(req.query.view_term) ? req.query.view_term : defaultTerm;
 
                 const gradesRes = await pool.query(`
                     SELECT g.id, g.course_code, g.final_grade, g.instructor, g.instructor_username, g.remarks, g.enrolled_term, g.academic_year,
@@ -927,6 +976,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             currentTerm: selectedTerm,
             currentViewAy: selectedAy,
             facultyList: facultyList,
+            lockedAccounts: lockedRes.rows,
             selectedFaculty: selectedFaculty,
             facultyAssignedCourses: facultyAssignedCourses,
             hasBatchCredentials: Array.isArray(req.session.lastBatchCredentials) && req.session.lastBatchCredentials.length > 0
@@ -939,9 +989,9 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
 
 app.post('/registrar/update-settings', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+    const ay = /^\d{4}-\d{4}$/.test(req.body.current_ay || '') ? req.body.current_ay : '2026-2027';
+    const sem = parseInt(req.body.current_semester, 10) === 2 ? 2 : 1;
     try {
-        const ay = /^\d{4}-\d{4}$/.test(req.body.current_ay || '') ? String(req.body.current_ay) : '2026-2027';
-        const sem = parseInt(req.body.current_semester, 10) === 2 ? 2 : 1;
         await pool.query('UPDATE settings SET current_ay = $1, current_semester = $2 WHERE id = 1', [ay, sem]);
         setFlash(req, 'msg', 'Active Academic Year and Semester updated system-wide.');
         res.redirect('/registrar');
@@ -1059,9 +1109,6 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                         if (userCheck.rows[0].role !== 'student') {
                             throw new Error(`Row ${idx + 2}: Student ID '${cleanId}' conflicts with a staff account.`);
                         }
-                        if (userCheck.rows[0].is_archived) {
-                            await client.query(`UPDATE users SET is_archived = FALSE WHERE username = $1`, [cleanId]);
-                        }
                     } else {
                         const tempPassword = generateSecurePassword();
                         const hashedPassword = await bcrypt.hash(tempPassword, BCRYPT_COST);
@@ -1165,22 +1212,22 @@ app.get('/registrar/export-batch-credentials', isAuthenticated, (req, res) => {
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
+    const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
+    const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
+    const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
+    const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
+    const pass = req.body.temp_password && String(req.body.temp_password).trim() ? String(req.body.temp_password).trim() : generateSecurePassword();
+
+    if (!cleanId || !fName || !lName) {
+        setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
+        return res.redirect('/registrar');
+    }
+
     const client = await pool.connect();
     try {
-        const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
-        const fName = req.body.first_name ? String(req.body.first_name).trim() : '';
-        const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
-        const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
-        const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-        const secRaw = req.body.section ? String(req.body.section).trim().toUpperCase() : '';
-        const sec = ['A', 'B', 'C'].includes(secRaw) ? secRaw : 'A';
-        const pass = req.body.temp_password && String(req.body.temp_password).trim() ? String(req.body.temp_password).trim() : generateSecurePassword();
-
-        if (!cleanId || !fName || !lName) {
-            setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
-            return res.redirect('/registrar');
-        }
-
         await client.query('BEGIN');
         const existing = await client.query('SELECT username FROM users WHERE username = $1', [cleanId]);
         if (existing.rows.length > 0) {
@@ -1192,8 +1239,8 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
 
         await client.query(`
-            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name, is_archived) 
+            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await client.query(`
@@ -1209,7 +1256,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i];
-                const facUser = instUsers[i] ? String(instUsers[i]).trim() : '';
+                const facUser = instUsers[i] ? instUsers[i].trim() : '';
                 let facFormalName = '';
 
                 if (facUser) {
@@ -1219,15 +1266,12 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
                     }
                 }
 
-                const checkCourse = await client.query('SELECT course_code FROM courses WHERE course_code = $1', [code]);
-                if (checkCourse.rows.length > 0) {
-                    await client.query(`
-                        INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year)
-                        VALUES ($1, $2, '', $3, $4, '', $5, $6)
-                        ON CONFLICT (student_id, course_code, academic_year, enrolled_term) 
-                        DO UPDATE SET instructor = $3, instructor_username = $4;
-                    `, [cleanId, code, facFormalName, facUser, term, ay]);
-                }
+                await client.query(`
+                    INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year)
+                    VALUES ($1, $2, '', $3, $4, '', $5, $6)
+                    ON CONFLICT (student_id, course_code, academic_year, enrolled_term) 
+                    DO UPDATE SET instructor = $3, instructor_username = $4;
+                `, [cleanId, code, facFormalName, facUser, term, ay]);
             }
         }
 
@@ -1247,12 +1291,11 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
 app.post('/registrar/update-student-year-section', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
+    const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
+    const rawSec = String(req.body.section || '').trim().toUpperCase();
+    const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
     try {
-        const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
-        const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-        const secRaw = req.body.section ? String(req.body.section).trim().toUpperCase() : '';
-        const sec = ['A', 'B', 'C'].includes(secRaw) ? secRaw : 'A';
-        
         const updateRes = await pool.query(`
             UPDATE students SET year_level = $1, section = $2 WHERE student_id = $3
         `, [yr, sec, cleanId]);
@@ -1266,7 +1309,7 @@ app.post('/registrar/update-student-year-section', isAuthenticated, async (req, 
     } catch (err) {
         console.error('Update class error:', err);
         setFlash(req, 'err', 'Failed to update Year Level and Section.');
-        res.redirect('/registrar');
+        res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
     }
 });
 
@@ -1296,18 +1339,18 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
         await client.query(`
-            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'faculty', $3, $4, $5, TRUE, FALSE)
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name, is_archived) 
+            VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5, FALSE)
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
         if (req.body.course_codes) {
             const codes = [...new Set(Array.isArray(req.body.course_codes) ? req.body.course_codes : [req.body.course_codes])];
             for (let code of codes) {
-                if (code && String(code).trim() !== '') {
+                if (code && code.trim() !== '') {
                     await client.query(`
                         INSERT INTO faculty_courses (username, course_code) 
                         VALUES ($1, $2) ON CONFLICT DO NOTHING;
-                    `, [cleanUser, String(code).trim()]);
+                    `, [cleanUser, code.trim()]);
                 }
             }
         }
@@ -1361,7 +1404,7 @@ app.post('/registrar/edit-faculty', isAuthenticated, async (req, res) => {
         if (req.body.temp_password && String(req.body.temp_password).trim() !== '') {
             const hashedPassword = await bcrypt.hash(String(req.body.temp_password).trim(), BCRYPT_COST);
             await client.query(`
-                UPDATE users SET password_hash = $1, must_change_password = TRUE WHERE username = $2 AND role = 'faculty'
+                UPDATE users SET password_hash = $1, must_change_password = TRUE, failed_login_attempts = 0, is_locked = FALSE, locked_at = NULL WHERE username = $2 AND role = 'faculty'
             `, [hashedPassword, cleanUser]);
         }
 
@@ -1369,16 +1412,17 @@ app.post('/registrar/edit-faculty', isAuthenticated, async (req, res) => {
         if (req.body.course_codes) {
             const codes = [...new Set(Array.isArray(req.body.course_codes) ? req.body.course_codes : [req.body.course_codes])];
             for (let code of codes) {
-                if (code && String(code).trim() !== '') {
+                if (code && code.trim() !== '') {
                     await client.query(`
                         INSERT INTO faculty_courses (username, course_code) 
                         VALUES ($1, $2) ON CONFLICT DO NOTHING;
-                    `, [cleanUser, String(code).trim()]);
+                    `, [cleanUser, code.trim()]);
                 }
             }
         }
 
         await client.query('COMMIT');
+        if (req.body.temp_password && String(req.body.temp_password).trim() !== '') await logSecurityEvent(cleanUser, 'PASSWORD_RESET', req.session.user.username);
         setFlash(req, 'msg', 'Faculty profile updated.');
         res.redirect(`/registrar?faculty_user=${encodeURIComponent(cleanUser)}`);
     } catch (err) {
@@ -1424,13 +1468,14 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
     try {
         const hashedPassword = await bcrypt.hash(newPass, BCRYPT_COST);
         const updateRes = await pool.query(`
-            UPDATE users SET password_hash = $1, must_change_password = TRUE 
+            UPDATE users SET password_hash = $1, must_change_password = TRUE, failed_login_attempts = 0, is_locked = FALSE, locked_at = NULL 
             WHERE username = $2 AND role = 'student'
         `, [hashedPassword, cleanId]);
 
         if (updateRes.rowCount === 0) {
             setFlash(req, 'err', 'Student account not found.');
         } else {
+            await logSecurityEvent(cleanId, 'PASSWORD_RESET', req.session.user.username);
             setFlash(req, 'msg', `Password successfully reset for Student ID ${cleanId}.`);
         }
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
@@ -1438,6 +1483,114 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
         console.error('Reset student password error:', err);
         setFlash(req, 'err', 'Failed to reset student password.');
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
+    }
+});
+
+// ==================== ACCOUNT SECURITY LOG (Registrar / Admin) ====================
+const SECURITY_EVENTS = ['ACCOUNT_LOCKED', 'PASSWORD_RESET_UNLOCK', 'PASSWORD_RESET'];
+
+app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
+    const role = req.session.user.role;
+    if (role !== 'registrar' && role !== 'admin') return res.redirect('/portal');
+
+    try {
+        const q = req.query.q ? String(req.query.q).trim().slice(0, 100) : '';
+        const eventFilter = SECURITY_EVENTS.includes(String(req.query.event || '')) ? String(req.query.event) : '';
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const PAGE_SIZE = 50;
+
+        const conditions = [];
+        const params = [];
+
+        // Registrar sees student/faculty activity only; admin sees everything
+        if (role !== 'admin') {
+            params.push(['student', 'faculty']);
+            conditions.push(`u.role = ANY($${params.length}::text[])`);
+        }
+        if (q) {
+            params.push(`%${q.replace(/[\\%_]/g, '\\$&')}%`);
+            conditions.push(`l.username ILIKE $${params.length}`);
+        }
+        if (eventFilter) {
+            params.push(eventFilter);
+            conditions.push(`l.event = $${params.length}`);
+        }
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const countRes = await pool.query(
+            `SELECT COUNT(*) AS total FROM account_security_logs l LEFT JOIN users u ON u.username = l.username ${where}`,
+            params
+        );
+        const total = parseInt(countRes.rows[0].total, 10);
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const safePage = Math.min(page, totalPages);
+
+        const listParams = [...params, PAGE_SIZE, (safePage - 1) * PAGE_SIZE];
+        const logRes = await pool.query(`
+            SELECT l.id, l.username, l.event, l.performed_by, l.created_at,
+                   u.role, u.first_name, u.middle_name, u.last_name
+            FROM account_security_logs l
+            LEFT JOIN users u ON u.username = l.username
+            ${where}
+            ORDER BY l.created_at DESC, l.id DESC
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        `, listParams);
+
+        res.render('security_log', {
+            currentUser: req.session.user,
+            logs: logRes.rows,
+            q: q,
+            eventFilter: eventFilter,
+            page: safePage,
+            totalPages: totalPages,
+            total: total
+        });
+    } catch (err) {
+        console.error('Security log load error:', err);
+        res.status(500).send('Unable to load the account security log.');
+    }
+});
+
+app.post('/registrar/unlock-account', isAuthenticated, async (req, res) => {
+    const actorRole = req.session.user.role;
+    if (actorRole !== 'registrar' && actorRole !== 'admin') return res.status(403).send('Access denied');
+
+    try {
+        const username = req.body.username ? String(req.body.username).trim() : '';
+        const typedPass = req.body.temp_password ? String(req.body.temp_password).trim() : '';
+        // Registrar may reset students and faculty; only the admin may reset a locked registrar
+        const allowedRoles = actorRole === 'admin' ? ['student', 'faculty', 'registrar'] : ['student', 'faculty'];
+
+        const target = await pool.query(`
+            SELECT username FROM users
+            WHERE username = $1 AND COALESCE(is_archived, FALSE) = FALSE AND role = ANY($2::text[])
+        `, [username, allowedRoles]);
+
+        if (target.rows.length === 0) {
+            setFlash(req, 'err', 'Account not found, or you are not allowed to reset it.');
+            return res.redirect('/registrar');
+        }
+
+        const newPass = typedPass || generateSecurePassword();
+        const hashedPassword = await bcrypt.hash(newPass, BCRYPT_COST);
+
+        await pool.query(`
+            UPDATE users
+            SET password_hash = $1, must_change_password = TRUE,
+                failed_login_attempts = 0, is_locked = FALSE, locked_at = NULL
+            WHERE username = $2
+        `, [hashedPassword, username]);
+
+        await logSecurityEvent(username, 'PASSWORD_RESET_UNLOCK', req.session.user.username);
+
+        setFlash(req, 'msg', typedPass
+            ? `Account '${username}' unlocked. The user must change the temporary password at next login.`
+            : `Account '${username}' unlocked. Temporary password (shown once, give it to the user in person): ${newPass}`);
+        res.redirect('/registrar');
+    } catch (err) {
+        console.error('Unlock account error:', err);
+        setFlash(req, 'err', 'Failed to unlock account.');
+        res.redirect('/registrar');
     }
 });
 
@@ -1453,12 +1606,6 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
     try {
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const currentAy = targetAy || settingsRes.rows[0].current_ay;
-
-        const checkCourse = await pool.query('SELECT course_code FROM courses WHERE course_code = $1', [courseCode]);
-        if (checkCourse.rows.length === 0) {
-            setFlash(req, 'err', `Subject ${courseCode} not found in active catalog.`);
-            return res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
-        }
 
         let facFormalName = '';
         if (facUser) {
@@ -1554,66 +1701,43 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
 app.post('/registrar/delete-grade', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
+    const courseCode = req.body.course_code ? String(req.body.course_code).trim() : '';
+    const term = req.body.term ? String(req.body.term).trim() : '';
+    const ay = req.body.academic_year ? String(req.body.academic_year).trim() : '';
     try {
-        const cleanId = String(req.body.student_id || '').trim();
-        const courseCode = String(req.body.course_code || '').trim();
-        const term = String(req.body.term || '').trim();
-        const ay = String(req.body.academic_year || '').trim();
-
-        const gradeRes = await pool.query(`
-            SELECT * FROM grades 
+        await pool.query(`
+            DELETE FROM grades 
             WHERE student_id = $1 AND course_code = $2 AND enrolled_term = $3 AND academic_year = $4
         `, [cleanId, courseCode, term, ay]);
 
-        if (gradeRes.rows.length > 0) {
-            const oldGrade = gradeRes.rows[0].final_grade || '';
-            await pool.query(`DELETE FROM grades WHERE id = $1`, [gradeRes.rows[0].id]);
-            await pool.query(`
-                INSERT INTO grade_audit_logs (changed_by, changed_by_role, student_id, course_code, academic_year, enrolled_term, old_grade, new_grade)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, 'DELETED')
-            `, [req.session.user.username, req.session.user.role, cleanId, courseCode, ay, term, oldGrade]);
-            setFlash(req, 'msg', `Subject ${courseCode} removed from student record.`);
-        } else {
-            setFlash(req, 'err', 'Subject record not found.');
-        }
+        setFlash(req, 'msg', `Subject ${courseCode} removed from student record.`);
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}&view_term=${encodeURIComponent(term)}&view_ay=${encodeURIComponent(ay)}`);
     } catch (err) {
         console.error('Delete grade error:', err);
         setFlash(req, 'err', 'Could not remove subject.');
-        res.redirect('/registrar');
+        res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
     }
 });
 
 app.post('/registrar/unenroll-term', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
+    const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
+    const term = req.body.term ? String(req.body.term).trim() : '';
+    const ay = req.body.academic_year ? String(req.body.academic_year).trim() : '';
     try {
-        const cleanId = String(req.body.student_id || '').trim();
-        const term = String(req.body.term || '').trim();
-        const ay = String(req.body.academic_year || '').trim();
-
-        const gradesRes = await pool.query(`
-            SELECT * FROM grades 
+        await pool.query(`
+            DELETE FROM grades 
             WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3
         `, [cleanId, term, ay]);
 
-        if (gradesRes.rows.length > 0) {
-            await pool.query(`DELETE FROM grades WHERE student_id = $1 AND enrolled_term = $2 AND academic_year = $3`, [cleanId, term, ay]);
-            for (const g of gradesRes.rows) {
-                await pool.query(`
-                    INSERT INTO grade_audit_logs (changed_by, changed_by_role, student_id, course_code, academic_year, enrolled_term, old_grade, new_grade)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, 'UNENROLLED')
-                `, [req.session.user.username, req.session.user.role, cleanId, g.course_code, ay, term, g.final_grade || '']);
-            }
-            setFlash(req, 'msg', 'Student successfully unenrolled from all subjects for this term.');
-        } else {
-            setFlash(req, 'err', 'No subjects found for this term.');
-        }
+        setFlash(req, 'msg', 'Student successfully unenrolled from all subjects for this term.');
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}&view_term=${encodeURIComponent(term)}&view_ay=${encodeURIComponent(ay)}`);
     } catch (err) {
         console.error('Unenroll term error:', err);
         setFlash(req, 'err', 'Failed to unenroll student from term.');
-        res.redirect('/registrar');
+        res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
     }
 });
 
@@ -1875,6 +1999,7 @@ app.get('/portal', isAuthenticated, async (req, res) => {
         res.status(500).send('Server Error');
     }
 });
+
 
 async function startServer() {
     try {
