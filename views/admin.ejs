@@ -199,15 +199,20 @@
                                 <h4 class="font-bold text-amber-900 text-sm uppercase tracking-wider">📦 Bulk Archive Active Students</h4>
                                 <p class="text-xs text-amber-700">Archiving removes accounts from active class lists, but preserves all their grades, records, and logs safely.</p>
                             </div>
-                            <div class="flex gap-2">
-                                <select id="archiveYearFilter" class="px-3 py-2 rounded-lg border border-amber-300 text-xs font-bold text-amber-900 bg-white cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <label class="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-amber-900 bg-amber-100/50 px-2.5 py-1.5 rounded-lg border border-amber-300 shadow-sm transition hover:bg-amber-200">
+                                    <input type="checkbox" id="archiveShowAllToggle" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer">
+                                    Show All
+                                </label>
+                                <div class="w-px h-6 bg-amber-300 hidden sm:block"></div>
+                                <select id="archiveYearFilter" class="px-3 py-2 rounded-lg border border-amber-300 text-xs font-bold text-amber-900 bg-white cursor-pointer transition-opacity">
                                     <option value="" style="font-style:italic;">-- Year --</option>
                                     <option value="1">BSN1</option>
                                     <option value="2">BSN2</option>
                                     <option value="3">BSN3</option>
                                     <option value="4">BSN4</option>
                                 </select>
-                                <select id="archiveSecFilter" class="px-3 py-2 rounded-lg border border-amber-300 text-xs font-bold text-amber-900 bg-white cursor-pointer">
+                                <select id="archiveSecFilter" class="px-3 py-2 rounded-lg border border-amber-300 text-xs font-bold text-amber-900 bg-white cursor-pointer transition-opacity">
                                     <option value="" style="font-style:italic;">-- Sec --</option>
                                     <option value="A">A</option>
                                     <option value="B">B</option>
@@ -239,15 +244,20 @@
                                 <h4 class="font-bold text-red-900 text-sm uppercase tracking-wider">🗑️ Bulk Permanently Delete Students</h4>
                                 <p class="text-xs font-bold text-red-600 uppercase tracking-wider">Danger Zone: ALL DATA, GRADES, AND LOGS WILL BE WIPED COMPLETELY.</p>
                             </div>
-                            <div class="flex gap-2">
-                                <select id="deleteYearFilter" class="px-3 py-2 rounded-lg border border-red-300 text-xs font-bold text-red-900 bg-white cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <label class="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-red-900 bg-red-100/50 px-2.5 py-1.5 rounded-lg border border-red-300 shadow-sm transition hover:bg-red-200">
+                                    <input type="checkbox" id="deleteShowAllToggle" class="w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer">
+                                    Show All
+                                </label>
+                                <div class="w-px h-6 bg-red-300 hidden sm:block"></div>
+                                <select id="deleteYearFilter" class="px-3 py-2 rounded-lg border border-red-300 text-xs font-bold text-red-900 bg-white cursor-pointer transition-opacity">
                                     <option value="" style="font-style:italic;">-- Year --</option>
                                     <option value="1">BSN1</option>
                                     <option value="2">BSN2</option>
                                     <option value="3">BSN3</option>
                                     <option value="4">BSN4</option>
                                 </select>
-                                <select id="deleteSecFilter" class="px-3 py-2 rounded-lg border border-red-300 text-xs font-bold text-red-900 bg-white cursor-pointer">
+                                <select id="deleteSecFilter" class="px-3 py-2 rounded-lg border border-red-300 text-xs font-bold text-red-900 bg-white cursor-pointer transition-opacity">
                                     <option value="" style="font-style:italic;">-- Sec --</option>
                                     <option value="A">A</option>
                                     <option value="B">B</option>
@@ -589,23 +599,28 @@
             function renderBulkList(mode) {
                 const yearSel = document.getElementById(`${mode}YearFilter`);
                 const secSel = document.getElementById(`${mode}SecFilter`);
+                const showAllToggle = document.getElementById(`${mode}ShowAllToggle`);
                 const tbody = document.getElementById(`${mode}Tbody`);
                 
                 if (!yearSel || !secSel || !tbody) return;
 
                 const year = yearSel.value;
                 const sec = secSel.value;
+                const showAll = showAllToggle && showAllToggle.checked;
 
-                if (!year || !sec) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="p-5 text-center text-slate-500 italic">Please select Year Level and Section to load student accounts.</td></tr>';
+                if (!showAll && (!year || !sec)) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="p-5 text-center text-slate-500 italic">Please select Year Level and Section to load student accounts, or check "Show All".</td></tr>';
                     return;
                 }
 
-                const filtered = allActiveStudents.filter(s => String(s.year_level) === year && s.section === sec);
+                let filtered = allActiveStudents;
+                if (!showAll) {
+                    filtered = allActiveStudents.filter(s => String(s.year_level) === year && s.section === sec);
+                }
                 
                 let html = '';
                 if (filtered.length === 0) {
-                    html = '<tr><td colspan="3" class="p-5 text-center text-slate-500 font-bold">No active students found in this class.</td></tr>';
+                    html = '<tr><td colspan="4" class="p-5 text-center text-slate-500 font-bold">No active students found.</td></tr>';
                 } else {
                     filtered.forEach(s => {
                         const fullName = escapeHtml(`${s.last_name}, ${s.first_name} ${s.middle_name || ''}`.trim());
@@ -614,19 +629,35 @@
                                 <td class="py-2 px-4 text-center w-12"><input type="checkbox" name="userIds" value="${escapeHtml(s.student_id)}" class="${mode}-checkbox w-4 h-4 cursor-pointer text-indigo-600 rounded border-slate-300"></td>
                                 <td class="py-2 px-4 font-mono font-bold text-slate-700 w-32">${escapeHtml(s.student_id)}</td>
                                 <td class="py-2 px-4 uppercase font-bold text-slate-800">${fullName}</td>
+                                <td class="py-2 px-4 uppercase font-bold text-slate-500 text-right text-[10px]">BSN${escapeHtml(s.year_level)} - ${escapeHtml(s.section)}</td>
                             </tr>
                         `;
                     });
                 }
                 tbody.innerHTML = html;
+
+                // Visually and functionally disable dropdowns if Show All is checked
+                if (showAll) {
+                    yearSel.disabled = true;
+                    secSel.disabled = true;
+                    yearSel.classList.add('opacity-50', 'cursor-not-allowed');
+                    secSel.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    yearSel.disabled = false;
+                    secSel.disabled = false;
+                    yearSel.classList.remove('opacity-50', 'cursor-not-allowed');
+                    secSel.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
             }
 
             ['archive', 'delete'].forEach(mode => {
                 const yF = document.getElementById(`${mode}YearFilter`);
                 const sF = document.getElementById(`${mode}SecFilter`);
+                const sA = document.getElementById(`${mode}ShowAllToggle`);
                 if (yF && sF) {
                     yF.addEventListener('change', () => renderBulkList(mode));
                     sF.addEventListener('change', () => renderBulkList(mode));
+                    if(sA) sA.addEventListener('change', () => renderBulkList(mode));
                     renderBulkList(mode); // Initial render check
                 }
                 
