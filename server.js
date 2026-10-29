@@ -22,8 +22,46 @@ if (!process.env.SESSION_SECRET) {
 
 const app = express();
 const BCRYPT_COST = 12;
-const MAX_FAILED_LOGINS = 5; // account locks after this many consecutive wrong passwords (admin exempt)
-const LOCKED_MESSAGE = 'This account has been locked after 5 incorrect password attempts. Please request a password reset from the College Registrar.';
+const MAX_FAILED_LOGINS = 5;                       // consecutive wrong passwords before an account locks (applies to ALL roles, incl. admin)
+const FAILED_WINDOW_HOURS = 24;                    // failures older than this no longer count toward a lock
+const REGISTRAR_CONTACT = process.env.REGISTRAR_CONTACT ? ` (${process.env.REGISTRAR_CONTACT})` : '';
+const LOCKED_MESSAGE = `This account is locked after ${MAX_FAILED_LOGINS} incorrect password attempts. To request a password reset, please contact the College Registrar in person or by phone and be ready to verify your identity${REGISTRAR_CONTACT}.`;
+
+// Dummy hash so unknown/locked usernames cost the same time as real ones (prevents timing-based username checks)
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_COST);
+
+// Unknown usernames get the SAME attempts-remaining / locked behavior as real ones, so responses never reveal
+// whether an account exists. Kept in memory with a TTL and a size cap so it cannot grow without limit.
+const unknownLoginFailures = new Map();
+const UNKNOWN_TTL_MS = FAILED_WINDOW_HOURS * 60 * 60 * 1000;
+const UNKNOWN_MAX_ENTRIES = 5000;
+
+function unknownKey(name) { return String(name || '').toLowerCase().slice(0, 100); }
+
+function isUnknownLocked(name) {
+    const e = unknownLoginFailures.get(unknownKey(name));
+    return !!e && (Date.now() - e.last) <= UNKNOWN_TTL_MS && e.count >= MAX_FAILED_LOGINS;
+}
+
+function recordUnknownFailure(name) {
+    const key = unknownKey(name);
+    const now = Date.now();
+    let e = unknownLoginFailures.get(key);
+    if (!e || (now - e.last) > UNKNOWN_TTL_MS) e = { count: 0, last: now };
+    e.count += 1;
+    e.last = now;
+    unknownLoginFailures.delete(key);   // re-insert so Map order = recency
+    unknownLoginFailures.set(key, e);
+    while (unknownLoginFailures.size > UNKNOWN_MAX_ENTRIES) {
+        unknownLoginFailures.delete(unknownLoginFailures.keys().next().value);
+    }
+    return e.count;
+}
+
+function failureMessage(count) {
+    const remaining = MAX_FAILED_LOGINS - count;
+    return `Invalid username or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before this account is locked.`;
+}
 
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
@@ -161,11 +199,11 @@ function sanitizeCsvCell(val) {
 }
 
 // Records account lock / password reset events (best effort; always called outside transactions)
-async function logSecurityEvent(username, event, performedBy) {
+async function logSecurityEvent(username, event, performedBy, ip) {
     try {
         await pool.query(
-            'INSERT INTO account_security_logs (username, event, performed_by) VALUES ($1, $2, $3)',
-            [username, event, performedBy]
+            'INSERT INTO account_security_logs (username, event, performed_by, ip) VALUES ($1, $2, $3, $4)',
+            [username, event, performedBy, ip ? String(ip).slice(0, 64) : null]
         );
     } catch (err) {
         console.error('Security log write failed:', err.message);
@@ -245,6 +283,7 @@ async function seedDatabase() {
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT DEFAULT 0;`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_at TIMESTAMPTZ;`);
         await pool.query(`
             CREATE TABLE IF NOT EXISTS account_security_logs (
                 id SERIAL PRIMARY KEY,
@@ -254,6 +293,7 @@ async function seedDatabase() {
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
         `);
+        await pool.query(`ALTER TABLE account_security_logs ADD COLUMN IF NOT EXISTS ip VARCHAR(64);`);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS students (
@@ -368,6 +408,25 @@ async function seedDatabase() {
             }
         }
 
+        // ADMIN RECOVERY: if the admin account is locked, set RESET_ADMIN_PASSWORD in the environment and restart.
+        // It only acts while the admin is locked, forces a password change at next login, and is written to the security log.
+        if (process.env.RESET_ADMIN_PASSWORD) {
+            const adm = await pool.query(`SELECT is_locked FROM users WHERE username = 'admin'`);
+            if (adm.rows.length > 0 && adm.rows[0].is_locked) {
+                const recoveryHash = await bcrypt.hash(String(process.env.RESET_ADMIN_PASSWORD), BCRYPT_COST);
+                await pool.query(`
+                    UPDATE users
+                    SET password_hash = $1, must_change_password = TRUE,
+                        failed_login_attempts = 0, is_locked = FALSE, locked_at = NULL, last_failed_at = NULL
+                    WHERE username = 'admin'
+                `, [recoveryHash]);
+                await logSecurityEvent('admin', 'ADMIN_RECOVERY', 'server-environment', null);
+                console.log("[ADMIN RECOVERY] Admin account unlocked and password reset. REMOVE the RESET_ADMIN_PASSWORD environment variable now.");
+            } else {
+                console.log("[ADMIN RECOVERY] RESET_ADMIN_PASSWORD is set but the admin account is not locked, so it was ignored. Remove the variable.");
+            }
+        }
+
         const existingRegistrar = await pool.query(`SELECT username FROM users WHERE username = 'registrar'`);
         if (existingRegistrar.rows.length === 0) {
             const initRegPass = process.env.INITIAL_REGISTRAR_PASSWORD || generateSecurePassword();
@@ -441,43 +500,50 @@ app.post('/login', loginLimiter, async (req, res) => {
         const password = req.body.password ? String(req.body.password) : '';
 
         const userQuery = await pool.query('SELECT * FROM users WHERE username = $1 AND COALESCE(is_archived, FALSE) = FALSE', [username]);
+
+        // Unknown (or archived) username: behave exactly like a real account so nothing is revealed
         if (userQuery.rows.length === 0) {
-            return res.render('login', { error: 'Invalid username or password.', popupMessage: null });
+            await bcrypt.compare(password, DUMMY_HASH);
+            if (isUnknownLocked(username)) {
+                return res.render('login', { error: LOCKED_MESSAGE, popupMessage: null });
+            }
+            const count = recordUnknownFailure(username);
+            return res.render('login', {
+                error: count >= MAX_FAILED_LOGINS ? LOCKED_MESSAGE : failureMessage(count),
+                popupMessage: null
+            });
         }
 
         const user = userQuery.rows[0];
 
-        // Locked accounts are rejected even with the correct password until the Registrar resets them
+        // Locked accounts are rejected even with the correct password until a reset is done
         if (user.is_locked) {
+            await bcrypt.compare(password, DUMMY_HASH);
             return res.render('login', { error: LOCKED_MESSAGE, popupMessage: null });
         }
 
         const match = await bcrypt.compare(password, user.password_hash);
         if (!match) {
-            // Admin is exempt from lockout (otherwise nobody could reset it); the IP rate limiter still applies
-            if (user.role === 'admin') {
-                return res.render('login', { error: 'Invalid username or password.', popupMessage: null });
-            }
-
-            // Atomic increment so parallel guesses cannot slip past the limit
+            // Atomic update; failures older than the window start a fresh count
+            const NEW_ATTEMPTS = `CASE WHEN last_failed_at IS NULL OR last_failed_at < NOW() - INTERVAL '${FAILED_WINDOW_HOURS} hours'
+                                       THEN 1 ELSE COALESCE(failed_login_attempts, 0) + 1 END`;
             const failRes = await pool.query(`
                 UPDATE users
-                SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
-                    is_locked = (COALESCE(failed_login_attempts, 0) + 1 >= $2),
-                    locked_at = CASE WHEN COALESCE(failed_login_attempts, 0) + 1 >= $2 THEN NOW() ELSE locked_at END
+                SET failed_login_attempts = ${NEW_ATTEMPTS},
+                    last_failed_at = NOW(),
+                    is_locked = (${NEW_ATTEMPTS} >= $2),
+                    locked_at = CASE WHEN ${NEW_ATTEMPTS} >= $2 THEN NOW() ELSE locked_at END
                 WHERE username = $1
                 RETURNING failed_login_attempts, is_locked
             `, [user.username, MAX_FAILED_LOGINS]);
 
             const result = failRes.rows[0];
             if (result && result.is_locked) {
-                await logSecurityEvent(user.username, 'ACCOUNT_LOCKED', 'system');
+                await logSecurityEvent(user.username, 'ACCOUNT_LOCKED', 'system', req.ip);
                 return res.render('login', { error: LOCKED_MESSAGE, popupMessage: null });
             }
-
-            const remaining = MAX_FAILED_LOGINS - (result ? result.failed_login_attempts : 0);
             return res.render('login', {
-                error: `Invalid username or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before this account is locked.`,
+                error: failureMessage(result ? result.failed_login_attempts : 1),
                 popupMessage: null
             });
         }
@@ -1487,7 +1553,7 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
 });
 
 // ==================== ACCOUNT SECURITY LOG (Registrar / Admin) ====================
-const SECURITY_EVENTS = ['ACCOUNT_LOCKED', 'PASSWORD_RESET_UNLOCK', 'PASSWORD_RESET'];
+const SECURITY_EVENTS = ['ACCOUNT_LOCKED', 'PASSWORD_RESET_UNLOCK', 'PASSWORD_RESET', 'ADMIN_RECOVERY'];
 
 app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
     const role = req.session.user.role;
@@ -1527,7 +1593,7 @@ app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
 
         const listParams = [...params, PAGE_SIZE, (safePage - 1) * PAGE_SIZE];
         const logRes = await pool.query(`
-            SELECT l.id, l.username, l.event, l.performed_by, l.created_at,
+            SELECT l.id, l.username, l.event, l.performed_by, l.ip, l.created_at,
                    u.role, u.first_name, u.middle_name, u.last_name
             FROM account_security_logs l
             LEFT JOIN users u ON u.username = l.username
@@ -1558,6 +1624,11 @@ app.post('/registrar/unlock-account', isAuthenticated, async (req, res) => {
     try {
         const username = req.body.username ? String(req.body.username).trim() : '';
         const typedPass = req.body.temp_password ? String(req.body.temp_password).trim() : '';
+
+        if (req.body.verified !== 'yes') {
+            setFlash(req, 'err', 'Please confirm that you verified the person\'s identity before resetting the password.');
+            return res.redirect('/registrar');
+        }
         // Registrar may reset students and faculty; only the admin may reset a locked registrar
         const allowedRoles = actorRole === 'admin' ? ['student', 'faculty', 'registrar'] : ['student', 'faculty'];
 
