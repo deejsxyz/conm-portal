@@ -1,7 +1,11 @@
 require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
+
+// Fix PostgreSQL date-parsing off-by-one timezone shifting (parses as raw string YYYY-MM-DD)
+require('pg').types.setTypeParser(1082, (val) => val);
+
+const bcrypt = require('bcrypt'); // Switched to native bcrypt for performance and event-loop health
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const rateLimit = require('express-rate-limit');
@@ -9,6 +13,7 @@ const helmet = require('helmet');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -20,6 +25,12 @@ if (!process.env.SESSION_SECRET) {
     process.exit(1);
 }
 
+// Production TLS enforcement requirement check
+if (process.env.NODE_ENV === 'production' && !process.env.PG_CA_CERT) {
+    console.error('FATAL ERROR: PG_CA_CERT environment variable is missing in production for secure TLS validation.');
+    process.exit(1);
+}
+
 const app = express();
 const BCRYPT_COST = 12;
 const BCRYPT_BATCH_COST = 10;
@@ -28,7 +39,7 @@ const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const LOCKOUT_MINUTES = 15;
 const REGISTRAR_CONTACT = process.env.REGISTRAR_CONTACT ? ` (${process.env.REGISTRAR_CONTACT})` : '';
-const LOCKED_MESSAGE = `Account locked due to too many failed attempts. Please contact the College Registrar${REGISTRAR_CONTACT} to reset your password.`;
+const GENERIC_LOGIN_ERROR = 'Invalid username or password.';
 
 class UserError extends Error {}
 function safeMsg(err, fallback) { return err instanceof UserError ? err.message : fallback; }
@@ -88,13 +99,19 @@ app.use((req, res, next) => {
     next();
 });
 
+// Secure Pool Configuration with Strict TLS and Error Handling
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' 
-        ? (process.env.PG_CA_CERT ? { ca: process.env.PG_CA_CERT } : { rejectUnauthorized: false })
+        ? { ca: process.env.PG_CA_CERT, rejectUnauthorized: true }
         : false
 });
 
+pool.on('error', (err) => {
+    console.error('Unexpected PG pool error on idle client:', err.message);
+});
+
+// Upgraded multer configuration
 const upload = multer({
     dest: 'uploads/',
     limits: { fileSize: 2 * 1024 * 1024 },
@@ -124,15 +141,16 @@ app.use(session({
     }
 }));
 
+// Rate limiter keyed by IP + username to prevent campus-wide NAT lockouts
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
-    skipSuccessfulRequests: true,
+    max: 30, // Raised to accommodate campus NAT environments safely
+    keyGenerator: (req) => `${req.ip}-${req.body.username || 'anonymous'}`,
     standardHeaders: true,
     legacyHeaders: false,
     handler: (req, res) => {
         res.status(429).render('login', {
-            error: 'Too many failed login attempts. Please try again later.',
+            error: 'Too many failed login attempts from this connection. Please try again later.',
             popupMessage: null
         });
     }
@@ -183,10 +201,21 @@ function computeServerRemark(grade) {
 
 function normalizeGrade(rawGrade) {
     if (!rawGrade || String(rawGrade).trim() === '') return '';
-    let g = String(rawGrade).trim().toUpperCase();
-    if (/^[1-5]$/.test(g)) g = `${g}.00`;
-    if (ALLOWED_GRADES.includes(g)) return g;
+    let cleaned = String(rawGrade).trim().toUpperCase();
+    if (/^\d+(\.\d+)?$/.test(cleaned)) {
+        let num = Number(cleaned);
+        if (num >= 1 && num <= 5) {
+            cleaned = num.toFixed(2);
+        }
+    }
+    if (ALLOWED_GRADES.includes(cleaned)) return cleaned;
     throw new UserError(`Invalid grade value submitted: ${rawGrade}`);
+}
+
+function isValidAcademicYear(ay) {
+    if (!/^\d{4}-\d{4}$/.test(ay)) return false;
+    const [y1, y2] = ay.split('-').map(Number);
+    return y2 === y1 + 1;
 }
 
 function formatFullName(first, middle, last, fallback) {
@@ -307,7 +336,6 @@ async function seedDatabase() {
             );
         `);
         await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
-        await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));`);
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ DEFAULT NOW();`);
 
         await pool.query(`
@@ -320,6 +348,22 @@ async function seedDatabase() {
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
         `);
+
+        // Ordered table creation to satisfy dependencies on fresh database boots
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS students (
+                student_id VARCHAR(100) PRIMARY KEY,
+                student_number VARCHAR(100),
+                first_name VARCHAR(100) NOT NULL,
+                middle_name VARCHAR(100),
+                last_name VARCHAR(100) NOT NULL,
+                program VARCHAR(150) DEFAULT 'Bachelor of Science in Nursing (BSN)',
+                year_level INT DEFAULT 1,
+                section VARCHAR(10) DEFAULT 'A',
+                is_archived BOOLEAN DEFAULT FALSE
+            );
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_students_year_sec ON students (year_level, section) WHERE is_archived = FALSE;`);
 
         // ==================== IMMUNIZATION STATUS TABLES ====================
         await pool.query(`
@@ -358,7 +402,6 @@ async function seedDatabase() {
             );
         `);
 
-        // Seed initial vaccine rules (#2)
         const initialVaccines = [
             ['Tetanus Toxoid', 5, 12, 28, true],
             ['Hepatitis B', 3, 60, 30, false],
@@ -368,25 +411,9 @@ async function seedDatabase() {
             await pool.query(`
                 INSERT INTO vaccine_types (name, doses_required, validity_months, min_days_between, restart_when_expired)
                 VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (name) DO UPDATE SET 
-                    doses_required = $2, validity_months = $3, min_days_between = $4, restart_when_expired = $5;
+                ON CONFLICT (name) DO NOTHING;
             `, v);
         }
-
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS students (
-                student_id VARCHAR(100) PRIMARY KEY,
-                student_number VARCHAR(100),
-                first_name VARCHAR(100) NOT NULL,
-                middle_name VARCHAR(100),
-                last_name VARCHAR(100) NOT NULL,
-                program VARCHAR(150) DEFAULT 'Bachelor of Science in Nursing (BSN)',
-                year_level INT DEFAULT 1,
-                section VARCHAR(10) DEFAULT 'A',
-                is_archived BOOLEAN DEFAULT FALSE
-            );
-        `);
-        await pool.query(`CREATE INDEX IF NOT EXISTS idx_students_year_sec ON students (year_level, section) WHERE is_archived = FALSE;`);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS courses (
@@ -426,26 +453,29 @@ async function seedDatabase() {
 
         await pool.query(`ALTER TABLE grades DROP CONSTRAINT IF EXISTS grades_student_id_course_code_key;`);
         await pool.query(`
-            DELETE FROM grades a USING grades b
-            WHERE a.id < b.id
-              AND a.student_id = b.student_id
-              AND a.course_code = b.course_code
-              AND COALESCE(a.academic_year, '') = COALESCE(b.academic_year, '')
-              AND COALESCE(a.enrolled_term, '') = COALESCE(b.enrolled_term, '');
-        `);
-        await pool.query(`
             CREATE UNIQUE INDEX IF NOT EXISTS grades_stu_course_ay_term_idx 
             ON grades (student_id, course_code, academic_year, enrolled_term);
         `);
 
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_grades_student_term ON grades (student_id, enrolled_term, academic_year);`);
 
-        await pool.query(`DELETE FROM grades WHERE student_id NOT IN (SELECT student_id FROM students);`);
-        await pool.query(`DELETE FROM grades WHERE course_code NOT IN (SELECT course_code FROM courses);`);
-        await pool.query(`ALTER TABLE grades DROP CONSTRAINT IF EXISTS fk_grades_student;`);
-        await pool.query(`ALTER TABLE grades ADD CONSTRAINT fk_grades_student FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE RESTRICT;`);
-        await pool.query(`ALTER TABLE grades DROP CONSTRAINT IF EXISTS fk_grades_course;`);
-        await pool.query(`ALTER TABLE grades ADD CONSTRAINT fk_grades_course FOREIGN KEY (course_code) REFERENCES courses(course_code) ON DELETE RESTRICT;`);
+        // Idempotent constraints setup
+        await pool.query(`
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_grades_student') THEN
+                    ALTER TABLE grades ADD CONSTRAINT fk_grades_student
+                        FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE RESTRICT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_grades_course') THEN
+                    ALTER TABLE grades ADD CONSTRAINT fk_grades_course
+                        FOREIGN KEY (course_code) REFERENCES courses(course_code) ON DELETE RESTRICT;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
+                    ALTER TABLE users ADD CONSTRAINT users_role_check
+                        CHECK (role IN ('admin', 'faculty', 'student', 'registrar'));
+                END IF;
+            END $$;
+        `);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS grade_audit_logs (
@@ -546,17 +576,14 @@ async function seedDatabase() {
             ['NCM 122', 'Intensive Nursing Practicum (Hospital and Community Settings)', 0, 8, 8, 8]
         ];
 
-        const validCodes = conmCourses.map(c => c[0]);
-        await pool.query(`UPDATE courses SET is_active = FALSE WHERE course_code <> ALL($1::text[])`, [validCodes]);
-
-        for (let c of conmCourses) {
+        for (const c of conmCourses) {
             await pool.query(`
-                INSERT INTO courses (course_code, descriptive_title, lec_units, rle_units, total_units, term_id, is_active) 
+                INSERT INTO courses (course_code, descriptive_title, lec_units, rle_units, total_units, term_id, is_active)
                 VALUES ($1, $2, $3, $4, $5, $6, TRUE)
-                ON CONFLICT (course_code) 
-                DO UPDATE SET descriptive_title = $2, lec_units = $3, rle_units = $4, total_units = $5, term_id = $6, is_active = TRUE;
+                ON CONFLICT (course_code) DO NOTHING;
             `, c);
         }
+
         console.log("Database schema verified and active.");
     } catch (err) {
         console.error("Critical database seeding error:", err);
@@ -585,11 +612,11 @@ app.post('/login', loginLimiter, async (req, res) => {
         if (userQuery.rows.length === 0) {
             await bcrypt.compare(password, DUMMY_HASH);
             if (isUnknownLocked(username)) {
-                return res.status(401).render('login', { error: LOCKED_MESSAGE, popupMessage: null });
+                return res.status(401).render('login', { error: GENERIC_LOGIN_ERROR, popupMessage: null });
             }
-            const count = recordUnknownFailure(username);
+            recordUnknownFailure(username);
             return res.status(401).render('login', {
-                error: count >= MAX_FAILED_LOGINS ? LOCKED_MESSAGE : 'Invalid username or password.',
+                error: GENERIC_LOGIN_ERROR,
                 popupMessage: null
             });
         }
@@ -604,8 +631,7 @@ app.post('/login', loginLimiter, async (req, res) => {
                 user.failed_login_attempts = 0;
             } else {
                 await bcrypt.compare(password, DUMMY_HASH);
-                const remain = Math.ceil((LOCKOUT_MINUTES * 60 * 1000 - (Date.now() - lockedAt)) / 60000);
-                return res.status(401).render('login', { error: `Account locked. Try again in ${remain} minutes.`, popupMessage: null });
+                return res.status(401).render('login', { error: GENERIC_LOGIN_ERROR, popupMessage: null });
             }
         }
 
@@ -626,10 +652,9 @@ app.post('/login', loginLimiter, async (req, res) => {
             const result = failRes.rows[0];
             if (result && result.is_locked) {
                 await logSecurityEvent(user.username, 'ACCOUNT_LOCKED', 'system', req.ip);
-                return res.status(401).render('login', { error: LOCKED_MESSAGE, popupMessage: null });
             }
             return res.status(401).render('login', {
-                error: 'Invalid username or password.',
+                error: GENERIC_LOGIN_ERROR,
                 popupMessage: null
             });
         }
@@ -869,7 +894,7 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
 
         await client.query(`
-            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name, is_archived) 
+            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
             VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
@@ -1259,7 +1284,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             lockedAccounts: lockedRes.rows,
             selectedFaculty: selectedFaculty,
             facultyAssignedCourses: facultyAssignedCourses,
-            hasBatchCredentials: Array.isArray(req.session.lastBatchCredentials) && req.session.lastBatchCredentials.length > 0
+            hasBatchFilePath: Boolean(req.session.lastBatchFilePath && fs.existsSync(req.session.lastBatchFilePath))
         });
     } catch (err) {
         console.error('Registrar load error:', err);
@@ -1271,7 +1296,7 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
 
 app.post('/registrar/update-settings', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
-    const ay = /^\d{4}-\d{4}$/.test(req.body.current_ay || '') ? req.body.current_ay : '2026-2027';
+    const ay = isValidAcademicYear(req.body.current_ay) ? req.body.current_ay : '2026-2027';
     const sem = parseInt(req.body.current_semester, 10) === 2 ? 2 : 1;
     try {
         await pool.query('UPDATE settings SET current_ay = $1, current_semester = $2 WHERE id = 1', [ay, sem]);
@@ -1304,6 +1329,7 @@ app.post('/registrar/toggle-faculty-lock', isAuthenticated, async (req, res) => 
     }
 });
 
+// Secure Batch Upload with temporary file credential handling (prevents plaintext storage in session table)
 app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -1395,13 +1421,17 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                         if (userCheck.rows[0].is_archived) {
                             await client.query(`UPDATE users SET is_archived = FALSE WHERE username = $1`, [cleanId]);
                         }
+                        // Update existing user names to prevent drift
+                        await client.query(`
+                            UPDATE users SET first_name = $1, middle_name = $2, last_name = $3 WHERE username = $4
+                        `, [fName, mName, lName, cleanId]);
                     } else {
                         const tempPassword = generateSecurePassword();
                         const hashedPassword = await bcrypt.hash(tempPassword, BCRYPT_BATCH_COST);
 
                         await client.query(`
                             INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-                            VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
+                            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, TRUE, FALSE)
                         `, [cleanId, hashedPassword, fName, mName, lName]);
 
                         generatedCredentials.push({
@@ -1424,8 +1454,8 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                             throw new UserError(`Row ${idx + 2} (${cleanId}) has an invalid semester.`);
                         }
                         const cleanAy = String(row.academic_year).trim();
-                        if (!/^\d{4}-\d{4}$/.test(cleanAy)) {
-                            throw new UserError(`Row ${idx + 2} (${cleanId}) has an invalid academic year format (expected YYYY-YYYY).`);
+                        if (!isValidAcademicYear(cleanAy)) {
+                            throw new UserError(`Row ${idx + 2} (${cleanId}) has an invalid academic year format (expected YYYY-YYYY where second year equals first plus one).`);
                         }
 
                         const termId = ((cleanYear - 1) * 2 + cleanSem).toString();
@@ -1456,7 +1486,25 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                 }
 
                 await client.query('COMMIT');
-                req.session.lastBatchCredentials = generatedCredentials;
+                
+                // Securely write batch credentials to a temporary local file instead of storing plaintext in database session tables
+                if (generatedCredentials.length > 0) {
+                    if (req.session.lastBatchFilePath && fs.existsSync(req.session.lastBatchFilePath)) {
+                        try { fs.unlinkSync(req.session.lastBatchFilePath); } catch (e) {}
+                    }
+                    const csvHeader = 'Student ID,Student Name,Year & Section,Temporary Password\n';
+                    const csvRows = generatedCredentials.map(c => [
+                        sanitizeCsvCell(c.student_id),
+                        sanitizeCsvCell(c.name),
+                        sanitizeCsvCell(c.year_section),
+                        `"${String(c.temp_password).replace(/"/g, '""')}"`
+                    ].join(',')).join('\n');
+                    
+                    const tempFilePath = path.join('uploads', `batch_creds_${crypto.randomBytes(16).toString('hex')}.csv`);
+                    fs.writeFileSync(tempFilePath, csvHeader + csvRows, 'utf8');
+                    req.session.lastBatchFilePath = tempFilePath;
+                }
+
                 setFlash(req, 'msg', `${enrolledCount} students processed (${generatedCredentials.length} new accounts generated).`);
                 res.redirect('/registrar');
             } catch (err) {
@@ -1474,25 +1522,20 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
 app.get('/registrar/export-batch-credentials', isAuthenticated, (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
     
-    const credentials = req.session.lastBatchCredentials;
-    if (!credentials || credentials.length === 0) {
+    const filePath = req.session.lastBatchFilePath;
+    if (!filePath || !fs.existsSync(filePath)) {
         setFlash(req, 'err', 'No new student credentials available to download.');
         return res.redirect('/registrar');
     }
 
-    delete req.session.lastBatchCredentials;
-
-    const csvHeader = 'Student ID,Student Name,Year & Section,Temporary Password\n';
-    const csvRows = credentials.map(c => [
-        sanitizeCsvCell(c.student_id),
-        sanitizeCsvCell(c.name),
-        sanitizeCsvCell(c.year_section),
-        `"${String(c.temp_password).replace(/"/g, '""')}"`
-    ].join(',')).join('\n');
+    delete req.session.lastBatchFilePath;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="batch_temporary_passwords.csv"');
-    res.status(200).send(csvHeader + csvRows);
+    res.status(200).sendFile(path.resolve(filePath), (err) => {
+        if (err) console.error('Error sending credentials file:', err);
+        try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+    });
 });
 
 app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
@@ -1527,7 +1570,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
 
         await client.query(`
             INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
+            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await client.query(`
@@ -1541,7 +1584,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             const codes = Array.isArray(req.body.course_codes) ? req.body.course_codes : [req.body.course_codes];
 
             if (!/^[1-8]$/.test(term)) throw new UserError('Invalid term.');
-            if (!/^\d{4}-\d{4}$/.test(ay)) throw new UserError('Invalid academic year format.');
+            if (!isValidAcademicYear(ay)) throw new UserError('Invalid academic year format (second year must equal first plus one).');
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i];
@@ -1708,8 +1751,8 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
         await client.query(`
-            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5, FALSE)
+            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived)
+            VALUES ($1, $2, 'faculty', $3, $4, $5, TRUE, FALSE)
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
         if (req.body.course_codes) {
@@ -2020,7 +2063,7 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
         const targetAy = req.body.academic_year ? String(req.body.academic_year).trim() : '';
 
         if (!/^[1-8]$/.test(term)) throw new UserError('Invalid term.');
-        if (!/^\d{4}-\d{4}$/.test(targetAy)) throw new UserError('Invalid academic year format.');
+        if (!isValidAcademicYear(targetAy)) throw new UserError('Invalid academic year format (second year must equal first plus one).');
 
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const currentAy = targetAy || settingsRes.rows[0].current_ay;
@@ -2067,7 +2110,7 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
         const { course_codes, final_grades } = req.body;
         
         if (!/^[1-8]$/.test(enrolledTerm)) throw new UserError('Invalid term.');
-        if (!/^\d{4}-\d{4}$/.test(academicYear)) throw new UserError('Invalid academic year format.');
+        if (!isValidAcademicYear(academicYear)) throw new UserError('Invalid academic year format.');
 
         client = await pool.connect();
         await client.query('BEGIN');
@@ -2079,10 +2122,10 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
             const code = codes[i];
             const cleanGrade = normalizeGrade(grades[i]);
             const computedRem = computeServerRemark(cleanGrade);
-            const facUser = req.body[`instructor__${code}`] ? String(req.body[`instructor__${code}`]).trim() : '';
+            const facUser = req.body[`instructor__${code}`] !== undefined ? String(req.body[`instructor__${code}`]).trim() : undefined;
 
-            let facFormalName = '';
-            if (facUser) {
+            let facFormalName = undefined;
+            if (facUser !== undefined && facUser !== '') {
                 const facRes = await client.query(`SELECT first_name, middle_name, last_name FROM users WHERE username = $1 AND role = 'faculty'`, [facUser]);
                 if (facRes.rows.length > 0) {
                     facFormalName = formatFormalFacultyName(facRes.rows[0]);
@@ -2093,23 +2136,27 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
 
             if (code) {
                 const existingRes = await client.query(`
-                    SELECT final_grade FROM grades 
+                    SELECT final_grade, instructor, instructor_username FROM grades 
                     WHERE student_id = $1 AND course_code = $2 AND enrolled_term = $3 AND academic_year = $4
                 `, [cleanId, code, enrolledTerm, academicYear]);
 
-                const oldGrade = existingRes.rows[0] ? existingRes.rows[0].final_grade : '';
+                if (existingRes.rows.length > 0) {
+                    const oldGrade = existingRes.rows[0].final_grade || '';
+                    const finalInst = facFormalName !== undefined ? facFormalName : existingRes.rows[0].instructor;
+                    const finalInstUser = facUser !== undefined ? facUser : existingRes.rows[0].instructor_username;
 
-                await client.query(`
-                    UPDATE grades 
-                    SET final_grade = $1, instructor = $2, instructor_username = $3, remarks = $4 
-                    WHERE student_id = $5 AND course_code = $6 AND enrolled_term = $7 AND academic_year = $8
-                `, [cleanGrade, facFormalName, facUser, computedRem, cleanId, code, enrolledTerm, academicYear]);
-
-                if (oldGrade !== cleanGrade) {
                     await client.query(`
-                        INSERT INTO grade_audit_logs (changed_by, changed_by_role, student_id, course_code, academic_year, enrolled_term, old_grade, new_grade)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                    `, [req.session.user.username, req.session.user.role, cleanId, code, academicYear, enrolledTerm, oldGrade, cleanGrade]);
+                        UPDATE grades 
+                        SET final_grade = $1, instructor = $2, instructor_username = $3, remarks = $4 
+                        WHERE student_id = $5 AND course_code = $6 AND enrolled_term = $7 AND academic_year = $8
+                    `, [cleanGrade, finalInst, finalInstUser, computedRem, cleanId, code, enrolledTerm, academicYear]);
+
+                    if (oldGrade !== cleanGrade) {
+                        await client.query(`
+                            INSERT INTO grade_audit_logs (changed_by, changed_by_role, student_id, course_code, academic_year, enrolled_term, old_grade, new_grade)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        `, [req.session.user.username, req.session.user.role, cleanId, code, academicYear, enrolledTerm, oldGrade, cleanGrade]);
+                    }
                 }
             }
         }
