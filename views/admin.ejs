@@ -60,12 +60,12 @@
 
         <div class="space-y-4">
             <!-- ==================== MANAGE STUDENTS SECTION ==================== -->
-            <div id="studentManageSection" class="<%= locals.searchStudentId ? '' : 'hidden' %> space-y-5">
+            <div id="studentManageSection" class="<%= locals.searchStudentId || (locals.searchedStudents && searchedStudents.length > 0) ? '' : 'hidden' %> space-y-5">
                 
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div>
-                        <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Search Registered Student Accounts by ID</h4>
-                        <p class="text-xs text-slate-500">To keep the page fast, students are grouped into the 4 Year Level tables (BSN1–BSN4) below and displayed when searched by ID number.</p>
+                        <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Manage Registered Student Accounts</h4>
+                        <p class="text-xs text-slate-500">Students are grouped into 4 Year Level tables (BSN1–BSN4). Select multiple students to permanently wipe their accounts, grades, and logs.</p>
                     </div>
 
                     <form method="GET" action="/admin" class="flex items-center gap-2 w-full sm:w-auto">
@@ -75,10 +75,29 @@
                         </button>
                         <% if (locals.searchStudentId) { %>
                             <a href="/admin" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">
-                                Clear
+                                Clear Search
                             </a>
                         <% } %>
                     </form>
+                </div>
+
+                <!-- Global Hidden Form for Bulk Deletion -->
+                <form id="bulkDeleteForm" action="/admin/bulk-delete-users" method="POST" class="hidden">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                </form>
+                
+                <div class="flex flex-wrap justify-between items-center gap-4 bg-red-50 p-4 border border-red-200 rounded-xl shadow-sm">
+                    <div class="text-xs text-red-800 font-bold">
+                        ⚠️ <span class="uppercase tracking-wider">Danger Zone:</span> Permanently deleting accounts removes ALL their data instantly.
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" id="selectAllStudentsBtn" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-sm">
+                            Select All / None
+                        </button>
+                        <button type="button" id="bulkDeleteBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-md cursor-pointer transition-colors flex items-center gap-1.5">
+                            🗑️ Permanently Delete Selected
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 4 YEAR LEVEL STUDENT TABLES (BSN1 - BSN4) -->
@@ -108,13 +127,9 @@
                                 </span>
                             </div>
 
-                            <% if (!locals.searchStudentId) { %>
-                                <div class="py-4 px-5 text-xs text-slate-400 italic">
-                                    Use the Search Student ID bar above to look up a BSN<%= level %> student account.
-                                </div>
-                            <% } else if (levelMatches.length === 0) { %>
+                            <% if (levelMatches.length === 0) { %>
                                 <div class="py-4 px-5 text-xs text-slate-400">
-                                    No matching student ID "<span class="font-mono font-semibold text-slate-600"><%= searchStudentId %></span>" in BSN<%= level %>.
+                                    <%= locals.searchStudentId ? `No matching student ID "${searchStudentId}" in BSN${level}.` : `No students found in BSN${level}.` %>
                                 </div>
                             <% } else { %>
                                 <div class="divide-y divide-slate-100 p-4 space-y-3">
@@ -122,10 +137,12 @@
                                         const actionWord = stu.is_archived ? 'Restore' : 'Archive';
                                     %>
                                         <div class="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-3">
-                                            <div class="flex flex-wrap justify-between items-center gap-2">
-                                                <div class="flex items-center gap-2">
+                                            <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-200 pb-3">
+                                                <div class="flex items-center gap-2.5">
+                                                    <input type="checkbox" value="<%= stu.student_id %>" class="student-checkbox w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer shadow-sm">
+                                                    
                                                     <span class="font-mono font-bold text-sm text-emerald-900"><%= stu.student_id %></span>
-                                                    <span class="text-xs font-bold text-slate-700">
+                                                    <span class="text-xs font-bold text-slate-700 hidden sm:inline">
                                                         — <%= [stu.first_name, stu.middle_name, stu.last_name].filter(Boolean).join(' ') %>
                                                     </span>
                                                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">
@@ -141,22 +158,21 @@
                                                 </div>
 
                                                 <div class="flex items-center gap-2">
-                                                    <a href="/registrar?student_id=<%= encodeURIComponent(stu.student_id) %>" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-sm">
+                                                    <a href="/registrar?student_id=<%= encodeURIComponent(stu.student_id) %>" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-sm cursor-pointer">
                                                         Manage in Registrar
                                                     </a>
                                                     <form action="/admin/delete-user" method="POST" class="inline confirm-form" data-confirm-msg="<%= actionWord %> student <%= stu.student_id %>? Academic records and grades are preserved.">
                                                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                                         <input type="hidden" name="username" value="<%= stu.student_id %>">
                                                         <input type="hidden" name="action" value="<%= stu.is_archived ? 'restore' : 'archive' %>">
-                                                        <button type="submit" class="px-3 py-1.5 <%= stu.is_archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700' %> text-white rounded text-xs font-bold shadow-sm cursor-pointer">
+                                                        <button type="submit" class="px-3 py-1.5 <%= stu.is_archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-600 hover:bg-slate-700' %> text-white rounded text-xs font-bold shadow-sm cursor-pointer">
                                                             <%= actionWord %> Student
                                                         </button>
                                                     </form>
                                                 </div>
                                             </div>
 
-                                            <!-- Quick Edit Student Form -->
-                                            <form action="/admin/edit-student" method="POST" class="grid grid-cols-1 sm:grid-cols-7 gap-2 items-end pt-2 border-t border-slate-200">
+                                            <form action="/admin/edit-student" method="POST" class="grid grid-cols-1 sm:grid-cols-7 gap-2 items-end pt-1">
                                                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                                 <input type="hidden" name="student_id" value="<%= stu.student_id %>">
                                                 <div>
@@ -197,7 +213,7 @@
                                                 </div>
                                                 <div class="flex gap-2">
                                                     <a href="/admin" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm flex items-center justify-center">Cancel</a>
-                                                    <button type="submit" class="flex-[2] py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-bold text-xs shadow-sm cursor-pointer">
+                                                    <button type="submit" class="flex-[2] py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-bold text-xs shadow-sm cursor-pointer">
                                                         Save
                                                     </button>
                                                 </div>
@@ -273,7 +289,7 @@
                     </div>
 
                     <form method="GET" action="/admin" class="w-full sm:w-80">
-                        <select name="staff_user" id="staffSelectDropdown" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500">
+                        <select name="staff_user" id="staffSelectDropdown" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                             <option value="">-- Select Staff Member --</option>
                             <% if (locals.staffList) { staffList.forEach(staff => { 
                                 const fullName = [staff.first_name, staff.middle_name, staff.last_name].filter(Boolean).join(' ') || staff.username;
@@ -360,7 +376,7 @@
                     </div>
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Role</label>
-                        <select name="role" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium">
+                        <select name="role" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium cursor-pointer">
                             <option value="registrar">Registrar</option>
                             <option value="faculty">Faculty</option>
                         </select>
@@ -474,13 +490,45 @@
                 });
             }
 
+            // Bulk Delete JS Logic
+            const selectAllBtn = document.getElementById('selectAllStudentsBtn');
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener('click', () => {
+                    const checkboxes = document.querySelectorAll('.student-checkbox');
+                    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+                    checkboxes.forEach(cb => cb.checked = !allChecked);
+                });
+            }
+
+            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+            if (bulkDeleteBtn) {
+                bulkDeleteBtn.addEventListener('click', () => {
+                    const selected = document.querySelectorAll('.student-checkbox:checked');
+                    if (selected.length === 0) {
+                        alert('No students selected.');
+                        return;
+                    }
+                    if (confirm(`Permanently delete ${selected.length} student account(s) and ALL associated data (grades, logs, vaccines)? This CANNOT be undone.`)) {
+                        const form = document.getElementById('bulkDeleteForm');
+                        selected.forEach(cb => {
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = 'userIds';
+                            input.value = cb.value;
+                            form.appendChild(input);
+                        });
+                        form.submit();
+                    }
+                });
+            }
+
             const staffPass = document.getElementById('staffTempPassword');
             const studentPass = document.getElementById('studentTempPassword');
             if (staffPass && !staffPass.value) staffPass.value = generateRandomPassword();
             if (studentPass && !studentPass.value) studentPass.value = generateRandomPassword();
             
             const staffManagedOpen = "<%= locals.selectedStaff ? 'true' : 'false' %>" === "true";
-            const studentManagedOpen = "<%= locals.searchStudentId ? 'true' : 'false' %>" === "true";
+            const studentManagedOpen = "<%= locals.searchStudentId || (locals.searchedStudents && searchedStudents.length > 0) ? 'true' : 'false' %>" === "true";
             
             if (staffManagedOpen) {
                 sessionStorage.setItem('activeAdminSection', 'staffManageSection');

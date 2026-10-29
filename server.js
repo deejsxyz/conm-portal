@@ -44,6 +44,32 @@ class UserError extends Error {}
 function safeMsg(err, fallback) { return err instanceof UserError ? err.message : fallback; }
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_COST);
+const unknownLoginFailures = new Map();
+const UNKNOWN_TTL_MS = LOCKOUT_MINUTES * 60 * 1000;
+const UNKNOWN_MAX_ENTRIES = 5000;
+
+function unknownKey(name) { return String(name || '').toLowerCase().slice(0, 100); }
+
+function isUnknownLocked(name) {
+    const e = unknownLoginFailures.get(unknownKey(name));
+    return !!e && (Date.now() - e.last) <= UNKNOWN_TTL_MS && e.count >= MAX_FAILED_LOGINS;
+}
+
+function recordUnknownFailure(name) {
+    const key = unknownKey(name);
+    const now = Date.now();
+    let e = unknownLoginFailures.get(key);
+    if (!e || (now - e.last) > UNKNOWN_TTL_MS) e = { count: 0, last: now };
+    e.count += 1;
+    e.last = now;
+    unknownLoginFailures.delete(key);
+    unknownLoginFailures.set(key, e);
+    while (unknownLoginFailures.size > UNKNOWN_MAX_ENTRIES) {
+        unknownLoginFailures.delete(unknownLoginFailures.keys().next().value);
+    }
+    return e.count;
+}
+
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('query parser', 'simple');
@@ -811,6 +837,16 @@ app.get('/admin', isAuthenticated, async (req, res) => {
                 ORDER BY s.is_archived ASC, s.student_id ASC
             `, [`%${searchStudentId}%`]);
             searchedStudents = stuSearchRes.rows;
+        } else {
+            // Fix 1: Load all students by default when search is empty
+            const stuAllRes = await pool.query(`
+                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level, COALESCE(s.section, 'A') AS section,
+                       s.is_archived, u.must_change_password
+                FROM students s
+                LEFT JOIN users u ON s.student_id = u.username
+                ORDER BY s.is_archived ASC, s.year_level ASC, s.last_name ASC
+            `);
+            searchedStudents = stuAllRes.rows;
         }
 
         res.render('admin', {
@@ -917,6 +953,7 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
+// Single Archive/Restore route (existing)
 app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -957,6 +994,58 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
         if (client) await client.query('ROLLBACK');
         console.error('Archive user error:', err);
         setFlash(req, 'err', 'Failed to update account archive status.');
+        res.redirect('/admin');
+    } finally {
+        if (client) client.release();
+    }
+});
+
+// Fix 2: Bulk PERMANENT DELETE route
+app.post('/admin/bulk-delete-users', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    let client;
+    try {
+        let userIds = req.body.userIds;
+        if (!userIds) {
+            setFlash(req, 'err', 'No users selected for deletion.');
+            return res.redirect('/admin');
+        }
+        
+        // Ensure it's an array if only one is selected
+        if (!Array.isArray(userIds)) userIds = [userIds];
+        
+        // Strictly protect root admin
+        userIds = userIds.filter(id => id !== 'admin');
+
+        if (userIds.length === 0) {
+            setFlash(req, 'err', 'Invalid selection.');
+            return res.redirect('/admin');
+        }
+
+        client = await pool.connect();
+        await client.query('BEGIN');
+        
+        // Grades have RESTRICT foreign keys linking to students, so they must be wiped first
+        await client.query('DELETE FROM grades WHERE student_id = ANY($1::text[])', [userIds]);
+        await client.query('DELETE FROM student_vaccinations WHERE student_id = ANY($1::text[])', [userIds]);
+        await client.query('DELETE FROM grade_audit_logs WHERE student_id = ANY($1::text[])', [userIds]);
+        await client.query('DELETE FROM immunization_access_logs WHERE student_id = ANY($1::text[])', [userIds]);
+        
+        await client.query('DELETE FROM students WHERE student_id = ANY($1::text[])', [userIds]);
+        await client.query('DELETE FROM faculty_courses WHERE username = ANY($1::text[])', [userIds]);
+        await client.query('DELETE FROM account_security_logs WHERE username = ANY($1::text[])', [userIds]);
+        
+        // Finally, wipe the user accounts
+        await client.query('DELETE FROM users WHERE username = ANY($1::text[])', [userIds]);
+
+        await client.query('COMMIT');
+        setFlash(req, 'msg', `Successfully deleted ${userIds.length} account(s) permanently.`);
+        res.redirect('/admin');
+    } catch (err) {
+        if (client) await client.query('ROLLBACK');
+        console.error('Bulk delete error:', err);
+        setFlash(req, 'err', 'Failed to permanently delete accounts.');
         res.redirect('/admin');
     } finally {
         if (client) client.release();
