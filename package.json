@@ -1,6 +1,6 @@
 {
   "name": "conm-grading-portal",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "CONM Academic Grading & Information System",
   "main": "server.js",
   "engines": {
@@ -19,7 +19,7 @@
     "express-rate-limit": "^7.2.0",
     "express-session": "^1.18.0",
     "helmet": "^7.1.0",
-    "multer": "^2.0.0-rc.4",
+    "multer": "2.0.0-rc.4",
     "pg": "^8.11.5"
   }
 }
