@@ -21,7 +21,7 @@
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <form action="/logout" method="POST" class="inline">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button type="submit" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded font-medium">Log Out</button>
+                    <button type="submit" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded font-medium cursor-pointer">Log Out</button>
                 </form>
             </div>
         </div>
@@ -44,14 +44,14 @@
                 %>
                 
                 <div class="flex gap-2">
-                    <select id="portal_year_select" onchange="submitPortalFilter()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
+                    <select id="portal_year_select" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500 cursor-pointer">
                         <option value="1" <%= viewYear === '1' ? 'selected' : '' %>>BSN1</option>
                         <option value="2" <%= viewYear === '2' ? 'selected' : '' %>>BSN2</option>
                         <option value="3" <%= viewYear === '3' ? 'selected' : '' %>>BSN3</option>
                         <option value="4" <%= viewYear === '4' ? 'selected' : '' %>>BSN4</option>
                     </select>
 
-                    <select id="portal_sem_select" onchange="submitPortalFilter()" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500">
+                    <select id="portal_sem_select" class="px-3 py-2 rounded-lg border border-slate-300 text-sm bg-slate-50 font-medium focus:ring-2 focus:ring-pink-500 cursor-pointer">
                         <option value="1" <%= viewSem === '1' ? 'selected' : '' %>>1st Semester</option>
                         <option value="2" <%= viewSem === '2' ? 'selected' : '' %>>2nd Semester</option>
                     </select>
@@ -147,13 +147,25 @@
         </div>
     </main>
 
-    <script>
-        function submitPortalFilter() {
-            const y = parseInt(document.getElementById('portal_year_select').value);
-            const s = parseInt(document.getElementById('portal_sem_select').value);
-            document.getElementById('portal_term_hidden').value = (y - 1) * 2 + s;
-            document.getElementById('semesterFilterForm').submit();
-        }
+    <script nonce="<%= cspNonce %>">
+        document.addEventListener('DOMContentLoaded', () => {
+            const portalYear = document.getElementById('portal_year_select');
+            const portalSem = document.getElementById('portal_sem_select');
+            const termHidden = document.getElementById('portal_term_hidden');
+            const filterForm = document.getElementById('semesterFilterForm');
+
+            if (portalYear && portalSem && termHidden && filterForm) {
+                const submitFilter = () => {
+                    const y = parseInt(portalYear.value, 10);
+                    const s = parseInt(portalSem.value, 10);
+                    termHidden.value = (y - 1) * 2 + s;
+                    filterForm.submit();
+                };
+
+                portalYear.addEventListener('change', submitFilter);
+                portalSem.addEventListener('change', submitFilter);
+            }
+        });
     </script>
 </body>
 </html>

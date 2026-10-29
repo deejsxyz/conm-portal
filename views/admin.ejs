@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>CONM System Admin</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
     <header class="bg-emerald-950 text-white shadow-md border-b-4 border-pink-500">
@@ -21,7 +21,7 @@
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <form action="/logout" method="POST" class="inline">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</button>
+                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium cursor-pointer">Log Out</button>
                 </form>
             </div>
         </div>
@@ -30,29 +30,29 @@
     <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-8">
 
         <% if (locals.message) { %>
-            <div class="p-4 bg-emerald-100 border border-emerald-400 text-emerald-800 text-xs font-bold rounded-xl shadow-sm">
+            <div class="p-4 bg-emerald-100 border border-emerald-400 text-emerald-800 text-xs font-bold rounded-xl shadow-sm text-center">
                 ✅ <%= message %>
             </div>
         <% } %>
 
         <% if (locals.error) { %>
-            <div class="p-4 bg-red-100 border border-red-400 text-red-700 text-xs font-bold rounded-xl shadow-sm">
+            <div class="p-4 bg-red-100 border border-red-400 text-red-700 text-xs font-bold rounded-xl shadow-sm text-center">
                 ⚠️ <%= error %>
             </div>
         <% } %>
 
         <!-- TOGGLE BUTTONS FOR ADMIN SECTIONS -->
         <div class="flex flex-wrap gap-4">
-            <button type="button" onclick="toggleSection('staffRegSection')" class="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+            <button type="button" data-target-section="staffRegSection" class="admin-nav-btn px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 cursor-pointer">
                 👨‍🏫 Register Staff
             </button>
-            <button type="button" onclick="toggleSection('staffManageSection')" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+            <button type="button" data-target-section="staffManageSection" class="admin-nav-btn px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 cursor-pointer">
                 👥 Manage Staff
             </button>
-            <button type="button" onclick="toggleSection('studentRegSection')" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+            <button type="button" data-target-section="studentRegSection" class="admin-nav-btn px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 cursor-pointer">
                 👤 Register Student
             </button>
-            <button type="button" onclick="toggleSection('studentManageSection')" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+            <button type="button" data-target-section="studentManageSection" class="admin-nav-btn px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2 cursor-pointer">
                 ✏️ Manage Students
             </button>
         </div>
@@ -69,7 +69,7 @@
 
                     <form method="GET" action="/admin" class="flex items-center gap-2 w-full sm:w-auto">
                         <input type="text" name="search_student_id" value="<%= locals.searchStudentId || '' %>" placeholder="Enter Student ID" class="w-full sm:w-64 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
-                        <button type="submit" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow">
+                        <button type="submit" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow cursor-pointer">
                             Search ID
                         </button>
                         <% if (locals.searchStudentId) { %>
@@ -143,11 +143,11 @@
                                                     <a href="/registrar?student_id=<%= encodeURIComponent(stu.student_id) %>" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-sm">
                                                         Manage in Registrar
                                                     </a>
-                                                    <form action="/admin/delete-user" method="POST" class="inline" data-confirm="<%= actionWord %> student <%= stu.student_id %>? Academic records and grades are preserved." onsubmit="return confirm(this.dataset.confirm);">
+                                                    <form action="/admin/delete-user" method="POST" class="inline confirm-form" data-confirm-msg="<%= actionWord %> student <%= stu.student_id %>? Academic records and grades are preserved.">
                                                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                                         <input type="hidden" name="username" value="<%= stu.student_id %>">
                                                         <input type="hidden" name="action" value="<%= stu.is_archived ? 'restore' : 'archive' %>">
-                                                        <button type="submit" class="px-3 py-1.5 <%= stu.is_archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700' %> text-white rounded text-xs font-bold shadow-sm">
+                                                        <button type="submit" class="px-3 py-1.5 <%= stu.is_archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700' %> text-white rounded text-xs font-bold shadow-sm cursor-pointer">
                                                             <%= actionWord %> Student
                                                         </button>
                                                     </form>
@@ -191,12 +191,12 @@
                                                     <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
                                                     <div class="flex">
                                                         <input type="text" name="temp_password" id="temp_pass_<%= stu.student_id %>" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded-l border border-amber-300 bg-amber-50 text-[11px] font-mono focus:ring-1 focus:ring-amber-500">
-                                                        <button type="button" data-target="temp_pass_<%= stu.student_id %>" onclick="document.getElementById(this.dataset.target).value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
+                                                        <button type="button" data-target="temp_pass_<%= stu.student_id %>" class="gen-pass-btn px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors cursor-pointer" title="Generate New Password">↻</button>
                                                     </div>
                                                 </div>
                                                 <div class="flex gap-2">
-                                                    <button type="button" onclick="window.location.href='/admin'" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm">Cancel</button>
-                                                    <button type="submit" class="flex-[2] py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-bold text-xs shadow-sm">
+                                                    <a href="/admin" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm flex items-center justify-center">Cancel</a>
+                                                    <button type="submit" class="flex-[2] py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-bold text-xs shadow-sm cursor-pointer">
                                                         Save
                                                     </button>
                                                 </div>
@@ -255,8 +255,8 @@
                         <input type="text" id="studentTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-emerald-400 bg-emerald-50 text-xs font-mono font-bold text-emerald-900">
                     </div>
                     <div class="flex gap-2">
-                        <button type="button" onclick="toggleSection('studentManageSection')" class="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
-                        <button type="submit" class="flex-[2] py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                        <button type="button" data-target-section="studentManageSection" class="cancel-toggle-btn flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">Cancel</button>
+                        <button type="submit" class="flex-[2] py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">
                             + Add
                         </button>
                     </div>
@@ -272,7 +272,7 @@
                     </div>
 
                     <form method="GET" action="/admin" class="w-full sm:w-80">
-                        <select name="staff_user" onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500">
+                        <select name="staff_user" id="staffSelectDropdown" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-emerald-500">
                             <option value="">-- Select Staff Member --</option>
                             <% if (locals.staffList) { staffList.forEach(staff => { 
                                 const fullName = [staff.first_name, staff.middle_name, staff.last_name].filter(Boolean).join(' ') || staff.username;
@@ -299,10 +299,10 @@
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <form action="/admin/delete-user" method="POST" class="inline" data-confirm="Archive staff account <%= selectedStaff.username %>?" onsubmit="return confirm(this.dataset.confirm);">
+                                <form action="/admin/delete-user" method="POST" class="inline confirm-form" data-confirm-msg="Archive staff account <%= selectedStaff.username %>?">
                                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                     <input type="hidden" name="username" value="<%= selectedStaff.username %>">
-                                    <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm">
+                                    <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">
                                         Archive Staff
                                     </button>
                                 </form>
@@ -332,12 +332,12 @@
                                 <label class="block text-[10px] uppercase font-bold text-amber-600 mb-1">Reset Password?</label>
                                 <div class="flex">
                                     <input type="text" name="temp_password" id="temp_pass_staff_<%= selectedStaff.username %>" placeholder="Leave blank" class="w-full px-2.5 py-1.5 rounded-l border border-amber-300 bg-amber-50 text-[11px] font-mono focus:ring-1 focus:ring-amber-500">
-                                    <button type="button" data-target="temp_pass_staff_<%= selectedStaff.username %>" onclick="document.getElementById(this.dataset.target).value = generateRandomPassword()" class="px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors" title="Generate New Password">↻</button>
+                                    <button type="button" data-target="temp_pass_staff_<%= selectedStaff.username %>" class="gen-pass-btn px-2 bg-amber-200 hover:bg-amber-300 border border-l-0 border-amber-300 rounded-r text-xs font-bold text-amber-800 transition-colors cursor-pointer" title="Generate New Password">↻</button>
                                 </div>
                             </div>
                             <div class="flex gap-2">
-                                <button type="button" onclick="window.location.href='/admin'" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-sm">Cancel</button>
-                                <button type="submit" class="flex-[2] py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow-sm">
+                                <a href="/admin" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-sm flex items-center justify-center">Cancel</a>
+                                <button type="submit" class="flex-[2] py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs shadow-sm cursor-pointer">
                                     💾 Save
                                 </button>
                             </div>
@@ -381,8 +381,8 @@
                         <input type="text" id="staffTempPassword" name="temp_password" required class="w-full px-3 py-2 rounded-lg border border-emerald-400 bg-emerald-50 text-xs font-mono font-bold text-emerald-900">
                     </div>
                     <div class="flex gap-2">
-                        <button type="button" onclick="toggleSection('staffManageSection')" class="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors">Cancel</button>
-                        <button type="submit" class="flex-[2] py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors">
+                        <button type="button" data-target-section="staffManageSection" class="cancel-toggle-btn flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">Cancel</button>
+                        <button type="submit" class="flex-[2] py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold text-xs shadow transition-colors cursor-pointer">
                             + Add Staff
                         </button>
                     </div>
@@ -392,7 +392,7 @@
 
     </main>
 
-    <script>
+    <script nonce="<%= cspNonce %>">
         function toggleSection(sectionId) {
             const sections = ['staffRegSection', 'staffManageSection', 'studentRegSection', 'studentManageSection'];
             sections.forEach(id => {
@@ -436,6 +436,43 @@
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.admin-nav-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toggleSection(btn.getAttribute('data-target-section'));
+                });
+            });
+
+            document.querySelectorAll('.cancel-toggle-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toggleSection(btn.getAttribute('data-target-section'));
+                });
+            });
+
+            // CSP-compliant confirmation dialog handler for all forms with .confirm-form
+            document.querySelectorAll('.confirm-form').forEach(form => {
+                form.addEventListener('submit', (e) => {
+                    const msg = form.getAttribute('data-confirm-msg');
+                    if (msg && !confirm(msg)) {
+                        e.preventDefault();
+                    }
+                });
+            });
+
+            document.querySelectorAll('.gen-pass-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.getAttribute('data-target');
+                    const targetInput = document.getElementById(targetId);
+                    if (targetInput) targetInput.value = generateRandomPassword();
+                });
+            });
+
+            const staffDropdown = document.getElementById('staffSelectDropdown');
+            if (staffDropdown) {
+                staffDropdown.addEventListener('change', (e) => {
+                    e.target.form.submit();
+                });
+            }
+
             const staffPass = document.getElementById('staffTempPassword');
             const studentPass = document.getElementById('studentTempPassword');
             if (staffPass && !staffPass.value) staffPass.value = generateRandomPassword();

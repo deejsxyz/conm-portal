@@ -11,7 +11,6 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const crypto = require('crypto');
 
-// Critical safety net for unhandled async rejections
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
@@ -28,11 +27,17 @@ app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('query parser', 'simple');
 
+// Cryptographic Nonce Middleware for Strict CSP
+app.use((req, res, next) => {
+    res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+    next();
+});
+
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+            scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`, "https://cdn.tailwindcss.com"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:"]
         }
@@ -40,7 +45,6 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-// Use extended: false to block object injection exploits via urlencoded payloads
 app.use(express.urlencoded({ extended: false }));
 
 const pool = new Pool({
@@ -79,7 +83,6 @@ app.use(session({
     }
 }));
 
-// Campus-friendly rate limiter skipping successful logins
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
@@ -159,7 +162,6 @@ function setFlash(req, type, text) {
     req.session.flash = { type, text };
 }
 
-// Flash middleware skipping favicon
 app.use((req, res, next) => {
     if (req.path === '/favicon.ico') return next();
     if (!req.session.csrfToken) {
@@ -399,7 +401,6 @@ async function seedDatabase() {
     }
 }
 
-// ==================== AUTH ROUTES ====================
 app.get('/', (req, res) => {
     if (req.session.user) return res.redirect('/portal');
     const lockedPopup = req.query.locked === '1' 
@@ -672,7 +673,6 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
-// Hard-read role from database to prevent client role spoofing
 app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -947,7 +947,6 @@ app.post('/registrar/toggle-faculty-lock', isAuthenticated, async (req, res) => 
     }
 });
 
-// Transactional Batch Upload with header mapping & strict validation
 app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 

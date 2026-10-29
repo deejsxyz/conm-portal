@@ -23,7 +23,7 @@
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <form action="/logout" method="POST" class="inline">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium">Log Out</button>
+                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium cursor-pointer">Log Out</button>
                 </form>
             </div>
         </div>
@@ -59,7 +59,7 @@
             <form method="GET" action="/faculty/edit-grades" class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
                 <div class="sm:col-span-6">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">1. Select Subject Handled</label>
-                    <select name="course_code" id="courseSelect" required onchange="autoSelectYearFromCourse()" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-emerald-950 bg-slate-50 focus:ring-2 focus:ring-emerald-500">
+                    <select name="course_code" id="courseSelect" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-emerald-950 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                         <option value="" style="font-style: italic;">-- Select Assigned Subject --</option>
                         <% assignedCourses.forEach(c => { 
                             const courseYear = Math.ceil(Number(c.term_id || 1) / 2);
@@ -73,7 +73,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">2. Year Level</label>
-                    <select name="year_level" id="yearLevelSelect" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500">
+                    <select name="year_level" id="yearLevelSelect" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                         <option value="">-- Year --</option>
                         <option value="1" <%= selectedYearLevel === '1' ? 'selected' : '' %>>BSN1</option>
                         <option value="2" <%= selectedYearLevel === '2' ? 'selected' : '' %>>BSN2</option>
@@ -84,7 +84,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">3. Section</label>
-                    <select name="section" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500">
+                    <select name="section" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                         <option value="">-- Section --</option>
                         <option value="A" <%= selectedSection === 'A' ? 'selected' : '' %>>A</option>
                         <option value="B" <%= selectedSection === 'B' ? 'selected' : '' %>>B</option>
@@ -93,7 +93,7 @@
                 </div>
 
                 <div class="sm:col-span-2 flex gap-2">
-                    <button type="submit" class="w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap">
+                    <button type="submit" class="w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap cursor-pointer">
                         📋 Load Sheet
                     </button>
                 </div>
@@ -164,7 +164,7 @@
                                                 BSN<%= stu.year_level %> - <%= stu.section %>
                                             </td>
                                             <td class="p-1.5 border-r border-slate-300 bg-emerald-50/30">
-                                                <select name="final_grades" onchange="autoMatchRowRemark(this, '<%= idx %>')" class="w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-emerald-800 bg-white text-xs focus:ring-2 focus:ring-emerald-500">
+                                                <select name="final_grades" data-index="<%= idx %>" class="faculty-grade-select w-full px-2 py-1.5 rounded border border-slate-300 font-bold text-emerald-800 bg-white text-xs focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                                                     <option value="" <%= !stu.final_grade ? 'selected' : '' %>>-- Grade --</option>
                                                     <option value="1.00" <%= stu.final_grade === '1.00' ? 'selected' : '' %>>1.00</option>
                                                     <option value="1.25" <%= stu.final_grade === '1.25' ? 'selected' : '' %>>1.25</option>
@@ -199,7 +199,7 @@
                             <span class="text-xs text-slate-500">
                                 💡 <strong>Note:</strong> Remarks are automatically computed and verified by the server based on the selected Final Grade.
                             </span>
-                            <button type="submit" class="w-full sm:w-auto px-8 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors">
+                            <button type="submit" class="w-full sm:w-auto px-8 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-colors cursor-pointer">
                                 💾 Save All Grades for BSN<%= selectedYearLevel %> - <%= selectedSection %>
                             </button>
                         </div>
@@ -213,18 +213,26 @@
         <% } %>
     </main>
 
-    <script>
-        function autoSelectYearFromCourse() {
+    <script nonce="<%= cspNonce %>">
+        document.addEventListener('DOMContentLoaded', () => {
             const courseSelect = document.getElementById('courseSelect');
             const yearSelect = document.getElementById('yearLevelSelect');
-            if (!courseSelect || !yearSelect) return;
-
-            const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
-            const suggestedYear = selectedOpt ? selectedOpt.getAttribute('data-year') : '';
-            if (suggestedYear) {
-                yearSelect.value = suggestedYear;
+            if (courseSelect && yearSelect) {
+                courseSelect.addEventListener('change', () => {
+                    const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
+                    const suggestedYear = selectedOpt ? selectedOpt.getAttribute('data-year') : '';
+                    if (suggestedYear) {
+                        yearSelect.value = suggestedYear;
+                    }
+                });
             }
-        }
+
+            document.querySelectorAll('.faculty-grade-select').forEach(sel => {
+                sel.addEventListener('change', () => {
+                    autoMatchRowRemark(sel, sel.getAttribute('data-index'));
+                });
+            });
+        });
 
         function autoMatchRowRemark(selectElement, rowIndex) {
             const grade = selectElement.value;
