@@ -346,7 +346,6 @@ async function seedDatabase() {
             );
         `);
 
-        // Ordered table creation to satisfy dependencies on fresh database boots
         await pool.query(`
             CREATE TABLE IF NOT EXISTS students (
                 student_id VARCHAR(100) PRIMARY KEY,
@@ -362,7 +361,6 @@ async function seedDatabase() {
         `);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_students_year_sec ON students (year_level, section) WHERE is_archived = FALSE;`);
 
-        // ==================== IMMUNIZATION STATUS TABLES ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS vaccine_types (
                 id SERIAL PRIMARY KEY,
@@ -456,7 +454,6 @@ async function seedDatabase() {
 
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_grades_student_term ON grades (student_id, enrolled_term, academic_year);`);
 
-        // Idempotent constraints setup
         await pool.query(`
             DO $$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_grades_student') THEN
@@ -891,7 +888,7 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
 
         await client.query(`
-            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name, is_archived) 
             VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
@@ -1259,6 +1256,27 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
                 `, [targetStudentId, selectedTerm, selectedAy]);
                 grades = gradesRes.rows;
 
+                // Auto-enroll standard term subjects if none exist for this term yet
+                if (grades.length === 0) {
+                    const standardCourses = allCoursesRaw.filter(c => String(c.term_id) === String(selectedTerm));
+                    for (const sc of standardCourses) {
+                        await client.query(`
+                            INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year)
+                            VALUES ($1, $2, '', '', '', '', $3, $4)
+                            ON CONFLICT (student_id, course_code, academic_year, enrolled_term) DO NOTHING;
+                        `, [targetStudentId, sc.course_code, selectedTerm, selectedAy]);
+                    }
+                    const refetchedGrades = await client.query(`
+                        SELECT g.id, g.course_code, g.final_grade, g.instructor, g.instructor_username, g.remarks, g.enrolled_term, g.academic_year,
+                               c.descriptive_title, c.lec_units, c.rle_units, c.total_units
+                        FROM grades g
+                        JOIN courses c ON g.course_code = c.course_code
+                        WHERE g.student_id = $1 AND g.enrolled_term = $2 AND g.academic_year = $3
+                        ORDER BY g.course_code ASC
+                    `, [targetStudentId, selectedTerm, selectedAy]);
+                    grades = refetchedGrades.rows;
+                }
+
                 immunizationReport = await calculateImmunizationStatus(client, targetStudentId);
                 await client.query(
                     'INSERT INTO immunization_access_logs (student_id, accessed_by, action_type) VALUES ($1, $2, $3)',
@@ -1326,7 +1344,6 @@ app.post('/registrar/toggle-faculty-lock', isAuthenticated, async (req, res) => 
     }
 });
 
-// Secure Batch Upload with temporary file credential handling (prevents plaintext storage in session table)
 app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -1418,7 +1435,6 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                         if (userCheck.rows[0].is_archived) {
                             await client.query(`UPDATE users SET is_archived = FALSE WHERE username = $1`, [cleanId]);
                         }
-                        // Update existing user names to prevent drift
                         await client.query(`
                             UPDATE users SET first_name = $1, middle_name = $2, last_name = $3 WHERE username = $4
                         `, [fName, mName, lName, cleanId]);
@@ -1484,7 +1500,6 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
 
                 await client.query('COMMIT');
                 
-                // Securely write batch credentials to a temporary local file instead of storing plaintext in database session tables
                 if (generatedCredentials.length > 0) {
                     if (req.session.lastBatchFilePath && fs.existsSync(req.session.lastBatchFilePath)) {
                         try { fs.unlinkSync(req.session.lastBatchFilePath); } catch (e) {}
@@ -1556,23 +1571,20 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
 
         client = await pool.connect();
         await client.query('BEGIN');
-        const existing = await client.query('SELECT username FROM users WHERE username = $1', [cleanId]);
-        if (existing.rows.length > 0) {
-            await client.query('ROLLBACK');
-            setFlash(req, 'err', `Student ID '${cleanId}' is already registered.`);
-            return res.redirect('/registrar');
+        
+        const existingUser = await client.query('SELECT username FROM users WHERE username = $1', [cleanId]);
+        if (existingUser.rows.length === 0) {
+            const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
+            await client.query(`
+                INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
+                VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
+            `, [cleanId, hashedPassword, fName, mName, lName]);
         }
-
-        const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
-
-        await client.query(`
-            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
-        `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await client.query(`
             INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level, section, is_archived) 
             VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5, $6, FALSE)
+            ON CONFLICT (student_id) DO UPDATE SET first_name = $2, middle_name = $3, last_name = $4, year_level = $5, section = $6, is_archived = FALSE
         `, [cleanId, fName, mName, lName, yr, sec]);
 
         if (req.body.term && req.body.course_codes && req.body.academic_year) {
@@ -1581,7 +1593,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             const codes = Array.isArray(req.body.course_codes) ? req.body.course_codes : [req.body.course_codes];
 
             if (!/^[1-8]$/.test(term)) throw new UserError('Invalid term.');
-            if (!isValidAcademicYear(ay)) throw new UserError('Invalid academic year format (second year must equal first plus one).');
+            if (!isValidAcademicYear(ay)) throw new UserError('Invalid academic year format.');
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i];
@@ -1602,7 +1614,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
                     INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year)
                     VALUES ($1, $2, '', $3, $4, '', $5, $6)
                     ON CONFLICT (student_id, course_code, academic_year, enrolled_term) 
-                    DO UPDATE SET instructor = $3, instructor_username = $4;
+                    DO UPDATE SET instructor = COALESCE(NULLIF($3, ''), grades.instructor), instructor_username = COALESCE(NULLIF($4, ''), grades.instructor_username);
                 `, [cleanId, code, facFormalName, facUser, term, ay]);
             }
         }
