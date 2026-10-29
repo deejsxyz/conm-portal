@@ -364,7 +364,6 @@ async function seedDatabase() {
             );
         `);
 
-        // Ordered table creation to satisfy dependencies on fresh database boots
         await pool.query(`
             CREATE TABLE IF NOT EXISTS students (
                 student_id VARCHAR(100) PRIMARY KEY,
@@ -380,7 +379,6 @@ async function seedDatabase() {
         `);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_students_year_sec ON students (year_level, section) WHERE is_archived = FALSE;`);
 
-        // ==================== IMMUNIZATION STATUS TABLES ====================
         await pool.query(`
             CREATE TABLE IF NOT EXISTS vaccine_types (
                 id SERIAL PRIMARY KEY,
@@ -480,7 +478,6 @@ async function seedDatabase() {
 
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_grades_student_term ON grades (student_id, enrolled_term, academic_year);`);
 
-        // Idempotent constraints setup
         await pool.query(`
             DO $$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_grades_student') THEN
@@ -645,7 +642,6 @@ app.post('/login', loginIpLimiter, loginLimiter, async (req, res) => {
                 user.is_locked = false;
                 user.failed_login_attempts = 0;
             } else {
-                // Only someone who knows the correct password is told the account is locked
                 const knowsPassword = await bcrypt.compare(password, user.password_hash);
                 if (knowsPassword) {
                     const minsLeft = Math.max(1, Math.ceil((LOCKOUT_MINUTES * 60 * 1000 - lockElapsedMs) / 60000));
@@ -815,17 +811,6 @@ app.get('/admin', isAuthenticated, async (req, res) => {
             selectedStaff = staffRes.rows.find(f => f.username === selectedStaffUsername) || null;
         }
 
-        const countsRes = await pool.query(`
-            SELECT year_level, COUNT(*) AS total 
-            FROM students 
-            WHERE COALESCE(is_archived, FALSE) = FALSE
-            GROUP BY year_level
-        `);
-        const yearCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
-        countsRes.rows.forEach(r => {
-            yearCounts[r.year_level] = parseInt(r.total, 10);
-        });
-
         let searchedStudents = [];
         if (searchStudentId) {
             const stuSearchRes = await pool.query(`
@@ -837,25 +822,25 @@ app.get('/admin', isAuthenticated, async (req, res) => {
                 ORDER BY s.is_archived ASC, s.student_id ASC
             `, [`%${searchStudentId}%`]);
             searchedStudents = stuSearchRes.rows;
-        } else {
-            // Fix 1: Load all students by default when search is empty
-            const stuAllRes = await pool.query(`
-                SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level, COALESCE(s.section, 'A') AS section,
-                       s.is_archived, u.must_change_password
-                FROM students s
-                LEFT JOIN users u ON s.student_id = u.username
-                ORDER BY s.is_archived ASC, s.year_level ASC, s.last_name ASC
-            `);
-            searchedStudents = stuAllRes.rows;
         }
+
+        // Fetch ALL active students for the bulk Archive and bulk Delete UI lists
+        const allActiveRes = await pool.query(`
+            SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level, COALESCE(s.section, 'A') AS section
+            FROM students s
+            JOIN users u ON s.student_id = u.username
+            WHERE COALESCE(s.is_archived, FALSE) = FALSE AND u.role = 'student'
+            ORDER BY s.last_name ASC
+        `);
+        const allActiveStudents = allActiveRes.rows;
 
         res.render('admin', {
             currentUser: req.session.user,
             staffList: staffRes.rows,
             selectedStaff: selectedStaff,
-            yearCounts: yearCounts,
             searchStudentId: searchStudentId,
-            searchedStudents: searchedStudents
+            searchedStudents: searchedStudents,
+            allActiveStudents: allActiveStudents
         });
     } catch (err) {
         console.error('Admin load error:', err);
@@ -953,54 +938,46 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
     }
 });
 
-// Single Archive/Restore route (existing)
-app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
+// Bulk Archive Accounts Route
+app.post('/admin/bulk-archive-users', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
     let client;
     try {
-        const username = req.body.username ? String(req.body.username).trim() : '';
-        const action = req.body.action === 'restore' ? 'restore' : 'archive';
+        let userIds = req.body.userIds;
+        if (!userIds) {
+            setFlash(req, 'err', 'No users selected for archiving.');
+            return res.redirect('/admin');
+        }
         
-        if (!username || username === 'admin') {
-            setFlash(req, 'err', 'Cannot modify the primary system administrator.');
+        if (!Array.isArray(userIds)) userIds = [userIds];
+        userIds = userIds.filter(id => id !== 'admin');
+
+        if (userIds.length === 0) {
+            setFlash(req, 'err', 'Invalid selection.');
             return res.redirect('/admin');
         }
 
         client = await pool.connect();
         await client.query('BEGIN');
-        const userRes = await client.query('SELECT role FROM users WHERE username = $1', [username]);
-        if (userRes.rows.length === 0) {
-            await client.query('ROLLBACK');
-            setFlash(req, 'err', 'User account not found.');
-            return res.redirect('/admin');
-        }
-
-        const dbRole = userRes.rows[0].role;
-        const archiveFlag = action === 'archive';
-
-        await client.query('UPDATE users SET is_archived = $1 WHERE username = $2', [archiveFlag, username]);
-
-        if (dbRole === 'student') {
-            await client.query('UPDATE students SET is_archived = $1 WHERE student_id = $2', [archiveFlag, username]);
-        } else if (dbRole === 'faculty' && archiveFlag) {
-            await client.query('DELETE FROM faculty_courses WHERE username = $1', [username]);
-        }
+        
+        await client.query('UPDATE users SET is_archived = TRUE WHERE username = ANY($1::text[]) AND role = \'student\'', [userIds]);
+        await client.query('UPDATE students SET is_archived = TRUE WHERE student_id = ANY($1::text[])', [userIds]);
 
         await client.query('COMMIT');
-        setFlash(req, 'msg', `Account '${username}' has been ${archiveFlag ? 'archived (grades preserved)' : 'restored'}.`);
+        setFlash(req, 'msg', `Successfully archived ${userIds.length} student account(s).`);
         res.redirect('/admin');
     } catch (err) {
         if (client) await client.query('ROLLBACK');
-        console.error('Archive user error:', err);
-        setFlash(req, 'err', 'Failed to update account archive status.');
+        console.error('Bulk archive error:', err);
+        setFlash(req, 'err', 'Failed to archive accounts.');
         res.redirect('/admin');
     } finally {
         if (client) client.release();
     }
 });
 
-// Fix 2: Bulk PERMANENT DELETE route
+// Bulk PERMANENT DELETE Route
 app.post('/admin/bulk-delete-users', isAuthenticated, async (req, res) => {
     if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
@@ -1012,10 +989,7 @@ app.post('/admin/bulk-delete-users', isAuthenticated, async (req, res) => {
             return res.redirect('/admin');
         }
         
-        // Ensure it's an array if only one is selected
         if (!Array.isArray(userIds)) userIds = [userIds];
-        
-        // Strictly protect root admin
         userIds = userIds.filter(id => id !== 'admin');
 
         if (userIds.length === 0) {
@@ -1026,21 +1000,19 @@ app.post('/admin/bulk-delete-users', isAuthenticated, async (req, res) => {
         client = await pool.connect();
         await client.query('BEGIN');
         
-        // Grades have RESTRICT foreign keys linking to students, so they must be wiped first
+        // Wipe dependent records first
         await client.query('DELETE FROM grades WHERE student_id = ANY($1::text[])', [userIds]);
         await client.query('DELETE FROM student_vaccinations WHERE student_id = ANY($1::text[])', [userIds]);
         await client.query('DELETE FROM grade_audit_logs WHERE student_id = ANY($1::text[])', [userIds]);
         await client.query('DELETE FROM immunization_access_logs WHERE student_id = ANY($1::text[])', [userIds]);
         
+        // Wipe parent records
         await client.query('DELETE FROM students WHERE student_id = ANY($1::text[])', [userIds]);
-        await client.query('DELETE FROM faculty_courses WHERE username = ANY($1::text[])', [userIds]);
         await client.query('DELETE FROM account_security_logs WHERE username = ANY($1::text[])', [userIds]);
-        
-        // Finally, wipe the user accounts
         await client.query('DELETE FROM users WHERE username = ANY($1::text[])', [userIds]);
 
         await client.query('COMMIT');
-        setFlash(req, 'msg', `Successfully deleted ${userIds.length} account(s) permanently.`);
+        setFlash(req, 'msg', `Successfully deleted ${userIds.length} student account(s) permanently.`);
         res.redirect('/admin');
     } catch (err) {
         if (client) await client.query('ROLLBACK');

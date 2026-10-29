@@ -60,87 +60,52 @@
 
         <div class="space-y-4">
             <!-- ==================== MANAGE STUDENTS SECTION ==================== -->
-            <div id="studentManageSection" class="<%= locals.searchStudentId || (locals.searchedStudents && searchedStudents.length > 0) ? '' : 'hidden' %> space-y-5">
+            <div id="studentManageSection" class="<%= locals.searchStudentId ? '' : 'hidden' %> space-y-5">
                 
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div>
-                        <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Manage Registered Student Accounts</h4>
-                        <p class="text-xs text-slate-500">Students are grouped into 4 Year Level tables (BSN1–BSN4). Select multiple students to permanently wipe their accounts, grades, and logs.</p>
-                    </div>
-
-                    <form method="GET" action="/admin" class="flex items-center gap-2 w-full sm:w-auto">
-                        <input type="text" name="search_student_id" value="<%= locals.searchStudentId || '' %>" placeholder="Enter Student ID" class="w-full sm:w-64 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
-                        <button type="submit" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow cursor-pointer">
-                            Search ID
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-5">
+                    
+                    <!-- NEW SUB-TABS (Manage, Archive, Delete) -->
+                    <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+                        <button type="button" data-target="stu_manage_mode" class="stu-act-btn px-5 py-2 bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer">
+                            ✏️ Manage Account
                         </button>
-                        <% if (locals.searchStudentId) { %>
-                            <a href="/admin" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">
-                                Clear Search
-                            </a>
-                        <% } %>
-                    </form>
-                </div>
-
-                <!-- Global Hidden Form for Bulk Deletion -->
-                <form id="bulkDeleteForm" action="/admin/bulk-delete-users" method="POST" class="hidden">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                </form>
-                
-                <div class="flex flex-wrap justify-between items-center gap-4 bg-red-50 p-4 border border-red-200 rounded-xl shadow-sm">
-                    <div class="text-xs text-red-800 font-bold">
-                        ⚠️ <span class="uppercase tracking-wider">Danger Zone:</span> Permanently deleting accounts removes ALL their data instantly.
-                    </div>
-                    <div class="flex gap-2">
-                        <button type="button" id="selectAllStudentsBtn" class="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-sm">
-                            Select All / None
+                        <button type="button" data-target="stu_archive_mode" class="stu-act-btn px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer">
+                            📦 Bulk Archive
                         </button>
-                        <button type="button" id="bulkDeleteBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-md cursor-pointer transition-colors flex items-center gap-1.5">
-                            🗑️ Permanently Delete Selected
+                        <button type="button" data-target="stu_delete_mode" class="stu-act-btn px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer">
+                            🗑️ Bulk Delete
                         </button>
                     </div>
-                </div>
 
-                <!-- 4 YEAR LEVEL STUDENT TABLES (BSN1 - BSN4) -->
-                <div class="grid grid-cols-1 gap-4">
-                    <% 
-                        const yearLabels = { 1: 'BSN1', 2: 'BSN2', 3: 'BSN3', 4: 'BSN4' };
-                        let displayLevels = [1, 2, 3, 4];
-                        if (locals.searchStudentId && locals.searchedStudents) {
-                            displayLevels.sort((a, b) => {
-                                const aMatch = searchedStudents.some(s => Number(s.year_level) === a) ? 1 : 0;
-                                const bMatch = searchedStudents.some(s => Number(s.year_level) === b) ? 1 : 0;
-                                return bMatch - aMatch;
-                            });
-                        }
-                    %>
-
-                    <% displayLevels.forEach(level => { 
-                        const levelMatches = locals.searchedStudents ? searchedStudents.filter(s => Number(s.year_level) === level) : [];
-                    %>
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="bg-slate-50 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
-                                <h4 class="font-bold text-emerald-950 text-xs uppercase tracking-wider">
-                                    <%= yearLabels[level] %>
-                                </h4>
-                                <span class="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
-                                    Active Registered: <%= locals.yearCounts ? (yearCounts[level] || 0) : 0 %>
-                                </span>
+                    <!-- 1. MANAGE ACCOUNT MODE -->
+                    <div id="stu_manage_mode" class="stu-mode-panel space-y-5">
+                        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">Search & Edit Student Account</h4>
+                                <p class="text-xs text-slate-500">Search by ID to edit student details or reset passwords.</p>
                             </div>
+                            <form method="GET" action="/admin" class="flex items-center gap-2 w-full sm:w-auto">
+                                <input type="text" name="search_student_id" value="<%= locals.searchStudentId || '' %>" placeholder="Enter Student ID" class="w-full sm:w-64 px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
+                                <button type="submit" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow cursor-pointer">Search ID</button>
+                                <% if (locals.searchStudentId) { %>
+                                    <a href="/admin" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">Clear</a>
+                                <% } %>
+                            </form>
+                        </div>
 
-                            <% if (levelMatches.length === 0) { %>
-                                <div class="py-4 px-5 text-xs text-slate-400">
-                                    <%= locals.searchStudentId ? `No matching student ID "${searchStudentId}" in BSN${level}.` : `No students found in BSN${level}.` %>
+                        <% if (locals.searchStudentId) { %>
+                            <% if (searchedStudents.length === 0) { %>
+                                <div class="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-slate-200">
+                                    No student found with ID "<%= searchStudentId %>".
                                 </div>
                             <% } else { %>
-                                <div class="divide-y divide-slate-100 p-4 space-y-3">
-                                    <% levelMatches.forEach(stu => { 
+                                <div class="space-y-4">
+                                    <% searchedStudents.forEach(stu => { 
                                         const actionWord = stu.is_archived ? 'Restore' : 'Archive';
                                     %>
                                         <div class="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-3">
                                             <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-200 pb-3">
                                                 <div class="flex items-center gap-2.5">
-                                                    <input type="checkbox" value="<%= stu.student_id %>" class="student-checkbox w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer shadow-sm">
-                                                    
                                                     <span class="font-mono font-bold text-sm text-emerald-900"><%= stu.student_id %></span>
                                                     <span class="text-xs font-bold text-slate-700 hidden sm:inline">
                                                         — <%= [stu.first_name, stu.middle_name, stu.last_name].filter(Boolean).join(' ') %>
@@ -213,17 +178,100 @@
                                                 </div>
                                                 <div class="flex gap-2">
                                                     <a href="/admin" class="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-bold text-xs shadow-sm flex items-center justify-center">Cancel</a>
-                                                    <button type="submit" class="flex-[2] py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-bold text-xs shadow-sm cursor-pointer">
-                                                        Save
-                                                    </button>
+                                                    <button type="submit" class="flex-[2] py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded font-bold text-xs shadow-sm cursor-pointer">Save</button>
                                                 </div>
                                             </form>
                                         </div>
                                     <% }) %>
                                 </div>
                             <% } %>
+                        <% } else { %>
+                            <div class="p-8 text-center text-xs text-slate-400 italic bg-slate-50 rounded-lg border border-slate-200">
+                                Enter a Student ID above to edit their details.
+                            </div>
+                        <% } %>
+                    </div>
+
+                    <!-- 2. ARCHIVE MODE -->
+                    <div id="stu_archive_mode" class="stu-mode-panel hidden space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3 bg-amber-50 p-4 border border-amber-200 rounded-xl">
+                            <div>
+                                <h4 class="font-bold text-amber-900 text-sm uppercase tracking-wider">📦 Bulk Archive Active Students</h4>
+                                <p class="text-xs text-amber-700">Archiving removes accounts from active class lists, but preserves all their grades, records, and logs safely.</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <select id="archiveYearFilter" class="px-3 py-2 rounded-lg border border-amber-300 text-xs font-bold text-amber-900 bg-white cursor-pointer">
+                                    <option value="" style="font-style:italic;">-- Year --</option>
+                                    <option value="1">BSN1</option>
+                                    <option value="2">BSN2</option>
+                                    <option value="3">BSN3</option>
+                                    <option value="4">BSN4</option>
+                                </select>
+                                <select id="archiveSecFilter" class="px-3 py-2 rounded-lg border border-amber-300 text-xs font-bold text-amber-900 bg-white cursor-pointer">
+                                    <option value="" style="font-style:italic;">-- Sec --</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                </select>
+                            </div>
                         </div>
-                    <% }) %>
+
+                        <form id="bulkArchiveForm" action="/admin/bulk-archive-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
+                                <button type="button" id="archiveSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
+                                <button type="submit" onclick="return confirm('Are you sure you want to archive the selected accounts? All accounts will be removed from active lists, but their details, grades, and enrollment data will be retained.')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">📦 Archive Selected Accounts</button>
+                            </div>
+                            <div class="max-h-96 overflow-y-auto">
+                                <table class="w-full text-left text-xs">
+                                    <tbody id="archiveTbody" class="divide-y divide-slate-200">
+                                        <!-- Rendered by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 3. DELETE MODE -->
+                    <div id="stu_delete_mode" class="stu-mode-panel hidden space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3 bg-red-50 p-4 border border-red-200 rounded-xl">
+                            <div>
+                                <h4 class="font-bold text-red-900 text-sm uppercase tracking-wider">🗑️ Bulk Permanently Delete Students</h4>
+                                <p class="text-xs font-bold text-red-600 uppercase tracking-wider">Danger Zone: ALL DATA, GRADES, AND LOGS WILL BE WIPED COMPLETELY.</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <select id="deleteYearFilter" class="px-3 py-2 rounded-lg border border-red-300 text-xs font-bold text-red-900 bg-white cursor-pointer">
+                                    <option value="" style="font-style:italic;">-- Year --</option>
+                                    <option value="1">BSN1</option>
+                                    <option value="2">BSN2</option>
+                                    <option value="3">BSN3</option>
+                                    <option value="4">BSN4</option>
+                                </select>
+                                <select id="deleteSecFilter" class="px-3 py-2 rounded-lg border border-red-300 text-xs font-bold text-red-900 bg-white cursor-pointer">
+                                    <option value="" style="font-style:italic;">-- Sec --</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <form id="bulkDeleteForm" action="/admin/bulk-delete-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
+                                <button type="button" id="deleteSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
+                                <button type="submit" onclick="return confirm('Are you sure you want to PERMANENTLY DELETE the selected accounts? ALL data (details, grades, logs) will be wiped completely and cannot be undone.')" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">🗑️ Permanently Delete Selected</button>
+                            </div>
+                            <div class="max-h-96 overflow-y-auto">
+                                <table class="w-full text-left text-xs">
+                                    <tbody id="deleteTbody" class="divide-y divide-slate-200">
+                                        <!-- Rendered by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
+                    </div>
+
                 </div>
             </div>
 
@@ -410,14 +458,26 @@
     </main>
 
     <script nonce="<%= cspNonce %>">
+        // Safe HTML output
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function toggleSection(sectionId) {
             const sections = ['staffRegSection', 'staffManageSection', 'studentRegSection', 'studentManageSection'];
             sections.forEach(id => {
                 const section = document.getElementById(id);
-                if (id === sectionId) {
-                    section.classList.remove('hidden');
-                } else {
-                    section.classList.add('hidden');
+                if (section) {
+                    if (id === sectionId) {
+                        section.classList.remove('hidden');
+                    } else {
+                        section.classList.add('hidden');
+                    }
                 }
             });
             sessionStorage.setItem('activeAdminSection', sectionId);
@@ -465,7 +525,7 @@
                 });
             });
 
-            // CSP-compliant confirmation dialog handler for all forms with .confirm-form
+            // Standard form confirmations
             document.querySelectorAll('.confirm-form').forEach(form => {
                 form.addEventListener('submit', (e) => {
                     const msg = form.getAttribute('data-confirm-msg');
@@ -490,55 +550,109 @@
                 });
             }
 
-            // Bulk Delete JS Logic
-            const selectAllBtn = document.getElementById('selectAllStudentsBtn');
-            if (selectAllBtn) {
-                selectAllBtn.addEventListener('click', () => {
-                    const checkboxes = document.querySelectorAll('.student-checkbox');
-                    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-                    checkboxes.forEach(cb => cb.checked = !allChecked);
-                });
-            }
-
-            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-            if (bulkDeleteBtn) {
-                bulkDeleteBtn.addEventListener('click', () => {
-                    const selected = document.querySelectorAll('.student-checkbox:checked');
-                    if (selected.length === 0) {
-                        alert('No students selected.');
-                        return;
-                    }
-                    if (confirm(`Permanently delete ${selected.length} student account(s) and ALL associated data (grades, logs, vaccines)? This CANNOT be undone.`)) {
-                        const form = document.getElementById('bulkDeleteForm');
-                        selected.forEach(cb => {
-                            const input = document.createElement('input');
-                            input.type = 'hidden';
-                            input.name = 'userIds';
-                            input.value = cb.value;
-                            form.appendChild(input);
-                        });
-                        form.submit();
-                    }
-                });
-            }
-
             const staffPass = document.getElementById('staffTempPassword');
             const studentPass = document.getElementById('studentTempPassword');
             if (staffPass && !staffPass.value) staffPass.value = generateRandomPassword();
             if (studentPass && !studentPass.value) studentPass.value = generateRandomPassword();
             
+            // Manage Student Sub-Tabs Logic (Manage / Archive / Delete)
+            const stuActBtns = document.querySelectorAll('.stu-act-btn');
+            const stuModePanels = document.querySelectorAll('.stu-mode-panel');
+            
+            if (stuActBtns.length > 0) {
+                stuActBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        stuActBtns.forEach(b => {
+                            b.classList.remove('bg-indigo-700', 'text-white');
+                            b.classList.add('bg-slate-200', 'text-slate-700');
+                        });
+                        btn.classList.remove('bg-slate-200', 'text-slate-700');
+                        btn.classList.add('bg-indigo-700', 'text-white');
+
+                        const target = btn.getAttribute('data-target');
+                        stuModePanels.forEach(p => p.classList.add('hidden'));
+                        const panel = document.getElementById(target);
+                        if (panel) panel.classList.remove('hidden');
+
+                        sessionStorage.setItem('activeStudentSubTab', target);
+                    });
+                });
+
+                const savedSubTab = sessionStorage.getItem('activeStudentSubTab') || 'stu_manage_mode';
+                const defaultBtn = document.querySelector(`.stu-act-btn[data-target="${savedSubTab}"]`);
+                if (defaultBtn) defaultBtn.click();
+            }
+
+            // Client-Side Bulk Table Rendering for Archive and Delete Tabs
+            const allActiveStudents = <%- JSON.stringify(locals.allActiveStudents || []) %>;
+
+            function renderBulkList(mode) {
+                const yearSel = document.getElementById(`${mode}YearFilter`);
+                const secSel = document.getElementById(`${mode}SecFilter`);
+                const tbody = document.getElementById(`${mode}Tbody`);
+                
+                if (!yearSel || !secSel || !tbody) return;
+
+                const year = yearSel.value;
+                const sec = secSel.value;
+
+                if (!year || !sec) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="p-5 text-center text-slate-500 italic">Please select Year Level and Section to load student accounts.</td></tr>';
+                    return;
+                }
+
+                const filtered = allActiveStudents.filter(s => String(s.year_level) === year && s.section === sec);
+                
+                let html = '';
+                if (filtered.length === 0) {
+                    html = '<tr><td colspan="3" class="p-5 text-center text-slate-500 font-bold">No active students found in this class.</td></tr>';
+                } else {
+                    filtered.forEach(s => {
+                        const fullName = escapeHtml(`${s.last_name}, ${s.first_name} ${s.middle_name || ''}`.trim());
+                        html += `
+                            <tr class="border-b border-slate-200 hover:bg-slate-50">
+                                <td class="py-2 px-4 text-center w-12"><input type="checkbox" name="userIds" value="${escapeHtml(s.student_id)}" class="${mode}-checkbox w-4 h-4 cursor-pointer text-indigo-600 rounded border-slate-300"></td>
+                                <td class="py-2 px-4 font-mono font-bold text-slate-700 w-32">${escapeHtml(s.student_id)}</td>
+                                <td class="py-2 px-4 uppercase font-bold text-slate-800">${fullName}</td>
+                            </tr>
+                        `;
+                    });
+                }
+                tbody.innerHTML = html;
+            }
+
+            ['archive', 'delete'].forEach(mode => {
+                const yF = document.getElementById(`${mode}YearFilter`);
+                const sF = document.getElementById(`${mode}SecFilter`);
+                if (yF && sF) {
+                    yF.addEventListener('change', () => renderBulkList(mode));
+                    sF.addEventListener('change', () => renderBulkList(mode));
+                    renderBulkList(mode); // Initial render check
+                }
+                
+                // Select All / None Button Binding
+                const selectAllBtn = document.getElementById(`${mode}SelectAll`);
+                if (selectAllBtn) {
+                    selectAllBtn.addEventListener('click', () => {
+                        const checkboxes = document.querySelectorAll(`.${mode}-checkbox`);
+                        if (checkboxes.length === 0) return;
+                        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+                        checkboxes.forEach(cb => cb.checked = !allChecked);
+                    });
+                }
+            });
+
+            // Master Main Section Toggles 
             const staffManagedOpen = "<%= locals.selectedStaff ? 'true' : 'false' %>" === "true";
-            const studentManagedOpen = "<%= locals.searchStudentId || (locals.searchedStudents && searchedStudents.length > 0) ? 'true' : 'false' %>" === "true";
+            const studentManagedOpen = "<%= locals.searchStudentId || (locals.searchedStudents && locals.searchedStudents.length > 0) ? 'true' : 'false' %>" === "true";
             
             if (staffManagedOpen) {
                 sessionStorage.setItem('activeAdminSection', 'staffManageSection');
             } else if (studentManagedOpen) {
                 sessionStorage.setItem('activeAdminSection', 'studentManageSection');
             } else {
-                const savedSection = sessionStorage.getItem('activeAdminSection');
-                if (savedSection) {
-                    toggleSection(savedSection);
-                }
+                const savedSection = sessionStorage.getItem('activeAdminSection') || 'studentManageSection';
+                toggleSection(savedSection);
             }
         });
     </script>
