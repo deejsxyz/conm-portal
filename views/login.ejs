@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <title>Login - CONM Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
 </head>
 <body class="bg-gradient-to-br from-emerald-950 via-emerald-900 to-pink-950 min-h-screen flex flex-col items-center justify-between p-4 font-sans relative">
     
     <div></div>
 
-    <!-- Login Box Card -->
     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border-t-4 border-pink-600 space-y-6 z-10">
         <div class="text-center space-y-1">
             <h1 class="text-md font-bold text-emerald-950">City University of Pasay</h1>
@@ -40,18 +39,16 @@
                 </div>
             </div>
 
-            <button type="submit" class="w-full py-3 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs uppercase tracking-wider shadow-md transition-colors">
+            <button type="submit" class="w-full py-3 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs uppercase tracking-wider shadow-md transition-colors cursor-pointer">
                 Sign In
             </button>
         </form>
 
-        <!-- Data Privacy Act (RA 10173) Notice -->
         <div class="pt-3 border-t border-slate-100 text-[10px] text-slate-400 leading-relaxed text-center">
-            🔒 <strong>Data Privacy Notice (RA 10173):</strong> By signing in, you acknowledge that student records and academic grades are confidential personal information. All grade modifications and access events are logged for security and academic audit purposes.
+            🔒 <strong>Data Privacy Notice (RA 10173):</strong> By signing in, you acknowledge that student records and academic grades are confidential personal information. All grade modifications and access events are proactively logged for security and academic audit purposes.
         </div>
     </div>
 
-    <!-- PROFESSIONAL POP-UP MODAL FOR LOCKED FACULTY PORTAL -->
     <% if (locals.popupMessage) { %>
         <div id="lockedModalOverlay" class="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
             <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border-t-4 border-amber-500 text-center space-y-4 relative z-50">
@@ -82,7 +79,6 @@
             if (closeBtn && overlay) {
                 closeBtn.addEventListener('click', () => {
                     overlay.remove();
-                    // Clear the ?locked=1 query parameter from the URL cleanly
                     if (window.history && window.history.replaceState) {
                         window.history.replaceState({}, document.title, window.location.pathname);
                     }
