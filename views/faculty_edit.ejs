@@ -59,7 +59,7 @@
             <form method="GET" action="/faculty/edit-grades" class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
                 <div class="sm:col-span-6">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">1. Select Subject Handled</label>
-                    <select name="course_code" id="courseSelect" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-emerald-950 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+                    <select name="course_code" id="courseSelect" required class="w-full px-3 h-9 rounded-lg border border-slate-300 text-xs font-semibold text-emerald-950 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                         <option value="" style="font-style: italic;">-- Select Assigned Subject --</option>
                         <% assignedCourses.forEach(c => { 
                             const courseYear = Math.ceil(Number(c.term_id || 1) / 2);
@@ -73,7 +73,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">2. Year Level</label>
-                    <select name="year_level" id="yearLevelSelect" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+                    <select name="year_level" id="yearLevelSelect" required class="w-full px-3 h-9 rounded-lg border border-slate-300 text-xs font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                         <option value="">-- Year --</option>
                         <option value="1" <%= selectedYearLevel === '1' ? 'selected' : '' %>>BSN1</option>
                         <option value="2" <%= selectedYearLevel === '2' ? 'selected' : '' %>>BSN2</option>
@@ -84,7 +84,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">3. Section</label>
-                    <select name="section" required class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+                    <select name="section" required class="w-full px-3 h-9 rounded-lg border border-slate-300 text-xs font-bold text-emerald-900 bg-slate-50 focus:ring-2 focus:ring-emerald-500 cursor-pointer">
                         <option value="">-- Section --</option>
                         <option value="A" <%= selectedSection === 'A' ? 'selected' : '' %>>A</option>
                         <option value="B" <%= selectedSection === 'B' ? 'selected' : '' %>>B</option>
@@ -93,7 +93,7 @@
                 </div>
 
                 <div class="sm:col-span-2 flex gap-2">
-                    <button type="submit" class="w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap cursor-pointer">
+                    <button type="submit" class="w-full h-9 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow transition-colors whitespace-nowrap cursor-pointer">
                         📋 Load Sheet
                     </button>
                 </div>
