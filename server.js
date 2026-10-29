@@ -24,6 +24,8 @@ const app = express();
 const BCRYPT_COST = 12;
 const BCRYPT_BATCH_COST = 10;
 const MAX_FAILED_LOGINS = 5;
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000;            // auto sign-out after 10 minutes of no activity
+const ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000;    // hard limit per login
 const LOCKOUT_MINUTES = 15;
 const REGISTRAR_CONTACT = process.env.REGISTRAR_CONTACT ? ` (${process.env.REGISTRAR_CONTACT})` : '';
 const LOCKED_MESSAGE = `Account locked due to too many failed attempts. Please contact the College Registrar${REGISTRAR_CONTACT} to reset your password.`;
@@ -82,6 +84,12 @@ app.use(helmet({
 
 app.use(express.urlencoded({ extended: false }));
 
+// Never let the browser cache pages: stops the Back button from showing grades after logout.
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+});
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' 
@@ -105,7 +113,8 @@ app.use(session({
     store: new pgSession({
         pool: pool,
         tableName: 'user_sessions',
-        createTableIfMissing: true
+        createTableIfMissing: true,
+        ttl: 8 * 60 * 60   // seconds; expired sessions are purged from the database
     }),
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -113,8 +122,8 @@ app.use(session({
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 8 * 60 * 60 * 1000
+        sameSite: 'lax'
+        // No maxAge: this is a browser-session cookie, deleted when the browser is closed.
     }
 }));
 
@@ -248,6 +257,15 @@ app.use((req, res, next) => {
 
 async function isAuthenticated(req, res, next) {
     if (!req.session.user) return res.redirect('/');
+
+    const nowTs = Date.now();
+    const startedAt = req.session.user.login_time || nowTs;
+    const lastSeen = req.session.user.last_activity || startedAt;
+    if (nowTs - lastSeen > IDLE_TIMEOUT_MS || nowTs - startedAt > ABSOLUTE_TIMEOUT_MS) {
+        return req.session.destroy(() => res.redirect('/?msg=timeout'));
+    }
+    req.session.user.last_activity = nowTs;
+
     try {
         const checkRes = await pool.query('SELECT role, must_change_password, password_changed_at, COALESCE(is_archived, FALSE) AS is_archived FROM users WHERE username = $1', [req.session.user.username]);
         if (checkRes.rows.length === 0 || checkRes.rows[0].is_archived) {
@@ -506,7 +524,7 @@ app.get('/', (req, res) => {
         : null;
     const sessionExpired = req.query.msg === 'session_expired'
         ? 'Your session expired because your password was changed.'
-        : null;
+        : (req.query.msg === 'timeout' ? 'You were signed out because of inactivity. Please sign in again.' : null);
     res.render('login', { error: res.locals.error || sessionExpired, popupMessage: lockedPopup });
 });
 
