@@ -26,6 +26,11 @@ const BCRYPT_BATCH_COST = 10;
 const MAX_FAILED_LOGINS = 5;
 const LOCKOUT_MINUTES = 15;
 const REGISTRAR_CONTACT = process.env.REGISTRAR_CONTACT ? ` (${process.env.REGISTRAR_CONTACT})` : '';
+const LOCKED_MESSAGE = `Account locked due to too many failed attempts. Please contact the College Registrar${REGISTRAR_CONTACT} to reset your password.`;
+
+// Errors thrown on purpose for the user to read (validation). Anything else (DB errors etc.) is hidden behind a generic message.
+class UserError extends Error {}
+function safeMsg(err, fallback) { return err instanceof UserError ? err.message : fallback; }
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_COST);
 const unknownLoginFailures = new Map();
@@ -175,7 +180,7 @@ function normalizeGrade(rawGrade) {
     let g = String(rawGrade).trim().toUpperCase();
     if (/^[1-5]$/.test(g)) g = `${g}.00`;
     if (ALLOWED_GRADES.includes(g)) return g;
-    throw new Error(`Invalid grade value submitted: ${rawGrade}`);
+    throw new UserError(`Invalid grade value submitted: ${rawGrade}`);
 }
 
 function formatFullName(first, middle, last, fallback) {
@@ -593,7 +598,7 @@ app.post('/login', loginLimiter, async (req, res) => {
             role: user.role, 
             fullName: fullName,
             mustChangePassword: user.must_change_password,
-            login_time: Date.now()
+            login_time: Math.max(Date.now(), new Date(user.password_changed_at).getTime() || 0)
         };
 
         req.session.regenerate((regenErr) => {
@@ -641,22 +646,24 @@ app.post('/change-password', isAuthenticated, async (req, res) => {
             return res.render('change_password', { error: 'New password cannot be the same as your temporary or current password.' });
         }
 
-        const isValid = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(newPassword);
+        const isValid = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,72}$/.test(newPassword);
         if (!isValid) {
             return res.render('change_password', { 
-                error: 'Password must be at least 8 characters long and include uppercase letters, lowercase letters, numbers, and special characters.' 
+                error: 'Password must be 8 to 72 characters long and include uppercase letters, lowercase letters, numbers, and special characters.' 
             });
         }
 
         const hashedNewPassword = await bcrypt.hash(newPassword, BCRYPT_COST);
-        await pool.query(`
+        const pwUpdate = await pool.query(`
             UPDATE users 
             SET password_hash = $1, must_change_password = FALSE, password_changed_at = NOW()
             WHERE username = $2
+            RETURNING password_changed_at
         `, [hashedNewPassword, req.session.user.username]);
 
         req.session.user.mustChangePassword = false;
-        req.session.user.login_time = Date.now() + 1000;
+        // Use the DB's own timestamp so app/DB clock drift cannot log the user out.
+        req.session.user.login_time = new Date(pwUpdate.rows[0].password_changed_at).getTime();
 
         if (req.session.user.role === 'admin') return res.redirect('/admin');
         if (req.session.user.role === 'registrar') return res.redirect('/registrar');
@@ -978,7 +985,7 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
         if (client) await client.query('ROLLBACK');
         console.error('Admin edit student error:', err);
         setFlash(req, 'err', 'Failed to update student profile.');
-        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}`);
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(String(req.body.student_id || '').trim())}`);
     } finally {
         if (client) client.release();
     }
@@ -1181,13 +1188,13 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                     const lName = row.last_name ? String(row.last_name).trim() : '';
 
                     if (!cleanId || !fName || !lName) {
-                        throw new Error(`Row ${idx + 2} is missing student_id, first_name, or last_name.`);
+                        throw new UserError(`Row ${idx + 2} is missing student_id, first_name, or last_name.`);
                     }
 
                     const rawYear = String(row.year_level || '1').replace(/[^0-9]/g, '');
                     const cleanYear = parseInt(rawYear, 10);
                     if (![1, 2, 3, 4].includes(cleanYear)) {
-                        throw new Error(`Row ${idx + 2} (${cleanId}) has an invalid year_level.`);
+                        throw new UserError(`Row ${idx + 2} (${cleanId}) has an invalid year_level.`);
                     }
 
                     const rawSec = row.section ? String(row.section).trim().toUpperCase() : 'A';
@@ -1196,7 +1203,7 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                     const userCheck = await client.query('SELECT username, role, COALESCE(is_archived, FALSE) AS is_archived FROM users WHERE username = $1', [cleanId]);
                     if (userCheck.rows.length > 0) {
                         if (userCheck.rows[0].role !== 'student') {
-                            throw new Error(`Row ${idx + 2}: Student ID '${cleanId}' conflicts with a staff account.`);
+                            throw new UserError(`Row ${idx + 2}: Student ID '${cleanId}' conflicts with a staff account.`);
                         }
                         if (userCheck.rows[0].is_archived) {
                             await client.query(`UPDATE users SET is_archived = FALSE WHERE username = $1`, [cleanId]);
@@ -1227,11 +1234,11 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                     if (row.semester && row.subjects && row.academic_year) {
                         const cleanSem = parseInt(String(row.semester).trim(), 10);
                         if (![1, 2].includes(cleanSem)) {
-                            throw new Error(`Row ${idx + 2} (${cleanId}) has an invalid semester.`);
+                            throw new UserError(`Row ${idx + 2} (${cleanId}) has an invalid semester.`);
                         }
                         const cleanAy = String(row.academic_year).trim();
                         if (!/^\d{4}-\d{4}$/.test(cleanAy)) {
-                            throw new Error(`Row ${idx + 2} (${cleanId}) has an invalid academic year format (expected YYYY-YYYY).`);
+                            throw new UserError(`Row ${idx + 2} (${cleanId}) has an invalid academic year format (expected YYYY-YYYY).`);
                         }
 
                         const termId = ((cleanYear - 1) * 2 + cleanSem).toString();
@@ -1239,7 +1246,7 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
 
                         for (const code of courseCodes) {
                             if (!validCourseCodes.has(code)) {
-                                throw new Error(`Row ${idx + 2} (${cleanId}) lists unknown or inactive course code '${code}'.`);
+                                throw new UserError(`Row ${idx + 2} (${cleanId}) lists unknown or inactive course code '${code}'.`);
                             }
 
                             const instructorKey = `instructor_${code.toLowerCase().replace(/\s+/g, '_')}`;
@@ -1268,7 +1275,7 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
             } catch (err) {
                 if (client) await client.query('ROLLBACK');
                 console.error('Batch upload error:', err);
-                setFlash(req, 'err', err.message || 'Batch upload failed. No changes were saved.');
+                setFlash(req, 'err', safeMsg(err, 'Batch upload failed. No changes were saved.'));
                 res.redirect('/registrar');
             } finally {
                 if (client) client.release();
@@ -1346,8 +1353,8 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             const ay = String(req.body.academic_year).trim();
             const codes = Array.isArray(req.body.course_codes) ? req.body.course_codes : [req.body.course_codes];
 
-            if (!/^[1-8]$/.test(term)) throw new Error('Invalid term.');
-            if (!/^\d{4}-\d{4}$/.test(ay)) throw new Error('Invalid academic year format.');
+            if (!/^[1-8]$/.test(term)) throw new UserError('Invalid term.');
+            if (!/^\d{4}-\d{4}$/.test(ay)) throw new UserError('Invalid academic year format.');
 
             for (let i = 0; i < codes.length; i++) {
                 const code = codes[i];
@@ -1362,7 +1369,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
                 }
 
                 const checkCourse = await client.query('SELECT course_code FROM courses WHERE course_code = $1 AND COALESCE(is_active, TRUE) = TRUE', [code]);
-                if (checkCourse.rows.length === 0) throw new Error(`Subject ${code} is inactive or not found.`);
+                if (checkCourse.rows.length === 0) throw new UserError(`Subject ${code} is inactive or not found.`);
 
                 await client.query(`
                     INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year)
@@ -1379,7 +1386,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
     } catch (err) {
         if (client) await client.query('ROLLBACK');
         console.error('Registrar add student error:', err);
-        setFlash(req, 'err', err.message || 'Error registering new student.');
+        setFlash(req, 'err', safeMsg(err, 'Error registering new student.'));
         res.redirect('/registrar');
     } finally {
         if (client) client.release();
@@ -1408,7 +1415,7 @@ app.post('/registrar/update-student-year-section', isAuthenticated, async (req, 
     } catch (err) {
         console.error('Update class error:', err);
         setFlash(req, 'err', 'Failed to update Year Level and Section.');
-        res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
+        res.redirect(`/registrar?student_id=${encodeURIComponent(String(req.body.student_id || '').trim())}`);
     }
 });
 
@@ -1440,7 +1447,7 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
         await client.query(`
             INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5, FALSE)
+            VALUES ($1, $2, 'faculty', $3, $4, $5, TRUE, FALSE)
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
         if (req.body.course_codes) {
@@ -1752,8 +1759,8 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
         const term = req.body.term ? String(req.body.term).trim() : '1';
         const targetAy = req.body.academic_year ? String(req.body.academic_year).trim() : '';
 
-        if (!/^[1-8]$/.test(term)) throw new Error('Invalid term.');
-        if (!/^\d{4}-\d{4}$/.test(targetAy)) throw new Error('Invalid academic year format.');
+        if (!/^[1-8]$/.test(term)) throw new UserError('Invalid term.');
+        if (!/^\d{4}-\d{4}$/.test(targetAy)) throw new UserError('Invalid academic year format.');
 
         const settingsRes = await pool.query('SELECT * FROM settings WHERE id = 1');
         const currentAy = targetAy || settingsRes.rows[0].current_ay;
@@ -1784,7 +1791,7 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}&view_term=${encodeURIComponent(term)}&view_ay=${encodeURIComponent(currentAy)}`);
     } catch (err) {
         console.error('Add single course error:', err);
-        setFlash(req, 'err', err.message || 'Could not enroll subject.');
+        setFlash(req, 'err', safeMsg(err, 'Could not enroll subject.'));
         res.redirect(req.body.student_id ? `/registrar?student_id=${encodeURIComponent(String(req.body.student_id).trim())}` : '/registrar');
     }
 });
@@ -1799,8 +1806,8 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
         const academicYear = req.body.academic_year ? String(req.body.academic_year).trim() : '';
         const { course_codes, final_grades } = req.body;
         
-        if (!/^[1-8]$/.test(enrolledTerm)) throw new Error('Invalid term.');
-        if (!/^\d{4}-\d{4}$/.test(academicYear)) throw new Error('Invalid academic year format.');
+        if (!/^[1-8]$/.test(enrolledTerm)) throw new UserError('Invalid term.');
+        if (!/^\d{4}-\d{4}$/.test(academicYear)) throw new UserError('Invalid academic year format.');
 
         client = await pool.connect();
         await client.query('BEGIN');
@@ -1853,7 +1860,7 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
     } catch (err) {
         if (client) await client.query('ROLLBACK');
         console.error('Registrar update grades error:', err);
-        setFlash(req, 'err', err.message || 'Failed to update grades.');
+        setFlash(req, 'err', safeMsg(err, 'Failed to update grades.'));
         res.redirect(req.body.student_id ? `/registrar?student_id=${encodeURIComponent(String(req.body.student_id).trim())}` : '/registrar');
     } finally {
         if (client) client.release();
@@ -1936,11 +1943,11 @@ async function getFacultyAssignedCourses(facultyUsername, facultyFullName, role)
         SELECT DISTINCT c.course_code, c.descriptive_title, c.term_id
         FROM courses c
         LEFT JOIN faculty_courses fc ON fc.course_code = c.course_code AND fc.username = $1
-        LEFT JOIN grades g ON g.course_code = c.course_code AND (g.instructor_username = $1 OR g.instructor = $2)
-        WHERE (fc.username = $1 OR g.instructor_username = $1 OR g.instructor = $2)
+        LEFT JOIN grades g ON g.course_code = c.course_code AND g.instructor_username = $1
+        WHERE (fc.username = $1 OR g.instructor_username = $1)
           AND COALESCE(c.is_active, TRUE) = TRUE
         ORDER BY c.course_code
-    `, [facultyUsername, facultyFullName]);
+    `, [facultyUsername]);
     return facC.rows;
 }
 
@@ -1954,7 +1961,7 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
         const systemSettings = settingsRes.rows[0];
 
         if (req.session.user.role === 'faculty' && systemSettings.faculty_portal_locked) {
-            return res.session.destroy(() => {
+            return req.session.destroy(() => {
                 res.redirect('/?locked=1');
             });
         }
@@ -1998,8 +2005,8 @@ app.get('/faculty/edit-grades', isAuthenticated, async (req, res) => {
             let rosterParams = [selectedCourse, parseInt(selectedYearLevel, 10), selectedSection, systemSettings.current_ay, validTerms];
 
             if (req.session.user.role !== 'admin') {
-                rosterQuery += ` AND (g.instructor_username = $6 OR g.instructor = $7 OR COALESCE(TRIM(g.instructor), '') = '')`;
-                rosterParams.push(facultyUsername, facultyFullName);
+                rosterQuery += ` AND g.instructor_username = $6`;
+                rosterParams.push(facultyUsername);
             }
 
             rosterQuery += ` ORDER BY s.last_name ASC, s.first_name ASC`;
@@ -2072,8 +2079,8 @@ app.post('/faculty/update-grades-sheet', isAuthenticated, async (req, res) => {
         let rosterParams = [courseCode, yearLevel, section, systemSettings.current_ay, validTerms];
 
         if (req.session.user.role !== 'admin') {
-            rosterQuery += ` AND (g.instructor_username = $6 OR g.instructor = $7 OR COALESCE(TRIM(g.instructor), '') = '')`;
-            rosterParams.push(facultyUsername, facultyFullName);
+            rosterQuery += ` AND g.instructor_username = $6`;
+            rosterParams.push(facultyUsername);
         }
 
         const validRosterRes = await client.query(rosterQuery, rosterParams);
@@ -2119,7 +2126,7 @@ app.post('/faculty/update-grades-sheet', isAuthenticated, async (req, res) => {
     } catch (err) {
         if (client) await client.query('ROLLBACK');
         console.error('Faculty batch grade update error:', err);
-        setFlash(req, 'err', err.message || 'An error occurred while saving grades.');
+        setFlash(req, 'err', safeMsg(err, 'An error occurred while saving grades.'));
         res.redirect('/faculty/edit-grades');
     } finally {
         if (client) client.release();

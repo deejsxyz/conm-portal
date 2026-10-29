@@ -657,6 +657,49 @@
                     </div>
                 <% } %>
             </div>
+
+            <div id="lockedAccountsPanel" class="hidden bg-white rounded-xl shadow-sm border border-red-200 p-6 space-y-4">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-red-800 mb-1">Locked Accounts</h3>
+                <p class="text-xs text-slate-500">Accounts are locked after repeated failed sign-ins. Confirm the person's identity in person (or by official means) before resetting. Leave the password blank to generate one; it is shown once.</p>
+                <% if (lockedList.length === 0) { %>
+                    <div class="text-center py-6 text-xs text-slate-400 italic border border-dashed border-slate-200 rounded-lg">No locked accounts.</div>
+                <% } else { %>
+                    <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-600 uppercase text-[10px] tracking-wider">
+                                    <th class="p-2.5">Username</th>
+                                    <th class="p-2.5">Name</th>
+                                    <th class="p-2.5">Role</th>
+                                    <th class="p-2.5">Locked At</th>
+                                    <th class="p-2.5">Reset &amp; Unlock</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200">
+                                <% lockedList.forEach(acc => { %>
+                                    <tr>
+                                        <td class="p-2.5 font-mono font-bold"><%= acc.username %></td>
+                                        <td class="p-2.5"><%= [acc.last_name, [acc.first_name, acc.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '---' %></td>
+                                        <td class="p-2.5 uppercase font-bold text-slate-500"><%= acc.role %></td>
+                                        <td class="p-2.5 text-slate-500"><%= acc.locked_at ? new Date(acc.locked_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) : '---' %></td>
+                                        <td class="p-2.5">
+                                            <form action="/registrar/unlock-account" method="POST" class="flex flex-col lg:flex-row lg:items-center gap-2">
+                                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                                <input type="hidden" name="username" value="<%= acc.username %>">
+                                                <input type="text" name="temp_password" placeholder="New temp password (optional)" autocomplete="off" class="px-2 py-1.5 rounded border border-slate-300 text-xs font-mono w-full lg:w-52">
+                                                <label class="flex items-center gap-1.5 text-[11px] text-slate-600 whitespace-nowrap">
+                                                    <input type="checkbox" name="verified" value="yes" required> Identity verified
+                                                </label>
+                                                <button type="submit" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold cursor-pointer whitespace-nowrap">Reset &amp; Unlock</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } %>
+            </div>
         </div>
 
     </main>
@@ -1037,306 +1080,5 @@
             return confirm(msg);
         }
     </script>
-</body>
-</html>
-
-There is a file you can reference named "security_log_3.ejs". Refer to this file by its name verbatim.
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Account Security Log - CONM Portal</title>
-    <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
-</head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
-
-    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500">
-        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div>
-                <h2 class="text-base font-bold">College of Nursing and School of Midwifery</h2>
-                <p class="text-xs text-pink-300">Account Security Log</p>
-            </div>
-            <div class="flex items-center space-x-3">
-                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
-                    <%= currentUser.fullName || currentUser.username %>
-                </span>
-                <% if (currentUser.role === 'admin') { %>
-                    <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
-                <% } %>
-                <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
-                <form action="/logout" method="POST" class="inline">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium cursor-pointer">Log Out</button>
-                </form>
-            </div>
-        </div>
-    </header>
-
-    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-5">
-
-        <%
-            const eventLabels = {
-                ACCOUNT_LOCKED: { text: 'Account Locked', cls: 'bg-red-100 text-red-800 border-red-300' },
-                PASSWORD_RESET_UNLOCK: { text: 'Unlocked & Password Reset', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-                PASSWORD_RESET: { text: 'Password Reset', cls: 'bg-amber-100 text-amber-800 border-amber-300' },
-                ADMIN_RECOVERY: { text: 'Admin Recovery (Server)', cls: 'bg-purple-100 text-purple-800 border-purple-300' }
-            };
-            const baseQuery = (p) => {
-                const parts = [];
-                if (q) parts.push('q=' + encodeURIComponent(q));
-                if (eventFilter) parts.push('event=' + encodeURIComponent(eventFilter));
-                if (p > 1) parts.push('page=' + p);
-                return '/registrar/security-log' + (parts.length ? '?' + parts.join('&') : '');
-            };
-        %>
-
-        <!-- FILTERS -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-            <form method="GET" action="/registrar/security-log" class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
-                <div class="flex-1">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Username / Student ID</label>
-                    <input type="text" name="q" value="<%= q %>" placeholder="e.g. 2024-00123" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm bg-slate-50 font-mono">
-                </div>
-                <div class="sm:w-64">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Event Type</label>
-                    <select name="event" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm bg-slate-50 font-semibold cursor-pointer">
-                        <option value="">All events</option>
-                        <% Object.keys(eventLabels).forEach(key => { %>
-                            <option value="<%= key %>" <%= eventFilter === key ? 'selected' : '' %>><%= eventLabels[key].text %></option>
-                        <% }) %>
-                    </select>
-                </div>
-                <div class="flex gap-2">
-                    <button type="submit" class="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow cursor-pointer">Filter</button>
-                    <% if (q || eventFilter) { %>
-                        <a href="/registrar/security-log" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">Clear</a>
-                    <% } %>
-                </div>
-            </form>
-        </div>
-
-        <!-- LOG TABLE -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden">
-            <div class="bg-emerald-950 text-white px-5 py-3 flex justify-between items-center">
-                <h3 class="text-xs font-bold uppercase tracking-wider">Lock &amp; Password Reset History</h3>
-                <span class="text-xs bg-emerald-900 border border-emerald-700 px-3 py-1 rounded-lg font-bold text-emerald-100"><%= total %> record<%= total === 1 ? '' : 's' %></span>
-            </div>
-
-            <% if (logs.length === 0) { %>
-                <div class="text-center py-12 px-4 text-slate-400 text-sm">No security events found.</div>
-            <% } else { %>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead>
-                            <tr class="bg-slate-200 text-slate-700 border-b-2 border-slate-400 uppercase text-[10px] font-bold tracking-wider">
-                                <th class="py-2.5 px-3 border-r border-slate-300 whitespace-nowrap">Date &amp; Time (PH)</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300">Account</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300">Name</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300 text-center">Role</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300">Event</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300">Performed By</th>
-                                <th class="py-2.5 px-3 whitespace-nowrap">Source IP</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-300">
-                            <% logs.forEach(row => {
-                                const label = eventLabels[row.event] || { text: row.event, cls: 'bg-slate-100 text-slate-700 border-slate-300' };
-                                const fullName = [row.last_name, [row.first_name, row.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-                            %>
-                                <tr class="odd:bg-white even:bg-slate-50/60">
-                                    <td class="py-2 px-3 border-r border-slate-300 whitespace-nowrap font-mono text-slate-600">
-                                        <%= new Date(row.created_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }) %>
-                                    </td>
-                                    <td class="py-2 px-3 border-r border-slate-300 font-mono font-bold text-emerald-950 whitespace-nowrap"><%= row.username %></td>
-                                    <td class="py-2 px-3 border-r border-slate-300 font-semibold uppercase text-slate-700"><%= fullName || '—' %></td>
-                                    <td class="py-2 px-3 border-r border-slate-300 text-center">
-                                        <% if (row.role) { %>
-                                            <span class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] font-bold uppercase"><%= row.role %></span>
-                                        <% } else { %>
-                                            <span class="text-slate-400">—</span>
-                                        <% } %>
-                                    </td>
-                                    <td class="py-2 px-3 border-r border-slate-300">
-                                        <span class="inline-block px-2.5 py-0.5 border rounded-full text-[10px] font-bold uppercase tracking-wider <%= label.cls %>"><%= label.text %></span>
-                                    </td>
-                                    <td class="py-2 px-3 border-r border-slate-300 font-medium text-slate-700">
-                                        <% if (row.performed_by === 'system') { %>
-                                            <span class="italic text-slate-500">System (failed logins)</span>
-                                        <% } else { %>
-                                            <span class="font-mono font-bold"><%= row.performed_by || '—' %></span>
-                                        <% } %>
-                                    </td>
-                                    <td class="py-2 px-3 font-mono text-slate-500 whitespace-nowrap"><%= row.ip || '—' %></td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } %>
-
-            <% if (totalPages > 1) { %>
-                <div class="bg-slate-100 px-5 py-3 border-t border-slate-300 flex justify-between items-center text-xs">
-                    <% if (page > 1) { %>
-                        <a href="<%= baseQuery(page - 1) %>" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-bold text-slate-700">&larr; Newer</a>
-                    <% } else { %>
-                        <span></span>
-                    <% } %>
-                    <span class="font-bold text-slate-500">Page <%= page %> of <%= totalPages %></span>
-                    <% if (page < totalPages) { %>
-                        <a href="<%= baseQuery(page + 1) %>" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-bold text-slate-700">Older &rarr;</a>
-                    <% } else { %>
-                        <span></span>
-                    <% } %>
-                </div>
-            <% } %>
-        </div>
-
-        <p class="text-[11px] text-slate-400 text-center leading-relaxed">
-            🔒 This log is confidential (RA 10173). It records automatic account lockouts (with the source IP, so repeated lockouts from one address can be spotted) and every password reset done by the Registrar or Administrator.
-            <% if (currentUser.role !== 'admin') { %>Registrar view is limited to student and faculty accounts.<% } %>
-        </p>
-    </main>
-</body>
-</html>
-
-There is a file you can reference named "grade_logs.ejs". Refer to this file by its name verbatim.
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Grade Audit Log - CONM Portal</title>
-    <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
-</head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
-
-    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500">
-        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div>
-                <h2 class="text-base font-bold">College of Nursing and School of Midwifery</h2>
-                <p class="text-xs text-pink-300">Grade Audit Log</p>
-            </div>
-            <div class="flex items-center space-x-3">
-                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
-                    <%= currentUser.fullName || currentUser.username %>
-                </span>
-                <% if (currentUser.role === 'admin') { %>
-                    <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
-                <% } %>
-                <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
-                <form action="/logout" method="POST" class="inline">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium cursor-pointer">Log Out</button>
-                </form>
-            </div>
-        </div>
-    </header>
-
-    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-5">
-
-        <%
-            const baseQuery = (p) => {
-                const parts = [];
-                if (q) parts.push('q=' + encodeURIComponent(q));
-                if (p > 1) parts.push('page=' + p);
-                return '/registrar/grade-logs' + (parts.length ? '?' + parts.join('&') : '');
-            };
-        %>
-
-        <!-- FILTERS -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-            <form method="GET" action="/registrar/grade-logs" class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
-                <div class="flex-1">
-                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student ID / Course Code</label>
-                    <input type="text" name="q" value="<%= q %>" placeholder="e.g. 2024-00123 or NCM 101" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm bg-slate-50 font-mono">
-                </div>
-                <div class="flex gap-2">
-                    <button type="submit" class="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow cursor-pointer">Filter</button>
-                    <% if (q) { %>
-                        <a href="/registrar/grade-logs" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">Clear</a>
-                    <% } %>
-                </div>
-            </form>
-        </div>
-
-        <!-- LOG TABLE -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden">
-            <div class="bg-emerald-950 text-white px-5 py-3 flex justify-between items-center">
-                <h3 class="text-xs font-bold uppercase tracking-wider">Academic Grade Modification History</h3>
-                <span class="text-xs bg-emerald-900 border border-emerald-700 px-3 py-1 rounded-lg font-bold text-emerald-100"><%= total %> record<%= total === 1 ? '' : 's' %></span>
-            </div>
-
-            <% if (logs.length === 0) { %>
-                <div class="text-center py-12 px-4 text-slate-400 text-sm">No grade modifications found.</div>
-            <% } else { %>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead>
-                            <tr class="bg-slate-200 text-slate-700 border-b-2 border-slate-400 uppercase text-[10px] font-bold tracking-wider">
-                                <th class="py-2.5 px-3 border-r border-slate-300 whitespace-nowrap">Date &amp; Time (PH)</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300">Student ID</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300">Course</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300">Term / A.Y.</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300 text-center">Previous Grade</th>
-                                <th class="py-2.5 px-3 border-r border-slate-300 text-center">New Grade</th>
-                                <th class="py-2.5 px-3">Modified By</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-300">
-                            <% logs.forEach(row => { 
-                                const isDeleted = row.new_grade === 'DELETED' || row.new_grade === 'UNENROLLED';
-                            %>
-                                <tr class="odd:bg-white even:bg-slate-50/60">
-                                    <td class="py-2 px-3 border-r border-slate-300 whitespace-nowrap font-mono text-slate-600">
-                                        <%= new Date(row.changed_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }) %>
-                                    </td>
-                                    <td class="py-2 px-3 border-r border-slate-300 font-mono font-bold text-emerald-950 whitespace-nowrap"><%= row.student_id %></td>
-                                    <td class="py-2 px-3 border-r border-slate-300 font-mono font-semibold text-slate-700"><%= row.course_code %></td>
-                                    <td class="py-2 px-3 border-r border-slate-300 whitespace-nowrap">
-                                        Term <%= row.enrolled_term %><br><span class="text-[10px] text-slate-500"><%= row.academic_year %></span>
-                                    </td>
-                                    <td class="py-2 px-3 border-r border-slate-300 text-center font-bold text-slate-500">
-                                        <%= row.old_grade || '—' %>
-                                    </td>
-                                    <td class="py-2 px-3 border-r border-slate-300 text-center font-bold">
-                                        <% if (isDeleted) { %>
-                                            <span class="px-2 py-0.5 bg-red-100 text-red-700 border border-red-300 rounded text-[10px]"><%= row.new_grade %></span>
-                                        <% } else { %>
-                                            <span class="text-indigo-700"><%= row.new_grade || '—' %></span>
-                                        <% } %>
-                                    </td>
-                                    <td class="py-2 px-3">
-                                        <span class="font-mono font-bold block"><%= row.changed_by %></span>
-                                        <span class="text-[10px] uppercase font-bold text-slate-400"><%= row.changed_by_role %></span>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } %>
-
-            <% if (totalPages > 1) { %>
-                <div class="bg-slate-100 px-5 py-3 border-t border-slate-300 flex justify-between items-center text-xs">
-                    <% if (page > 1) { %>
-                        <a href="<%= baseQuery(page - 1) %>" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-bold text-slate-700">&larr; Newer</a>
-                    <% } else { %>
-                        <span></span>
-                    <% } %>
-                    <span class="font-bold text-slate-500">Page <%= page %> of <%= totalPages %></span>
-                    <% if (page < totalPages) { %>
-                        <a href="<%= baseQuery(page + 1) %>" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-bold text-slate-700">Older &rarr;</a>
-                    <% } else { %>
-                        <span></span>
-                    <% } %>
-                </div>
-            <% } %>
-        </div>
-
-        <p class="text-[11px] text-slate-400 text-center leading-relaxed">
-            🔒 This log is confidential (RA 10173). It permanently records all academic grade modifications, entries, deletions, and unenrollments across the portal.
-        </p>
-    </main>
 </body>
 </html>
