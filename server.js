@@ -134,7 +134,6 @@ function generateSecurePassword() {
     const special = '!@#$%^&*';
     const all = upper + lower + num + special;
 
-    // Force first char to be a letter to prevent Excel formula injection (=, +, -, @)
     const firstChar = crypto.randomInt(0, 2) === 0 
         ? upper[crypto.randomInt(0, upper.length)] 
         : lower[crypto.randomInt(0, lower.length)];
@@ -213,7 +212,6 @@ function setFlash(req, type, text) {
 app.use((req, res, next) => {
     if (req.path === '/favicon.ico') return next();
     
-    // Only generate CSRF on GET forms to prevent anonymous session DB spam
     if (!req.session.csrfToken && req.method === 'GET') {
         req.session.csrfToken = crypto.randomBytes(32).toString('hex');
     }
@@ -252,7 +250,6 @@ async function isAuthenticated(req, res, next) {
         }
         const dbUser = checkRes.rows[0];
         
-        // Session Revocation Check (kills older sessions if password changed)
         const pwdChangedTime = new Date(dbUser.password_changed_at).getTime();
         const loginTime = req.session.user.login_time || 0;
         if (pwdChangedTime > loginTime) {
@@ -434,7 +431,7 @@ async function seedDatabase() {
                     WHERE username = 'admin'
                 `, [recoveryHash]);
                 await logSecurityEvent('admin', 'ADMIN_RECOVERY', 'server-environment', null);
-                console.log("[ADMIN RECOVERY] Admin account unlocked and password reset. REMOVE the RESET_ADMIN_PASSWORD environment variable now.");
+                console.log("[ADMIN RECOVERY] Admin account unlocked and password reset.");
             }
         }
 
@@ -801,8 +798,8 @@ app.post('/admin/add-student', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
 
         await client.query(`
-            INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'student', $3, $4, $5, TRUE, FALSE)
+            INSERT INTO users (username, password_hash, role, must_change_password, first_name, middle_name, last_name, is_archived) 
+            VALUES ($1, $2, 'student', TRUE, $3, $4, $5, FALSE)
         `, [cleanId, hashedPassword, fName, mName, lName]);
 
         await client.query(`
@@ -920,7 +917,7 @@ app.post('/admin/edit-faculty', isAuthenticated, async (req, res) => {
         if (client) await client.query('ROLLBACK');
         console.error('Admin edit staff error:', err);
         setFlash(req, 'err', 'Failed to update staff profile.');
-        res.redirect('/admin');
+        res.redirect(`/admin?staff_user=${encodeURIComponent(req.body.original_username)}`);
     } finally {
         if (client) client.release();
     }
@@ -936,8 +933,8 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
         const mName = req.body.middle_name ? String(req.body.middle_name).trim() : '';
         const lName = req.body.last_name ? String(req.body.last_name).trim() : '';
         const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-        const secRaw = String(req.body.section || '').trim().toUpperCase();
-        const sec = ['A', 'B', 'C'].includes(secRaw) ? secRaw : 'A';
+        const rawSec = String(req.body.section || '').trim().toUpperCase();
+        const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
         
         if (!cleanId || !fName || !lName) {
             setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
@@ -981,7 +978,7 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
         if (client) await client.query('ROLLBACK');
         console.error('Admin edit student error:', err);
         setFlash(req, 'err', 'Failed to update student profile.');
-        res.redirect('/admin');
+        res.redirect(`/admin?search_student_id=${encodeURIComponent(cleanId)}`);
     } finally {
         if (client) client.release();
     }
@@ -1296,7 +1293,6 @@ app.get('/registrar/export-batch-credentials', isAuthenticated, (req, res) => {
         sanitizeCsvCell(c.student_id),
         sanitizeCsvCell(c.name),
         sanitizeCsvCell(c.year_section),
-        // Escape quotes but do not apply formula sanitization prefix to passwords
         `"${String(c.temp_password).replace(/"/g, '""')}"`
     ].join(',')).join('\n');
 
@@ -1396,8 +1392,8 @@ app.post('/registrar/update-student-year-section', isAuthenticated, async (req, 
     try {
         const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
         const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
-        const secRaw = String(req.body.section || '').trim().toUpperCase();
-        const sec = ['A', 'B', 'C'].includes(secRaw) ? secRaw : 'A';
+        const rawSec = String(req.body.section || '').trim().toUpperCase();
+        const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
         
         const updateRes = await pool.query(`
             UPDATE students SET year_level = $1, section = $2 WHERE student_id = $3
@@ -1412,7 +1408,7 @@ app.post('/registrar/update-student-year-section', isAuthenticated, async (req, 
     } catch (err) {
         console.error('Update class error:', err);
         setFlash(req, 'err', 'Failed to update Year Level and Section.');
-        res.redirect('/registrar');
+        res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
     }
 });
 
@@ -1444,7 +1440,7 @@ app.post('/registrar/add-faculty', isAuthenticated, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
         await client.query(`
             INSERT INTO users (username, password_hash, role, first_name, middle_name, last_name, must_change_password, is_archived) 
-            VALUES ($1, $2, 'faculty', $3, $4, $5, TRUE, FALSE)
+            VALUES ($1, $2, 'faculty', TRUE, $3, $4, $5, FALSE)
         `, [cleanUser, hashedPassword, fName, mName, lName]);
 
         if (req.body.course_codes) {
@@ -1591,7 +1587,7 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
     }
 });
 
-// ==================== ACCOUNT SECURITY LOG (Registrar / Admin) ====================
+// ==================== ACCOUNT SECURITY LOG ====================
 const SECURITY_EVENTS = ['ACCOUNT_LOCKED', 'PASSWORD_RESET_UNLOCK', 'PASSWORD_RESET', 'ADMIN_RECOVERY'];
 
 app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
@@ -1655,7 +1651,7 @@ app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
     }
 });
 
-// ==================== GRADE AUDIT LOG (Registrar / Admin) ====================
+// ==================== GRADE AUDIT LOG ====================
 app.get('/registrar/grade-logs', isAuthenticated, async (req, res) => {
     const role = req.session.user.role;
     if (role !== 'registrar' && role !== 'admin') return res.redirect('/portal');
@@ -1768,7 +1764,7 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             return res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
         }
 
-        const facUser = req.body[`instructor__${courseCode}`] ? String(req.body[`instructor__${courseCode}`]).trim() : '';
+        const facUser = req.body.instructor ? String(req.body.instructor).trim() : '';
         let facFormalName = '';
         if (facUser) {
             const facRes = await pool.query(`SELECT first_name, middle_name, last_name FROM users WHERE username = $1 AND role = 'faculty'`, [facUser]);
@@ -1930,7 +1926,7 @@ app.post('/registrar/unenroll-term', isAuthenticated, async (req, res) => {
     }
 });
 
-// ==================== FACULTY PORTAL ROUTES (HARDENED EXCEL CLASS ROSTER) ====================
+// ==================== FACULTY PORTAL ROUTES ====================
 async function getFacultyAssignedCourses(facultyUsername, facultyFullName, role) {
     if (role === 'admin') {
         const allC = await pool.query('SELECT course_code, descriptive_title, term_id FROM courses WHERE COALESCE(is_active, TRUE) = TRUE ORDER BY course_code');
@@ -2189,7 +2185,6 @@ app.get('/portal', isAuthenticated, async (req, res) => {
     }
 });
 
-
 async function startServer() {
     try {
         await seedDatabase();
@@ -2199,7 +2194,6 @@ async function startServer() {
             console.log(`Server running at http://localhost:${PORT}`);
         });
     } catch (err) {
-        // Suppress expected exits in logs, otherwise let it crash
         if (err.message !== "process.exit") console.error("Failed to start server:", err);
     }
 }

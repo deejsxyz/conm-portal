@@ -48,7 +48,6 @@
             };
         %>
 
-        <!-- FILTERS -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
             <form method="GET" action="/registrar/security-log" class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
                 <div class="flex-1">
@@ -73,7 +72,6 @@
             </form>
         </div>
 
-        <!-- LOG TABLE -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden">
             <div class="bg-emerald-950 text-white px-5 py-3 flex justify-between items-center">
                 <h3 class="text-xs font-bold uppercase tracking-wider">Lock &amp; Password Reset History</h3>
@@ -150,7 +148,7 @@
         </div>
 
         <p class="text-[11px] text-slate-400 text-center leading-relaxed">
-            🔒 This log is confidential (RA 10173). It records automatic account lockouts (with the source IP, so repeated lockouts from one address can be spotted) and every password reset done by the Registrar or Administrator.
+            🔒 This log is confidential (RA 10173). It records automatic account lockouts and password resets.
             <% if (currentUser.role !== 'admin') { %>Registrar view is limited to student and faculty accounts.<% } %>
         </p>
     </main>

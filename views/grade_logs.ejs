@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Grade Audit Log - CONM Portal</title>
+    <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div>
+                <h2 class="text-base font-bold">College of Nursing and School of Midwifery</h2>
+                <p class="text-xs text-pink-300">Grade Audit Log</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full text-indigo-100 font-medium">
+                    <%= currentUser.fullName || currentUser.username %>
+                </span>
+                <% if (currentUser.role === 'admin') { %>
+                    <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
+                <% } %>
+                <a href="/registrar" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-medium">Registrar Portal</a>
+                <form action="/logout" method="POST" class="inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="text-xs bg-pink-600 hover:bg-pink-700 text-white px-3 py-1.5 rounded font-medium cursor-pointer">Log Out</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-5">
+
+        <%
+            const baseQuery = (p) => {
+                const parts = [];
+                if (q) parts.push('q=' + encodeURIComponent(q));
+                if (p > 1) parts.push('page=' + p);
+                return '/registrar/grade-logs' + (parts.length ? '?' + parts.join('&') : '');
+            };
+        %>
+
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <form method="GET" action="/registrar/grade-logs" class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                <div class="flex-1">
+                    <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Search Student ID / Course Code</label>
+                    <input type="text" name="q" value="<%= q %>" placeholder="e.g. 2024-00123 or NCM 101" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm bg-slate-50 font-mono">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-xs font-bold shadow cursor-pointer">Filter</button>
+                    <% if (q) { %>
+                        <a href="/registrar/grade-logs" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold">Clear</a>
+                    <% } %>
+                </div>
+            </form>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden">
+            <div class="bg-emerald-950 text-white px-5 py-3 flex justify-between items-center">
+                <h3 class="text-xs font-bold uppercase tracking-wider">Academic Grade Modification History</h3>
+                <span class="text-xs bg-emerald-900 border border-emerald-700 px-3 py-1 rounded-lg font-bold text-emerald-100"><%= total %> record<%= total === 1 ? '' : 's' %></span>
+            </div>
+
+            <% if (logs.length === 0) { %>
+                <div class="text-center py-12 px-4 text-slate-400 text-sm">No grade modifications found.</div>
+            <% } else { %>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-200 text-slate-700 border-b-2 border-slate-400 uppercase text-[10px] font-bold tracking-wider">
+                                <th class="py-2.5 px-3 border-r border-slate-300 whitespace-nowrap">Date &amp; Time (PH)</th>
+                                <th class="py-2.5 px-3 border-r border-slate-300">Student ID</th>
+                                <th class="py-2.5 px-3 border-r border-slate-300">Course</th>
+                                <th class="py-2.5 px-3 border-r border-slate-300">Term / A.Y.</th>
+                                <th class="py-2.5 px-3 border-r border-slate-300 text-center">Previous Grade</th>
+                                <th class="py-2.5 px-3 border-r border-slate-300 text-center">New Grade</th>
+                                <th class="py-2.5 px-3">Modified By</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-300">
+                            <% logs.forEach(row => { 
+                                const isDeleted = row.new_grade === 'DELETED' || row.new_grade === 'UNENROLLED';
+                            %>
+                                <tr class="odd:bg-white even:bg-slate-50/60">
+                                    <td class="py-2 px-3 border-r border-slate-300 whitespace-nowrap font-mono text-slate-600">
+                                        <%= new Date(row.changed_at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }) %>
+                                    </td>
+                                    <td class="py-2 px-3 border-r border-slate-300 font-mono font-bold text-emerald-950 whitespace-nowrap"><%= row.student_id %></td>
+                                    <td class="py-2 px-3 border-r border-slate-300 font-mono font-semibold text-slate-700"><%= row.course_code %></td>
+                                    <td class="py-2 px-3 border-r border-slate-300 whitespace-nowrap">
+                                        Term <%= row.enrolled_term %><br><span class="text-[10px] text-slate-500"><%= row.academic_year %></span>
+                                    </td>
+                                    <td class="py-2 px-3 border-r border-slate-300 text-center font-bold text-slate-500">
+                                        <%= row.old_grade || '—' %>
+                                    </td>
+                                    <td class="py-2 px-3 border-r border-slate-300 text-center font-bold">
+                                        <% if (isDeleted) { %>
+                                            <span class="px-2 py-0.5 bg-red-100 text-red-700 border border-red-300 rounded text-[10px]"><%= row.new_grade %></span>
+                                        <% } else { %>
+                                            <span class="text-indigo-700"><%= row.new_grade || '—' %></span>
+                                        <% } %>
+                                    </td>
+                                    <td class="py-2 px-3">
+                                        <span class="font-mono font-bold block"><%= row.changed_by %></span>
+                                        <span class="text-[10px] uppercase font-bold text-slate-400"><%= row.changed_by_role %></span>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+
+            <% if (totalPages > 1) { %>
+                <div class="bg-slate-100 px-5 py-3 border-t border-slate-300 flex justify-between items-center text-xs">
+                    <% if (page > 1) { %>
+                        <a href="<%= baseQuery(page - 1) %>" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-bold text-slate-700">&larr; Newer</a>
+                    <% } else { %>
+                        <span></span>
+                    <% } %>
+                    <span class="font-bold text-slate-500">Page <%= page %> of <%= totalPages %></span>
+                    <% if (page < totalPages) { %>
+                        <a href="<%= baseQuery(page + 1) %>" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-bold text-slate-700">Older &rarr;</a>
+                    <% } else { %>
+                        <span></span>
+                    <% } %>
+                </div>
+            <% } %>
+        </div>
+
+        <p class="text-[11px] text-slate-400 text-center leading-relaxed">
+            🔒 This log is confidential (RA 10173). It permanently records all academic grade modifications, entries, deletions, and unenrollments across the portal.
+        </p>
+    </main>
+</body>
+</html>
