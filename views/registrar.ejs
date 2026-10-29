@@ -139,7 +139,7 @@
                     <% } %>
                 </div>
 
-                <div id="studentManageSection" class="<%= studentPanelOpen ? 'hidden' : '' %> space-y-4">
+                <div id="studentManageSection" class="space-y-4">
                     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                         <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
                             <div class="flex-grow w-full">
@@ -448,7 +448,7 @@
                 </div>
 
                 <!-- Register / Enroll Student Form -->
-                <div id="studentRegSection" class="<%= studentPanelOpen ? '' : 'hidden' %> bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
                     
                     <!-- Notification / Message Box for Lookup -->
@@ -547,8 +547,8 @@
             <div id="facultyPanel" class="<%= facultyPanelOpen ? '' : 'hidden' %> space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div role="tablist" aria-label="Faculty tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyManageSection" aria-selected="true" aria-controls="facultyManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer bg-white text-indigo-900 shadow">👥 Manage Faculty</button>
-                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyRegSection" aria-selected="false" aria-controls="facultyRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Register Faculty</button>
+                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyManageSection" aria-selected="<%= facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= facultyPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">👥 Manage Faculty</button>
+                        <button type="button" role="tab" data-tab-parent="facultyPanel" data-tab-target="facultyRegSection" aria-selected="<%= !facultyPanelOpen ? 'true' : 'false' %>" aria-controls="facultyRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !facultyPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register Faculty</button>
                     </div>
                 </div>
 
