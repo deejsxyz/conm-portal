@@ -84,11 +84,9 @@
                 <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white cursor-pointer">
-                        <option value="2025-2026" <%= systemSettings.current_ay === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
-                        <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                        <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                        <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                        <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                        <% const _by = parseInt(String(systemSettings.current_ay).slice(0, 4), 10) || 2026; for (let _y = _by - 4; _y <= _by + 3; _y++) { const _ay = _y + '-' + (_y + 1); %>
+                        <option value="<%= _ay %>" <%= systemSettings.current_ay === _ay ? 'selected' : '' %>>A.Y. <%= _ay %></option>
+                        <% } %>
                     </select>
                     <select name="current_semester" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white cursor-pointer">
                         <option value="1" <%= systemSettings.current_semester === 1 ? 'selected' : '' %>>1st Semester</option>
@@ -228,11 +226,9 @@
                         <form method="GET" action="/registrar" class="flex flex-wrap items-center gap-2">
                             <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                             <select name="view_ay" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50 cursor-pointer">
-                                <option value="2025-2026" <%= currentViewAy === '2025-2026' ? 'selected' : '' %>>A.Y. 2025-2026</option>
-                                <option value="2026-2027" <%= currentViewAy === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                                <option value="2027-2028" <%= currentViewAy === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                                <option value="2028-2029" <%= currentViewAy === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                                <option value="2029-2030" <%= currentViewAy === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
+                                <% const _vby = parseInt(String(currentViewAy).slice(0, 4), 10) || 2026; for (let _vy = _vby - 4; _vy <= _vby + 3; _vy++) { const _vay = _vy + '-' + (_vy + 1); %>
+                                <option value="<%= _vay %>" <%= currentViewAy === _vay ? 'selected' : '' %>>A.Y. <%= _vay %></option>
+                                <% } %>
                             </select>
                             <select name="view_term" class="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-bold bg-slate-50 cursor-pointer">
                                 <% Object.keys(termNames).forEach(tKey => { %>
@@ -787,13 +783,13 @@
 
     <!-- XSS-SAFE JSON SCRIPT BLOCKS WITH NONCE -->
     <script id="courses-data" type="application/json" nonce="<%= cspNonce %>">
-        <%- JSON.stringify(locals.allCoursesRaw || []).replace(/</g, '\\u003c') %>
+        <%- JSON.stringify(locals.allCoursesRaw || []).replace(/</g, '\u003c') %>
     </script>
     <script id="faculty-list-data" type="application/json" nonce="<%= cspNonce %>">
-        <%- JSON.stringify(locals.facultyList || []).replace(/</g, '\\u003c') %>
+        <%- JSON.stringify(locals.facultyList || []).replace(/</g, '\u003c') %>
     </script>
     <script id="faculty-assigned-data" type="application/json" nonce="<%= cspNonce %>">
-        <%- JSON.stringify(locals.facultyAssignedCourses || []).replace(/</g, '\\u003c') %>
+        <%- JSON.stringify(locals.facultyAssignedCourses || []).replace(/</g, '\u003c') %>
     </script>
     <script nonce="<%= cspNonce %>">
         const allCoursesData = JSON.parse(document.getElementById('courses-data').textContent);
