@@ -529,7 +529,7 @@
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester (Triggers Subjects)</label>
-                                <select id="reg_sem_select" disabled aria-disabled="true" title="Set automatically from the Global System Settings" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-100 text-xs font-bold text-slate-700 cursor-not-allowed">
+                                <select id="reg_sem_select" disabled aria-disabled="true" title="Set automatically from the Global System Settings" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-100 text-xs font-bold text-slate-700 cursor-not-allowed text-[10px] font-semibold text-slate-500">🔒 Auto">
                                     <option value="1" <%= parseInt(systemSettings.current_semester, 10) === 1 ? 'selected' : '' %>>1st Semester</option>
                                     <option value="2" <%= parseInt(systemSettings.current_semester, 10) === 2 ? 'selected' : '' %>>2nd Semester</option>
                                     <p class="text-[10px] font-semibold text-slate-500">🔒 Auto</p>
