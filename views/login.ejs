@@ -11,7 +11,15 @@
     
     <div></div>
 
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border-t-4 border-pink-600 space-y-6 z-10">
+    <div class="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12 lg:gap-20 w-full max-w-5xl z-10">
+
+        <!-- School logo (left) -->
+        <div class="flex justify-center items-center md:flex-1">
+            <img src="/static/logo-login.png" alt="College of Nursing and School of Midwifery logo" class="w-32 md:w-72 lg:w-96 h-auto drop-shadow-2xl">
+        </div>
+
+        <!-- Login box (right) -->
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full md:w-[28rem] md:shrink-0 p-8 border-t-4 border-pink-600 space-y-6">
         <div class="text-center space-y-1">
             <h1 class="text-md font-bold text-emerald-950">City University of Pasay</h1>
             <p class="text-sm font-bold uppercase tracking-wider text-pink-600">College of Nursing & School of Midwifery</p>
@@ -49,6 +57,8 @@
         <div class="pt-3 border-t border-slate-100 text-[10px] text-slate-400 leading-relaxed text-center">
             🔒 <strong>Data Privacy Notice (RA 10173):</strong> By signing in, you acknowledge that student records and academic grades are confidential personal information. Grade changes, password resets, account lockouts and access to immunization records are logged for security and academic audit purposes.
         </div>
+        </div>
+
     </div>
 
     <% if (locals.popupMessage) { %>
