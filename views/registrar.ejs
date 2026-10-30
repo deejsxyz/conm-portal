@@ -143,7 +143,7 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div role="tablist" aria-label="Student tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
                         <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="true" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer bg-white text-indigo-900 shadow">✏️ Manage Student</button>
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="false" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Pre-Register</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="false" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Register Student</button>
                     </div>
                     <% if (selectedStudent) { %>
                         <a href="/registrar" class="text-xs font-bold text-slate-600 hover:text-slate-900 underline">Close student record</a>
@@ -547,7 +547,7 @@
                         <div class="flex gap-3">
                             <button type="button" data-close-panel="studentPanel" class="cancel-toggle-btn w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">Cancel</button>
                             <button type="submit" class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">
-                                + Register Account & Pre-Register Student in Checked Subjects
+                                + Register Account & Register Student in Checked Subjects
                             </button>
                         </div>
                     </form>
@@ -1186,7 +1186,7 @@
 }
                     } else {
                         msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-amber-100 text-amber-800 border border-amber-300';
-                        msgContainer.textContent = '⚠️ No student record. Please register/enroll.';
+                        msgContainer.textContent = '⚠️ No student record found for this ID. Please check the number or proceed to pre-register.';
                         immContainer.classList.add('hidden');
                     }
                 } catch (err) {
