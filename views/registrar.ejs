@@ -41,28 +41,16 @@
             let currentTermLabel = termNames[currentTerm] || "Unknown Term";
         %>
 
-        <!-- FLOATING AUTO-DISAPPEAR MODALS -->
+        <!-- FLOATING TOP NOTIFICATIONS -->
         <% if (locals.message) { %>
-            <div class="flash-alert fixed inset-0 flex items-center justify-center bg-slate-900/60 z-[100] px-4 pointer-events-none transition-opacity">
-                <div class="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full border-t-4 border-emerald-500 text-center pointer-events-auto">
-                    <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-2xl mb-3">
-                        ✅
-                    </div>
-                    <h3 class="text-base font-bold text-slate-900 mb-1">Success</h3>
-                    <p class="text-xs text-slate-600 leading-relaxed"><%= message %></p>
-                </div>
+            <div class="flash-alert fixed top-6 left-1/2 transform -translate-x-1/2 w-[90%] max-w-4xl z-[100] p-4 bg-emerald-100/90 backdrop-blur-sm border border-emerald-400 text-emerald-900 text-xs font-bold rounded-xl shadow-lg text-center pointer-events-auto transition-opacity duration-500">
+                ✅ <%= message %>
             </div>
         <% } %>
 
         <% if (locals.error) { %>
-            <div class="flash-alert fixed inset-0 flex items-center justify-center bg-slate-900/60 z-[100] px-4 pointer-events-none transition-opacity">
-                <div class="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full border-t-4 border-red-500 text-center pointer-events-auto">
-                    <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto text-2xl mb-3">
-                        ⚠️
-                    </div>
-                    <h3 class="text-base font-bold text-slate-900 mb-1">Notice</h3>
-                    <p class="text-xs text-slate-600 leading-relaxed"><%= error %></p>
-                </div>
+            <div class="flash-alert fixed top-6 left-1/2 transform -translate-x-1/2 w-[90%] max-w-4xl z-[100] p-4 bg-red-100/90 backdrop-blur-sm border border-red-400 text-red-900 text-xs font-bold rounded-xl shadow-lg text-center pointer-events-auto transition-opacity duration-500">
+                ⚠️ <%= error %>
             </div>
         <% } %>
 
@@ -1032,14 +1020,13 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Auto-hide flash alerts after 2 seconds
+            // Auto-hide flash alerts after 4 seconds
             setTimeout(() => {
                 document.querySelectorAll('.flash-alert').forEach(el => {
-                    el.style.transition = 'opacity 0.5s ease-out';
                     el.style.opacity = '0';
                     setTimeout(() => el.remove(), 500);
                 });
-            }, 2000);
+            }, 4000);
 
             // NEW LOGS DROPDOWN LOGIC
             const logsBtn = document.getElementById('logsDropdownBtn');
