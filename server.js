@@ -71,6 +71,9 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
+// Static assets (logo). Mounted before the no-store middleware below so browsers can cache them.
+app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: '7d' }));
+
 app.use(express.urlencoded({ extended: false, parameterLimit: 5000, limit: '1mb' }));
 
 app.use((req, res, next) => {

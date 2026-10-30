@@ -4,12 +4,22 @@
     <meta charset="UTF-8">
     <title>CONM | LOGIN</title>
     <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 </head>
 <body class="bg-gradient-to-br from-emerald-950 via-emerald-900 to-pink-950 min-h-screen flex flex-col items-center justify-between p-4 font-sans relative">
     
     <div></div>
 
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border-t-4 border-pink-600 space-y-6 z-10">
+    <div class="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6 lg:gap-8 w-full max-w-5xl z-10">
+
+        <!-- School logo (left) -->
+        <div class="flex justify-center items-center">
+            <img src="/static/logo-login.png" alt="College of Nursing and School of Midwifery logo" class="w-32 md:w-72 lg:w-96 h-auto drop-shadow-2xl pointer-events-none select-none" draggable="false" style="-webkit-user-drag: none;">
+        </div>
+
+        <!-- Login box (right) -->
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full md:w-[28rem] md:shrink-0 p-8 border-t-4 border-pink-600 space-y-6">
         <div class="text-center space-y-1">
             <h1 class="text-md font-bold text-emerald-950">City University of Pasay</h1>
             <p class="text-sm font-bold uppercase tracking-wider text-pink-600">College of Nursing & School of Midwifery</p>
@@ -26,12 +36,12 @@
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div>
                 <label class="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Username</label>
-                <input type="text" name="username" required autocomplete="username" placeholder="Username" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm font-mono bg-slate-50">
+                <input type="text" name="username" required autocomplete="username" placeholder="Enter username" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm font-mono bg-slate-50">
             </div>
 
             <div>
                 <label class="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Password</label>
-                <input type="password" name="password" required autocomplete="current-password" placeholder="Password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm bg-slate-50">
+                <input type="password" name="password" required autocomplete="current-password" placeholder="Enter password" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm bg-slate-50">
                 <div class="flex justify-end mt-2">
                     <a href="#" id="forgotPassBtn" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 transition-colors uppercase tracking-wider">
                         Forgot Password?
@@ -40,13 +50,15 @@
             </div>
 
             <button type="submit" class="w-full py-3 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs uppercase tracking-wider shadow-md transition-colors cursor-pointer">
-                LOGIN
+                Sign In
             </button>
         </form>
 
         <div class="pt-3 border-t border-slate-100 text-[10px] text-slate-400 leading-relaxed text-center">
             🔒 <strong>Data Privacy Notice (RA 10173):</strong> By signing in, you acknowledge that student records and academic grades are confidential personal information. Grade changes, password resets, account lockouts and access to immunization records are logged for security and academic audit purposes.
         </div>
+        </div>
+
     </div>
 
     <% if (locals.popupMessage) { %>
