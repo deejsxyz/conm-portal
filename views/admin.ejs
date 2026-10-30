@@ -72,6 +72,9 @@
                         <button type="button" data-target="stu_archive_mode" class="stu-act-btn px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer">
                             📦 Bulk Archive
                         </button>
+                        <button type="button" data-target="stu_restore_mode" class="stu-act-btn px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer">
+                            ♻️ Bulk Restore
+                        </button>
                         <button type="button" data-target="stu_delete_mode" class="stu-act-btn px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer">
                             🗑️ Bulk Delete
                         </button>
@@ -237,12 +240,57 @@
                         </form>
                     </div>
 
-                    <!-- 3. DELETE MODE -->
+                    <!-- 3. RESTORE MODE -->
+                    <div id="stu_restore_mode" class="stu-mode-panel hidden space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3 bg-emerald-50 p-4 border border-emerald-200 rounded-xl">
+                            <div>
+                                <h4 class="font-bold text-emerald-900 text-sm uppercase tracking-wider">♻️ Bulk Restore Archived Students</h4>
+                                <p class="text-xs text-emerald-700">Restoring returns accounts to the active class lists. Grades and records were never removed, and students can log in again with their existing passwords.</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <label class="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-emerald-900 bg-emerald-100/50 px-2.5 py-1.5 rounded-lg border border-emerald-300 shadow-sm transition hover:bg-emerald-200">
+                                    <input type="checkbox" id="restoreShowAllToggle" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                                    Show All
+                                </label>
+                                <div class="w-px h-6 bg-emerald-300 hidden sm:block"></div>
+                                <select id="restoreYearFilter" class="px-3 py-2 rounded-lg border border-emerald-300 text-xs font-bold text-emerald-900 bg-white cursor-pointer transition-opacity">
+                                    <option value="" style="font-style:italic;">-- Year --</option>
+                                    <option value="1">BSN1</option>
+                                    <option value="2">BSN2</option>
+                                    <option value="3">BSN3</option>
+                                    <option value="4">BSN4</option>
+                                </select>
+                                <select id="restoreSecFilter" class="px-3 py-2 rounded-lg border border-emerald-300 text-xs font-bold text-emerald-900 bg-white cursor-pointer transition-opacity">
+                                    <option value="" style="font-style:italic;">-- Sec --</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <form id="bulkRestoreSubmitForm" action="/admin/bulk-restore-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="Restore the selected archived accounts? They will return to the active class lists and can log in again.">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
+                                <button type="button" id="restoreSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
+                                <button type="submit" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">♻️ Restore Selected Accounts</button>
+                            </div>
+                            <div class="max-h-96 overflow-y-auto">
+                                <table class="w-full text-left text-xs">
+                                    <tbody id="restoreTbody" class="divide-y divide-slate-200">
+                                        <!-- Rendered by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 4. DELETE MODE -->
                     <div id="stu_delete_mode" class="stu-mode-panel hidden space-y-4">
                         <div class="flex flex-wrap items-center justify-between gap-3 bg-red-50 p-4 border border-red-200 rounded-xl">
                             <div>
                                 <h4 class="font-bold text-red-900 text-sm uppercase tracking-wider">🗑️ Bulk Permanently Delete Students</h4>
-                                <p class="text-xs font-bold text-red-600 uppercase tracking-wider">Danger Zone: ALL DATA, GRADES, AND LOGS WILL BE WIPED COMPLETELY.</p>
+                                <p class="text-xs font-bold text-red-600 uppercase tracking-wider">Danger Zone: PERSONAL DATA, GRADES, AND VACCINE RECORDS WILL BE WIPED COMPLETELY. Audit logs are kept.</p>
                             </div>
                             <div class="flex items-center gap-3">
                                 <label class="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-red-900 bg-red-100/50 px-2.5 py-1.5 rounded-lg border border-red-300 shadow-sm transition hover:bg-red-200">
@@ -266,7 +314,7 @@
                             </div>
                         </div>
 
-                        <form id="bulkDeleteSubmitForm" action="/admin/bulk-delete-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CRITICAL WARNING: Are you sure you want to PERMANENTLY DELETE the selected accounts? ALL data (personal details, grades, audit logs, and vaccine records) will be WIPED COMPLETELY. This action CANNOT be undone.">
+                        <form id="bulkDeleteSubmitForm" action="/admin/bulk-delete-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CRITICAL WARNING: Are you sure you want to PERMANENTLY DELETE the selected accounts? ALL personal details, grades, and vaccine records will be WIPED COMPLETELY. Audit logs are retained. This action CANNOT be undone.">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
                                 <button type="button" id="deleteSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
@@ -472,6 +520,10 @@
         <%- JSON.stringify(locals.allActiveStudents || []).replace(/</g, '\\u003c') %>
     </script>
 
+    <script id="all-archived-students-data" type="application/json" nonce="<%= cspNonce %>">
+        <%- JSON.stringify(locals.allArchivedStudents || []).replace(/</g, '\\u003c') %>
+    </script>
+
     <script nonce="<%= cspNonce %>">
         // Safe HTML output
         function escapeHtml(str) {
@@ -551,8 +603,9 @@
             });
 
             // Secure Bulk Action Handlers (Bypasses CSP limits and validates empty selections)
-            ['archive', 'delete'].forEach(mode => {
-                const form = document.getElementById(mode === 'archive' ? 'bulkArchiveSubmitForm' : 'bulkDeleteSubmitForm');
+            ['archive', 'restore', 'delete'].forEach(mode => {
+                const formIds = { archive: 'bulkArchiveSubmitForm', restore: 'bulkRestoreSubmitForm', delete: 'bulkDeleteSubmitForm' };
+                const form = document.getElementById(formIds[mode]);
                 if (form) {
                     form.addEventListener('submit', (e) => {
                         const selectedBoxes = form.querySelectorAll(`.${mode}-checkbox:checked`);
@@ -619,6 +672,7 @@
 
             // Client-Side Bulk Table Rendering for Archive and Delete Tabs
             const allActiveStudents = JSON.parse(document.getElementById('all-active-students-data').textContent);
+            const allArchivedStudents = JSON.parse(document.getElementById('all-archived-students-data').textContent);
 
             function renderBulkList(mode) {
                 const yearSel = document.getElementById(`${mode}YearFilter`);
@@ -637,14 +691,14 @@
                     return;
                 }
 
-                let filtered = allActiveStudents;
+                let filtered = (mode === 'restore') ? allArchivedStudents : allActiveStudents;
                 if (!showAll) {
                     filtered = allActiveStudents.filter(s => String(s.year_level) === year && s.section === sec);
                 }
                 
                 let html = '';
                 if (filtered.length === 0) {
-                    html = '<tr><td colspan="4" class="p-5 text-center text-slate-500 font-bold">No active students found.</td></tr>';
+                    html = '<tr><td colspan="4" class="p-5 text-center text-slate-500 font-bold">' + (mode === 'restore' ? 'No archived students found.' : 'No active students found.') + '</td></tr>';
                 } else {
                     filtered.forEach(s => {
                         const fullName = escapeHtml(`${s.last_name}, ${s.first_name} ${s.middle_name || ''}`.trim());
@@ -674,7 +728,7 @@
                 }
             }
 
-            ['archive', 'delete'].forEach(mode => {
+            ['archive', 'restore', 'delete'].forEach(mode => {
                 const yF = document.getElementById(`${mode}YearFilter`);
                 const sF = document.getElementById(`${mode}SecFilter`);
                 const sA = document.getElementById(`${mode}ShowAllToggle`);

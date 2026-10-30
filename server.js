@@ -808,13 +808,24 @@ app.get('/admin', isAuthenticated, async (req, res) => {
         `);
         const allActiveStudents = allActiveRes.rows;
 
+        // Archived students for the Bulk Restore tab
+        const archivedRes = await pool.query(`
+            SELECT s.student_id, s.first_name, s.middle_name, s.last_name, s.program, s.year_level, COALESCE(s.section, 'A') AS section
+            FROM students s
+            JOIN users u ON s.student_id = u.username
+            WHERE COALESCE(s.is_archived, FALSE) = TRUE AND u.role = 'student'
+            ORDER BY s.last_name ASC
+        `);
+        const allArchivedStudents = archivedRes.rows;
+
         res.render('admin', {
             currentUser: req.session.user,
             staffList: staffRes.rows,
             selectedStaff: selectedStaff,
             searchStudentId: searchStudentId,
             searchedStudents: searchedStudents,
-            allActiveStudents: allActiveStudents
+            allActiveStudents: allActiveStudents,
+            allArchivedStudents: allArchivedStudents
         });
     } catch (err) {
         console.error('Admin load error:', err);
@@ -938,6 +949,10 @@ app.post('/admin/delete-user', isAuthenticated, async (req, res) => {
         const archiveFlag = action === 'archive';
 
         await client.query('UPDATE users SET is_archived = $1 WHERE username = $2', [archiveFlag, username]);
+        await client.query(
+            'INSERT INTO account_security_logs (username, event, performed_by) VALUES ($1, $2, $3)',
+            [username, archiveFlag ? 'ACCOUNT_ARCHIVED' : 'ACCOUNT_RESTORED', req.session.user.username]
+        );
 
         if (dbRole === 'student') {
             await client.query('UPDATE students SET is_archived = $1 WHERE student_id = $2', [archiveFlag, username]);
@@ -1006,6 +1021,60 @@ app.post('/admin/bulk-archive-users', isAuthenticated, async (req, res) => {
         if (client) await client.query('ROLLBACK').catch(() => {});
         console.error('Bulk archive error:', err);
         setFlash(req, 'err', 'Failed to archive accounts.');
+        res.redirect('/admin');
+    } finally {
+        if (client) client.release();
+    }
+});
+
+// Bulk restore (students only): reverses an archive. Grades and records were never removed.
+app.post('/admin/bulk-restore-users', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    let client;
+    try {
+        let userIds = req.body.userIds;
+        if (!userIds) {
+            setFlash(req, 'err', 'No users selected for restoring.');
+            return res.redirect('/admin');
+        }
+        if (!Array.isArray(userIds)) userIds = [userIds];
+        userIds = userIds.map(id => String(id).trim()).filter(id => id && id !== 'admin');
+
+        if (userIds.length === 0) {
+            setFlash(req, 'err', 'Invalid selection.');
+            return res.redirect('/admin');
+        }
+
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        const restored = await client.query(`
+            UPDATE users SET is_archived = FALSE
+            WHERE username = ANY($1::text[]) AND role = 'student' AND COALESCE(is_archived, FALSE) = TRUE
+            RETURNING username
+        `, [userIds]);
+        const ids = restored.rows.map(r => r.username);
+
+        if (ids.length > 0) {
+            await client.query('UPDATE students SET is_archived = FALSE WHERE student_id = ANY($1::text[])', [ids]);
+            await client.query(
+                `INSERT INTO account_security_logs (username, event, performed_by) SELECT unnest($1::text[]), 'ACCOUNT_RESTORED', $2`,
+                [ids, req.session.user.username]
+            );
+        }
+
+        await client.query('COMMIT');
+        if (ids.length === 0) {
+            setFlash(req, 'err', 'No archived student accounts matched the selection.');
+        } else {
+            setFlash(req, 'msg', `Successfully restored ${ids.length} student account(s). They can log in again with their existing passwords.`);
+        }
+        res.redirect('/admin');
+    } catch (err) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        console.error('Bulk restore error:', err);
+        setFlash(req, 'err', 'Failed to restore accounts.');
         res.redirect('/admin');
     } finally {
         if (client) client.release();
@@ -2022,7 +2091,7 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
     }
 });
 
-const SECURITY_EVENTS = ['ACCOUNT_LOCKED', 'PASSWORD_RESET_UNLOCK', 'PASSWORD_RESET', 'ADMIN_RECOVERY', 'ACCOUNT_ARCHIVED', 'ACCOUNT_DELETED'];
+const SECURITY_EVENTS = ['ACCOUNT_LOCKED', 'PASSWORD_RESET_UNLOCK', 'PASSWORD_RESET', 'ADMIN_RECOVERY', 'ACCOUNT_ARCHIVED', 'ACCOUNT_RESTORED', 'ACCOUNT_DELETED'];
 
 app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
     const role = req.session.user.role;
