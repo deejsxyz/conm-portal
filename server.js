@@ -371,6 +371,7 @@ async function seedDatabase() {
             );
         `);
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_students_year_sec ON students (year_level, section) WHERE is_archived = FALSE;`);
+        await pool.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS gender VARCHAR(10);`);
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS vaccine_types (
@@ -1801,10 +1802,16 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         const yr = Math.min(4, Math.max(1, parseInt(req.body.year_level, 10) || 1));
         const rawSec = String(req.body.section || '').trim().toUpperCase();
         const sec = ['A', 'B', 'C'].includes(rawSec) ? rawSec : 'A';
+        const rawGender = String(req.body.gender || '').trim();
+        const gender = ['Male', 'Female'].includes(rawGender) ? rawGender : '';
         const pass = req.body.temp_password && String(req.body.temp_password).trim() ? String(req.body.temp_password).trim() : generateSecurePassword();
 
         if (!cleanId || !fName || !lName) {
             setFlash(req, 'err', 'Student ID, First Name, and Last Name are required.');
+            return res.redirect('/registrar');
+        }
+        if (!gender) {
+            setFlash(req, 'err', 'Please select a Gender.');
             return res.redirect('/registrar');
         }
 
@@ -1831,10 +1838,10 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         }
 
         await client.query(`
-            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level, section, is_archived) 
-            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5, $6, FALSE)
-            ON CONFLICT (student_id) DO UPDATE SET first_name = $2, middle_name = $3, last_name = $4, year_level = $5, section = $6
-        `, [cleanId, fName, mName, lName, yr, sec]);
+            INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level, section, gender, is_archived) 
+            VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5, $6, $7, FALSE)
+            ON CONFLICT (student_id) DO UPDATE SET first_name = $2, middle_name = $3, last_name = $4, year_level = $5, section = $6, gender = $7
+        `, [cleanId, fName, mName, lName, yr, sec, gender]);
 
         const settingsRes = await client.query('SELECT current_ay, current_semester FROM settings WHERE id = 1');
         const ay = settingsRes.rows[0].current_ay;

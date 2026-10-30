@@ -478,7 +478,7 @@
 
                     <form action="/registrar/add-student" method="POST" class="space-y-4 text-sm">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-6 gap-3">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
                                 <div class="flex">
@@ -499,6 +499,14 @@
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Last Name</label>
                                 <input type="text" id="regLastNameInput" name="last_name" required placeholder="Last Name" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Gender</label>
+                                <select id="regGenderSelect" name="gender" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs cursor-pointer">
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Temp Password</label>
@@ -1114,6 +1122,7 @@
             const firstNameInput = document.getElementById('regFirstNameInput');
             const middleNameInput = document.getElementById('regMiddleNameInput');
             const lastNameInput = document.getElementById('regLastNameInput');
+            const genderSelect = document.getElementById('regGenderSelect');
             const yearLevelSelect = document.getElementById('reg_year_select');
             const sectionSelect = document.getElementById('reg_section_select');
             const msgContainer = document.getElementById('lookupMessageContainer');
@@ -1133,6 +1142,7 @@
                         firstNameInput.value = data.student.first_name || '';
                         middleNameInput.value = data.student.middle_name || '';
                         lastNameInput.value = data.student.last_name || '';
+                        if (genderSelect) genderSelect.value = data.student.gender || '';
                         yearLevelSelect.value = data.student.year_level || '1';
                         sectionSelect.value = data.student.section || 'A';
                         updateSubjectChecklist();
