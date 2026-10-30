@@ -6,7 +6,7 @@
     <script src="https://cdn.tailwindcss.com" nonce="<%= cspNonce %>"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
-    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500">
+    <header class="bg-emerald-900 text-white shadow-md border-b-4 border-pink-500 relative z-40">
         <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
             <div>
                 <h2 class="text-base font-bold">College of Nursing and School of Midwifery</h2>
@@ -20,9 +20,6 @@
                     <a href="/admin" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded font-bold">Admin Panel</a>
                     <a href="/faculty/edit-grades" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium">Open Grade Editor</a>
                 <% } %>
-                <a href="/registrar/grade-logs" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-medium">Grade Logs</a>
-                <a href="/registrar/security-log" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded font-medium">Security Log</a>
-                <a href="/registrar/immunization-log" class="text-xs bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded font-medium">Immunization Log</a>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <form action="/logout" method="POST" class="inline">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -77,7 +74,7 @@
                 <p class="text-xs text-indigo-700 mt-1">Set the active Academic Year, Semester, and control whether clinical instructors are allowed to access the Faculty Portal to encode grades.</p>
             </div>
             
-            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto relative z-30">
                 <form action="/registrar/update-settings" method="POST" class="flex gap-2 items-center">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <select name="current_ay" class="px-3 py-2 rounded-lg border border-indigo-300 text-xs font-bold text-indigo-900 bg-white cursor-pointer">
@@ -103,10 +100,23 @@
                         <%= systemSettings.faculty_portal_locked ? '🔓 Unlock Faculty Portal' : '🔒 Lock Faculty Portal' %>
                     </button>
                 </form>
+
+                <!-- NEW: SYSTEM LOGS DROPDOWN -->
+                <div class="relative inline-block text-left">
+                    <button type="button" id="logsDropdownBtn" class="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow-md transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+                        📂 System Logs ▼
+                    </button>
+                    <div id="logsDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+                        <a href="/registrar/grade-logs" class="block px-4 py-3 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-700 border-b border-slate-100 transition-colors">📊 Grade Logs</a>
+                        <a href="/registrar/security-log" class="block px-4 py-3 text-xs font-bold text-slate-700 hover:bg-red-50 hover:text-red-700 border-b border-slate-100 transition-colors">🛡️ Security Logs</a>
+                        <a href="/registrar/immunization-log" class="block px-4 py-3 text-xs font-bold text-slate-700 hover:bg-teal-50 hover:text-teal-700 transition-colors">💉 Immunization Logs</a>
+                    </div>
+                </div>
+
             </div>
         </div>
 
-        <nav class="flex flex-wrap items-center justify-center gap-3" aria-label="Registrar sections">
+        <nav class="flex flex-wrap items-center justify-center gap-3 relative z-20" aria-label="Registrar sections">
             <button type="button" data-target-section="studentPanel" aria-expanded="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentPanel" class="nav-toggle-btn px-5 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-bold tracking-wide shadow-md transition-colors inline-flex items-center gap-2 cursor-pointer">
                 <span>👤 STUDENT</span>
                 <span class="toggle-arrow text-[10px]"><%= studentPanelOpen ? '▲' : '▼' %></span>
@@ -396,9 +406,9 @@
                                 </div>
                             </form>
 
-                            <!-- Hidden forms for deleting individual grades safely -->
-                            <% grades.forEach((g, delIdx) => { %>
-                                <form id="delete_grade_form_<%= delIdx %>" action="/registrar/delete-grade" method="POST" class="hidden">
+                            <!-- Hidden forms for deleting individual grades safely using row indices -->
+                            <% grades.forEach((g, index) => { %>
+                                <form id="delete_grade_form_<%= index %>" action="/registrar/delete-grade" method="POST" class="hidden">
                                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                                     <input type="hidden" name="course_code" value="<%= g.course_code %>">
@@ -908,7 +918,6 @@
             container.innerHTML = html;
         }
 
-        // Dedicated function for dynamically adding EXTRA subjects during checklist enrollment
         function addExtraEnrollmentDropdown() {
             const container = document.getElementById('extraEnrollmentSubjectsContainer');
             if (!container) return;
@@ -944,7 +953,6 @@
             const removeRowBtn = div.querySelector('.remove-extra-row-btn');
             if (removeRowBtn) removeRowBtn.addEventListener('click', () => div.remove());
 
-            // Link the course select to the instructor select name attribute dynamically
             const courseSelect = div.querySelector('select[name="course_codes"]');
             const instSelect = div.querySelectorAll('select')[1];
             courseSelect.addEventListener('change', function() {
@@ -1012,6 +1020,21 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // NEW LOGS DROPDOWN LOGIC
+            const logsBtn = document.getElementById('logsDropdownBtn');
+            const logsMenu = document.getElementById('logsDropdownMenu');
+            if (logsBtn && logsMenu) {
+                logsBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    logsMenu.classList.toggle('hidden');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!logsBtn.contains(e.target) && !logsMenu.contains(e.target)) {
+                        logsMenu.classList.add('hidden');
+                    }
+                });
+            }
+
             document.querySelectorAll('.nav-toggle-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     toggleSection(btn.getAttribute('data-target-section'));
@@ -1039,7 +1062,6 @@
                 });
             });
 
-            // Live remarks preview in the grade editor (the server recomputes the remark when you save)
             const PASSING_GRADES = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
             document.querySelectorAll('.grade-select-box').forEach(sel => {
                 sel.addEventListener('change', () => {
@@ -1069,7 +1091,6 @@
                 });
             });
 
-            // Remove buttons on dynamically added faculty subject slots
             document.addEventListener('click', (e) => {
                 const slotBtn = e.target && e.target.closest ? e.target.closest('.remove-slot-btn') : null;
                 if (slotBtn && slotBtn.parentElement) slotBtn.parentElement.remove();
