@@ -221,7 +221,7 @@
                             </div>
                         </div>
 
-                        <form id="bulkArchiveForm" action="/admin/bulk-archive-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CONFIRMATION REQUIRED: Are you sure you want to archive the selected accounts? They will be removed from active class lists, but their details, grades, and enrollment data will be safely retained.">
+                        <form id="bulkArchiveSubmitForm" action="/admin/bulk-archive-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CONFIRMATION REQUIRED: Are you sure you want to archive the selected accounts? They will be removed from active class lists, but their details, grades, and enrollment data will be safely retained.">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
                                 <button type="button" id="archiveSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
@@ -266,7 +266,7 @@
                             </div>
                         </div>
 
-                        <form id="bulkDeleteForm" action="/admin/bulk-delete-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CRITICAL WARNING: Are you sure you want to PERMANENTLY DELETE the selected accounts? ALL data (personal details, grades, audit logs, and vaccine records) will be WIPED COMPLETELY. This action CANNOT be undone.">
+                        <form id="bulkDeleteSubmitForm" action="/admin/bulk-delete-users" method="POST" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" data-confirm-msg="CRITICAL WARNING: Are you sure you want to PERMANENTLY DELETE the selected accounts? ALL data (personal details, grades, audit logs, and vaccine records) will be WIPED COMPLETELY. This action CANNOT be undone.">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
                                 <button type="button" id="deleteSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
@@ -552,7 +552,7 @@
 
             // Secure Bulk Action Handlers (Bypasses CSP limits and validates empty selections)
             ['archive', 'delete'].forEach(mode => {
-                const form = document.getElementById(mode === 'archive' ? 'bulkArchiveForm' : 'bulkDeleteForm');
+                const form = document.getElementById(mode === 'archive' ? 'bulkArchiveSubmitForm' : 'bulkDeleteSubmitForm');
                 if (form) {
                     form.addEventListener('submit', (e) => {
                         const selectedBoxes = form.querySelectorAll(`.${mode}-checkbox:checked`);
