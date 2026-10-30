@@ -1493,10 +1493,10 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             student = studentRes.rows[0] || null;
 
             if (!student) {
-                setFlash(req, 'err', `No student record found for ID '${targetStudentId}'. Please check the number or use Pre-Register.`);
+                setFlash(req, 'err', `No student record found for ID '${targetStudentId}'. Please check the number or use Register.`);
                 return res.redirect('/registrar');
             }
-            
+
             if (student) {
                 const defaultTerm = ((parseInt(student.year_level, 10) - 1) * 2 + parseInt(systemSettings.current_semester, 10)).toString();
                 const gradesRes = await client.query(`
