@@ -1,0 +1,13 @@
+<%# Background logo watermark - included at the end of every page. Edit this one file to change it everywhere. %>
+<style>
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: url('/static/logo.png') center center / min(75vmin, 720px) no-repeat;
+    pointer-events: none;
+    z-index: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+</style>
