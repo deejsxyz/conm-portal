@@ -131,8 +131,8 @@
             <div id="studentPanel" class="space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div role="tablist" aria-label="Student tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage Student</button>
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Register / Enroll Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage/Enroll Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Pre-Register</button>
                     </div>
                     <% if (selectedStudent) { %>
                         <a href="/registrar" class="text-xs font-bold text-slate-600 hover:text-slate-900 underline">Close student record</a>
@@ -153,7 +153,7 @@
                 <% if (selectedStudent) { %>
                     <!-- IMMUNIZATION STATUS PANEL -->
                     <% if (locals.immunizationReport) { %>
-                        <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 space-y-4">
+                        <div id="immunizationPanel" class="bg-white rounded-xl shadow-sm border border-emerald-200 p-5 space-y-4">
                             <div class="flex justify-between items-center border-b border-slate-100 pb-3">
                                 <h3 class="text-sm font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
                                     <span>🛡️ Student Health &amp; Immunization Status</span>
@@ -442,9 +442,9 @@
                 <% } %>
                 </div>
 
-                <!-- Register / Enroll Student Form -->
+                <!-- Pre-Register Student Form -->
                 <div id="studentRegSection" class="<%= !studentPanelOpen ? 'hidden' : '' %> bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Register Account & Enroll Student</h3>
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Pre-Register Student Account</h3>
                     
                     <div id="lookupMessageContainer" class="hidden mb-3 p-3 text-xs font-bold rounded-lg text-center"></div>
 
@@ -486,12 +486,11 @@
                         <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 border-t border-slate-100 pt-3">
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Enrollment Academic Year</label>
-                                <select name="academic_year" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-medium cursor-pointer">
-                                    <option value="2026-2027" <%= systemSettings.current_ay === '2026-2027' ? 'selected' : '' %>>A.Y. 2026-2027</option>
-                                    <option value="2027-2028" <%= systemSettings.current_ay === '2027-2028' ? 'selected' : '' %>>A.Y. 2027-2028</option>
-                                    <option value="2028-2029" <%= systemSettings.current_ay === '2028-2029' ? 'selected' : '' %>>A.Y. 2028-2029</option>
-                                    <option value="2029-2030" <%= systemSettings.current_ay === '2029-2030' ? 'selected' : '' %>>A.Y. 2029-2030</option>
-                                </select>
+                                <input type="hidden" name="academic_year" value="<%= systemSettings.current_ay %>">
+                                <div class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-100 text-xs font-bold text-slate-700 cursor-not-allowed flex items-center justify-between" title="Set automatically from the Global System Settings">
+                                    <span>A.Y. <%= systemSettings.current_ay %></span>
+                                    <span class="text-[10px] font-semibold text-slate-500">🔒 Auto</span>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Year Level</label>
@@ -512,10 +511,11 @@
                             </div>
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Semester (Triggers Subjects)</label>
-                                <select id="reg_sem_select" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-indigo-800 cursor-pointer">
-                                    <option value="1">1st Semester</option>
-                                    <option value="2">2nd Semester</option>
+                                <select id="reg_sem_select" disabled aria-disabled="true" title="Set automatically from the Global System Settings" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-100 text-xs font-bold text-slate-700 cursor-not-allowed">
+                                    <option value="1" <%= parseInt(systemSettings.current_semester, 10) === 1 ? 'selected' : '' %>>1st Semester</option>
+                                    <option value="2" <%= parseInt(systemSettings.current_semester, 10) === 2 ? 'selected' : '' %>>2nd Semester</option>
                                 </select>
+                                <p class="mt-1 text-[10px] font-semibold text-slate-500">🔒 Set from Global System Settings</p>
                             </div>
                         </div>
                     
@@ -529,7 +529,7 @@
                         <div class="flex gap-3">
                             <button type="button" data-close-panel="studentPanel" class="cancel-toggle-btn w-1/4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">Cancel</button>
                             <button type="submit" class="w-3/4 py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg font-bold text-xs shadow-md transition-colors cursor-pointer">
-                                + Register Account & Enroll Student in Checked Subjects
+                                + Register Account & Pre-Register Student in Checked Subjects
                             </button>
                         </div>
                     </form>

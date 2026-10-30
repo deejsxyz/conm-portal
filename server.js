@@ -1758,9 +1758,13 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
             ON CONFLICT (student_id) DO UPDATE SET first_name = $2, middle_name = $3, last_name = $4, year_level = $5, section = $6, is_archived = FALSE
         `, [cleanId, fName, mName, lName, yr, sec]);
 
-        if (req.body.term && req.body.course_codes && req.body.academic_year) {
-            const term = String(req.body.term).trim();
-            const ay = String(req.body.academic_year).trim();
+        // Pre-registration always uses the Global System Settings (never client-supplied values)
+        const settingsRes = await client.query('SELECT current_ay, current_semester FROM settings WHERE id = 1');
+        const ay = settingsRes.rows[0].current_ay;
+        const sem = parseInt(settingsRes.rows[0].current_semester, 10) === 2 ? 2 : 1;
+        const term = String((yr - 1) * 2 + sem);
+
+        if (req.body.course_codes) {
             const codes = Array.isArray(req.body.course_codes) ? req.body.course_codes : [req.body.course_codes];
 
             if (!/^[1-8]$/.test(term)) throw new UserError('Invalid term.');
@@ -1793,8 +1797,8 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         }
 
         await client.query('COMMIT');
-        setFlash(req, 'msg', `Student '${cleanId}' (BSN${yr} - ${sec}) registered and officially enrolled.`);
-        res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
+        setFlash(req, 'msg', `Student '${cleanId}' (BSN${yr} - ${sec}) pre-registered for A.Y. ${ay}, ${sem === 1 ? '1st' : '2nd'} Semester. You can now add their immunization status and manage their enrollment below.`);
+        res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}#immunizationPanel`);
     } catch (err) {
         if (client) await client.query('ROLLBACK');
         console.error('Registrar add student error:', err);
