@@ -24,5 +24,8 @@
   },
   "allowScripts": {
     "bcrypt@5.1.1": true
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
   }
 }
