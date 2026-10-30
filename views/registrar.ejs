@@ -22,6 +22,7 @@
                 <% } %>
                 <a href="/registrar/grade-logs" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded font-medium">Grade Logs</a>
                 <a href="/registrar/security-log" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded font-medium">Security Log</a>
+                <a href="/registrar/immunization-log" class="text-xs bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded font-medium">Immunization Log</a>
                 <a href="/change-password" class="text-xs bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Change Password</a>
                 <form action="/logout" method="POST" class="inline">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -189,6 +190,15 @@
                                                 <button type="submit" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold whitespace-nowrap cursor-pointer">+ Dose</button>
                                             </div>
                                         </form>
+
+                                        <% if (v.last_dose_id) { %>
+                                            <form action="/registrar/void-vaccine" method="POST" class="confirm-form" data-confirm-msg="Remove the most recent <%= v.name %> dose (dose <%= v.dose_number %>)? Use this only to correct a mistake. The removal is logged.">
+                                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                                <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
+                                                <input type="hidden" name="dose_id" value="<%= v.last_dose_id %>">
+                                                <button type="submit" class="text-[10px] font-bold text-red-600 hover:text-red-800 underline cursor-pointer">Remove last dose (correction)</button>
+                                            </form>
+                                        <% } %>
                                     </div>
                                 <% }) %>
                             </div>
@@ -237,10 +247,9 @@
                                 <span class="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">A.Y. <%= currentViewAy %> — <%= currentTermLabel %></span>
                             </h3>
                     
-                            <form action="/registrar/reset-student-password" method="POST" class="inline-block">
+                            <form action="/registrar/reset-student-password" method="POST" class="inline-block confirm-form" data-confirm-msg="Reset the password for Student ID <%= selectedStudent.student_id %>? A new temporary password will be generated and shown once.">
                                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
-                                <input type="hidden" name="new_password" class="reset-pass-field">
                                 <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-md transition-colors cursor-pointer">
                                     🔑 Reset Student Password
                                 </button>
@@ -269,7 +278,6 @@
                                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg bg-white border border-slate-200 gap-3">
                                             <label class="flex items-center space-x-3 cursor-pointer flex-grow">
                                                 <input type="checkbox" name="course_codes" value="<%= c.course_code %>" checked class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                                                <input type="hidden" name="final_grades" value="">
                                                 <div>
                                                     <span class="text-xs font-bold text-slate-800">[<%= c.course_code %>]</span>
                                                     <span class="text-xs text-slate-600 ml-1"><%= c.descriptive_title %></span>
@@ -372,7 +380,7 @@
                                                     <span class="text-[10px] uppercase text-slate-400 block font-bold">Remarks</span>
                                                     <input type="text" id="remark_<%= index %>" value="<%= g.remarks || '' %>" readonly class="w-full px-2 py-1.5 rounded border border-slate-200 text-xs bg-slate-100 font-bold text-slate-700">
                                                 </div>
-                                                <button type="button" data-delete-form="delete_grade_form_<%= g.course_code %>" data-confirm-msg="Remove <%= g.course_code %> from student record?" class="delete-grade-btn mt-4 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow cursor-pointer">Delete</button>
+                                                <button type="button" data-delete-form="delete_grade_form_<%= index %>" data-confirm-msg="Remove <%= g.course_code %> from student record?" class="delete-grade-btn mt-4 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow cursor-pointer">Delete</button>
                                             </div>
                                         </div>
                                     <% }) %>
@@ -389,8 +397,8 @@
                             </form>
 
                             <!-- Hidden forms for deleting individual grades safely -->
-                            <% grades.forEach(g => { %>
-                                <form id="delete_grade_form_<%= g.course_code %>" action="/registrar/delete-grade" method="POST" class="hidden">
+                            <% grades.forEach((g, delIdx) => { %>
+                                <form id="delete_grade_form_<%= delIdx %>" action="/registrar/delete-grade" method="POST" class="hidden">
                                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                     <input type="hidden" name="student_id" value="<%= selectedStudent.student_id %>">
                                     <input type="hidden" name="course_code" value="<%= g.course_code %>">
@@ -925,7 +933,6 @@
                         ${optionsHtml}
                     </select>
                 </div>
-                <input type="hidden" name="final_grades" value="">
                 <div class="w-full sm:w-64">
                     <select class="w-full px-2 py-1.5 rounded border border-slate-300 text-xs font-medium text-slate-700 bg-white cursor-pointer">
                         ${facHtml}
@@ -1029,6 +1036,24 @@
                     if (msg && !confirm(msg)) {
                         e.preventDefault();
                     }
+                });
+            });
+
+            // Live remarks preview in the grade editor (the server recomputes the remark when you save)
+            const PASSING_GRADES = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00'];
+            document.querySelectorAll('.grade-select-box').forEach(sel => {
+                sel.addEventListener('change', () => {
+                    const out = document.getElementById('remark_' + sel.getAttribute('data-index'));
+                    if (!out) return;
+                    const g = sel.value;
+                    if (PASSING_GRADES.includes(g)) out.value = 'PASSED';
+                    else if (g === '4.00') out.value = 'CONDITIONAL';
+                    else if (g === '5.00') out.value = 'FAILED';
+                    else if (g === 'X') out.value = 'DROPPED';
+                    else if (g === 'INC') out.value = 'INCOMPLETE';
+                    else if (g === 'W') out.value = 'WITHDRAWN';
+                    else if (g === 'NG') out.value = 'NO GRADE';
+                    else out.value = '';
                 });
             });
 

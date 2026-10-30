@@ -318,7 +318,10 @@
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <div class="bg-slate-100 px-4 py-3 flex justify-between items-center border-b border-slate-300">
                                 <button type="button" id="deleteSelectAll" class="px-3 py-1.5 bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">Select All / None</button>
-                                <button type="submit" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">🗑️ Permanently Delete Selected</button>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" name="confirm_text" autocomplete="off" placeholder="Type DELETE to confirm" class="px-2.5 py-1.5 rounded border border-red-300 text-[11px] font-mono w-44 bg-white">
+                                    <button type="submit" class="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold shadow-sm transition-colors cursor-pointer">🗑️ Permanently Delete Selected</button>
+                                </div>
                             </div>
                             <div class="max-h-96 overflow-y-auto">
                                 <table class="w-full text-left text-xs">
@@ -467,6 +470,33 @@
                         </form>
                     </div>
                 <% } %>
+
+                <!-- Archived staff: restore here -->
+                <div class="mt-5 pt-4 border-t border-slate-200">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Archived Staff Accounts</h4>
+                    <% if (!locals.archivedStaffList || archivedStaffList.length === 0) { %>
+                        <p class="text-xs text-slate-400 italic">No archived staff accounts.</p>
+                    <% } else { %>
+                        <p class="text-[11px] text-slate-500 mb-2">Restoring an account lets the person log in again with their existing password. Faculty subject assignments were removed when archived, so re-assign them after restoring.</p>
+                        <div class="border border-slate-200 rounded-lg divide-y divide-slate-200">
+                            <% archivedStaffList.forEach(st => { %>
+                                <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
+                                    <div>
+                                        <span class="font-mono font-bold text-slate-800"><%= st.username %></span>
+                                        <span class="ml-2 uppercase font-bold text-slate-500 text-[10px]"><%= st.role %></span>
+                                        <span class="ml-2 text-slate-600"><%= [st.last_name, [st.first_name, st.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ') %></span>
+                                    </div>
+                                    <form action="/admin/delete-user" method="POST" class="inline confirm-form" data-confirm-msg="Restore staff account <%= st.username %>?">
+                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                        <input type="hidden" name="username" value="<%= st.username %>">
+                                        <input type="hidden" name="action" value="restore">
+                                        <button type="submit" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[11px] font-bold cursor-pointer">Restore</button>
+                                    </form>
+                                </div>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                </div>
             </div>
 
             <!-- ==================== REGISTER STAFF SECTION ==================== -->
@@ -614,6 +644,14 @@
                             alert(`Please select at least one account to ${mode}.`);
                             return;
                         }
+                        if (mode === 'delete') {
+                            const typed = form.querySelector('input[name="confirm_text"]');
+                            if (!typed || typed.value.trim() !== 'DELETE') {
+                                e.preventDefault();
+                                alert('To permanently delete accounts, type DELETE (in capital letters) in the confirmation box.');
+                                return;
+                            }
+                        }
                         const msg = form.getAttribute('data-confirm-msg');
                         if (msg && !confirm(msg)) {
                             e.preventDefault();
@@ -691,14 +729,13 @@
                     return;
                 }
 
-                let filtered = (mode === 'restore') ? allArchivedStudents : allActiveStudents;
-                if (!showAll) {
-                    filtered = allActiveStudents.filter(s => String(s.year_level) === year && s.section === sec);
-                }
+                // Restore and permanent delete both work on ARCHIVED students; archive works on active ones.
+                const source = (mode === 'restore' || mode === 'delete') ? allArchivedStudents : allActiveStudents;
+                const filtered = showAll ? source : source.filter(s => String(s.year_level) === year && s.section === sec);
                 
                 let html = '';
                 if (filtered.length === 0) {
-                    html = '<tr><td colspan="4" class="p-5 text-center text-slate-500 font-bold">' + (mode === 'restore' ? 'No archived students found.' : 'No active students found.') + '</td></tr>';
+                    html = '<tr><td colspan="4" class="p-5 text-center text-slate-500 font-bold">' + (mode === 'archive' ? 'No active students found.' : 'No archived students found.') + '</td></tr>';
                 } else {
                     filtered.forEach(s => {
                         const fullName = escapeHtml(`${s.last_name}, ${s.first_name} ${s.middle_name || ''}`.trim());

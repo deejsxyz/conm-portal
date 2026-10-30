@@ -41,7 +41,13 @@ const REGISTRAR_CONTACT = process.env.REGISTRAR_CONTACT ? ` (${process.env.REGIS
 const GENERIC_LOGIN_ERROR = 'Invalid username or password.';
 
 class UserError extends Error {}
-function safeMsg(err, fallback) { return err instanceof UserError ? err.message : fallback; }
+function safeMsg(err, fallback) {
+    if (err instanceof UserError) return err.message;
+    if (err && err.code === '23505' && err.constraint === 'uq_grades_student_course_ay') {
+        return 'This subject is already recorded for the student in this academic year (under another semester).';
+    }
+    return fallback;
+}
 
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_COST);
 app.set('trust proxy', 1);
@@ -65,7 +71,7 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, parameterLimit: 5000, limit: '1mb' }));
 
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -251,6 +257,8 @@ app.use((req, res, next) => {
 function verifyCsrf(req, res, next) {
     const token = (req.body && req.body._csrf) || req.headers['x-csrf-token'];
     if (!token || !req.session.csrfToken || token !== req.session.csrfToken) {
+        // Logging out with an expired/stale page should just land on the login screen, not a bare 403.
+        if (req.path === '/logout') return res.redirect('/');
         return res.status(403).send('Invalid or expired security token (CSRF). Please go back, refresh the page, and try again.');
     }
     next();
@@ -259,6 +267,18 @@ function verifyCsrf(req, res, next) {
 app.use((req, res, next) => {
     if (req.method === 'POST' && !req.is('multipart/form-data')) {
         return verifyCsrf(req, res, next);
+    }
+    next();
+});
+
+// Typed temporary passwords (admin/registrar forms) must be 8-72 characters. Blank = the system generates one.
+app.use((req, res, next) => {
+    if (req.method === 'POST' && req.body && typeof req.body.temp_password === 'string') {
+        const typed = req.body.temp_password.trim();
+        if (typed !== '' && (typed.length < 8 || typed.length > 72)) {
+            setFlash(req, 'err', 'The temporary password must be 8 to 72 characters long (or leave it blank to generate one). Nothing was saved.');
+            return res.redirect(req.path.startsWith('/admin') ? '/admin' : '/registrar');
+        }
     }
     next();
 });
@@ -379,8 +399,13 @@ async function seedDatabase() {
             );
         `);
 
+        await pool.query(`ALTER TABLE student_vaccinations ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ;`);
+        await pool.query(`ALTER TABLE student_vaccinations ADD COLUMN IF NOT EXISTS voided_by VARCHAR(100);`);
+
         try {
-            await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_student_vaccine_dose ON student_vaccinations (student_id, vaccine_id, cycle_number, dose_number);`);
+            // Corrected (removed) doses keep their row for the audit trail, so uniqueness only applies to active doses.
+            await pool.query(`DROP INDEX IF EXISTS uq_student_vaccine_dose;`);
+            await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_student_vaccine_dose_active ON student_vaccinations (student_id, vaccine_id, cycle_number, dose_number) WHERE voided_at IS NULL;`);
         } catch (idxErr) {
             console.warn('[SEED] Could not create unique vaccine-dose index (duplicate dose rows exist?):', idxErr.message);
         }
@@ -449,6 +474,13 @@ async function seedDatabase() {
             CREATE UNIQUE INDEX IF NOT EXISTS grades_stu_course_ay_term_idx 
             ON grades (student_id, course_code, academic_year, enrolled_term);
         `);
+
+        try {
+            // A student should not have the same subject twice in one academic year (even under different terms).
+            await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_grades_student_course_ay ON grades (student_id, course_code, academic_year);`);
+        } catch (idxErr) {
+            console.warn('[SEED] Could not create the one-subject-per-academic-year index (existing duplicates?). Check with: SELECT student_id, course_code, academic_year, COUNT(*) FROM grades GROUP BY 1,2,3 HAVING COUNT(*) > 1;', idxErr.message);
+        }
 
         await pool.query(`CREATE INDEX IF NOT EXISTS idx_grades_student_term ON grades (student_id, enrolled_term, academic_year);`);
 
@@ -575,6 +607,24 @@ async function seedDatabase() {
                 ON CONFLICT (course_code) DO NOTHING;
             `, c);
         }
+
+        // Link older grade rows that only store an instructor NAME to the matching faculty account,
+        // so they appear on that faculty member's grade sheet. Skipped when two faculty share the same formal name.
+        const backfill = await pool.query(`
+            UPDATE grades g SET instructor_username = u.username
+            FROM users u
+            WHERE u.role = 'faculty'
+              AND COALESCE(u.is_archived, FALSE) = FALSE
+              AND COALESCE(g.instructor_username, '') = ''
+              AND COALESCE(g.instructor, '') <> ''
+              AND g.instructor = (COALESCE(u.last_name, '') || ', ' || TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.middle_name, '')))
+              AND (
+                  SELECT COUNT(*) FROM users u2
+                  WHERE u2.role = 'faculty' AND COALESCE(u2.is_archived, FALSE) = FALSE
+                    AND g.instructor = (COALESCE(u2.last_name, '') || ', ' || TRIM(COALESCE(u2.first_name, '') || ' ' || COALESCE(u2.middle_name, '')))
+              ) = 1
+        `);
+        if (backfill.rowCount > 0) console.log(`[SEED] Linked ${backfill.rowCount} older grade row(s) to faculty accounts.`);
 
         console.log("Database schema verified and active.");
     } catch (err) {
@@ -780,6 +830,13 @@ app.get('/admin', isAuthenticated, async (req, res) => {
             ORDER BY role DESC, last_name ASC, username ASC
         `);
 
+        const archivedStaffRes = await pool.query(`
+            SELECT username, role, first_name, middle_name, last_name
+            FROM users
+            WHERE role IN ('faculty', 'registrar') AND COALESCE(is_archived, FALSE) = TRUE
+            ORDER BY role DESC, last_name ASC, username ASC
+        `);
+
         let selectedStaff = null;
         if (selectedStaffUsername) {
             selectedStaff = staffRes.rows.find(f => f.username === selectedStaffUsername) || null;
@@ -794,7 +851,7 @@ app.get('/admin', isAuthenticated, async (req, res) => {
                 LEFT JOIN users u ON s.student_id = u.username
                 WHERE s.student_id ILIKE $1
                 ORDER BY s.is_archived ASC, s.student_id ASC
-            `, [`%${searchStudentId}%`]);
+            `, [`%${searchStudentId.replace(/[\\%_]/g, '\\$&')}%`]);
             searchedStudents = stuSearchRes.rows;
         }
 
@@ -821,6 +878,7 @@ app.get('/admin', isAuthenticated, async (req, res) => {
         res.render('admin', {
             currentUser: req.session.user,
             staffList: staffRes.rows,
+            archivedStaffList: archivedStaffRes.rows,
             selectedStaff: selectedStaff,
             searchStudentId: searchStudentId,
             searchedStudents: searchedStudents,
@@ -1101,19 +1159,24 @@ app.post('/admin/bulk-delete-users', isAuthenticated, async (req, res) => {
             return res.redirect('/admin');
         }
 
+        if (String(req.body.confirm_text || '').trim() !== 'DELETE') {
+            setFlash(req, 'err', 'Nothing was deleted. Type DELETE in the confirmation box to permanently delete accounts.');
+            return res.redirect('/admin');
+        }
+
         client = await pool.connect();
         await client.query('BEGIN');
 
-        // Only genuine student accounts can be deleted here, whatever the form posted
+        // Only student accounts that are ALREADY ARCHIVED can be permanently deleted, whatever the form posted
         const found = await client.query(
-            `SELECT username FROM users WHERE username = ANY($1::text[]) AND role = 'student' FOR UPDATE`,
+            `SELECT username FROM users WHERE username = ANY($1::text[]) AND role = 'student' AND COALESCE(is_archived, FALSE) = TRUE FOR UPDATE`,
             [userIds]
         );
         const ids = found.rows.map(r => r.username);
 
         if (ids.length === 0) {
             await client.query('ROLLBACK');
-            setFlash(req, 'err', 'No matching student accounts were found.');
+            setFlash(req, 'err', 'No archived student accounts matched. Only archived accounts can be permanently deleted. Archive them first.');
             return res.redirect('/admin');
         }
 
@@ -1259,6 +1322,13 @@ app.post('/admin/edit-student', isAuthenticated, async (req, res) => {
 });
 
 // ==================== IMMUNIZATION HELPER ====================
+function addDaysYmd(ymd, days) {
+    const [y, m, d] = String(ymd).split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + (parseInt(days, 10) || 0));
+    return dt.toISOString().slice(0, 10);
+}
+
 async function calculateImmunizationStatus(client, studentId) {
     const vaccinesRes = await client.query('SELECT * FROM vaccine_types ORDER BY id');
     const vaccines = vaccinesRes.rows;
@@ -1267,7 +1337,7 @@ async function calculateImmunizationStatus(client, studentId) {
     for (const v of vaccines) {
         const dosesRes = await client.query(`
             SELECT * FROM student_vaccinations 
-            WHERE student_id = $1 AND vaccine_id = $2 
+            WHERE student_id = $1 AND vaccine_id = $2 AND voided_at IS NULL
             ORDER BY cycle_number DESC, dose_number DESC, date_given DESC
         `, [studentId, v.id]);
 
@@ -1278,6 +1348,7 @@ async function calculateImmunizationStatus(client, studentId) {
                 name: v.name,
                 doses_required: v.doses_required,
                 last_dose_date: null,
+                last_dose_id: null,
                 dose_number: 0,
                 status: 'Not started',
                 status_cls: 'bg-slate-100 text-slate-700 border-slate-300',
@@ -1319,6 +1390,7 @@ async function calculateImmunizationStatus(client, studentId) {
             name: v.name,
             doses_required: v.doses_required,
             last_dose_date: latest.date_given,
+            last_dose_id: latest.id,
             dose_number: latest.dose_number,
             status: status,
             status_cls: statusCls,
@@ -1681,7 +1753,7 @@ app.post('/registrar/batch-upload', isAuthenticated, (req, res) => {
                     ].join(',')).join('\n');
                     
                     const tempFilePath = path.join('uploads', `batch_creds_${crypto.randomBytes(16).toString('hex')}.csv`);
-                    fs.writeFileSync(tempFilePath, csvHeader + csvRows, 'utf8');
+                    fs.writeFileSync(tempFilePath, csvHeader + csvRows, { encoding: 'utf8', mode: 0o600 });
                     req.session.lastBatchFilePath = tempFilePath;
                 }
 
@@ -1740,9 +1812,17 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         client = await pool.connect();
         await client.query('BEGIN');
         
-        const existingUser = await client.query('SELECT username, role FROM users WHERE username = $1', [cleanId]);
+        const existingUser = await client.query('SELECT username, role, COALESCE(is_archived, FALSE) AS is_archived FROM users WHERE username = $1', [cleanId]);
         if (existingUser.rows.length > 0 && existingUser.rows[0].role !== 'student') {
             throw new UserError(`Student ID '${cleanId}' conflicts with a staff account.`);
+        }
+        const existingProfile = await client.query('SELECT COALESCE(is_archived, FALSE) AS is_archived FROM students WHERE student_id = $1', [cleanId]);
+        if ((existingUser.rows.length > 0 && existingUser.rows[0].is_archived) || (existingProfile.rows.length > 0 && existingProfile.rows[0].is_archived)) {
+            throw new UserError(`Student ID '${cleanId}' is archived. Please ask the administrator to restore the account before enrolling.`);
+        }
+        if (existingUser.rows.length > 0) {
+            // Keep the login account's name in step with the student profile.
+            await client.query(`UPDATE users SET first_name = $1, middle_name = $2, last_name = $3 WHERE username = $4 AND role = 'student'`, [fName, mName, lName, cleanId]);
         }
         if (existingUser.rows.length === 0) {
             const hashedPassword = await bcrypt.hash(pass, BCRYPT_COST);
@@ -1755,7 +1835,7 @@ app.post('/registrar/add-student', isAuthenticated, async (req, res) => {
         await client.query(`
             INSERT INTO students (student_id, student_number, first_name, middle_name, last_name, program, year_level, section, is_archived) 
             VALUES ($1, $1, $2, $3, $4, 'Bachelor of Science in Nursing (BSN)', $5, $6, FALSE)
-            ON CONFLICT (student_id) DO UPDATE SET first_name = $2, middle_name = $3, last_name = $4, year_level = $5, section = $6, is_archived = FALSE
+            ON CONFLICT (student_id) DO UPDATE SET first_name = $2, middle_name = $3, last_name = $4, year_level = $5, section = $6
         `, [cleanId, fName, mName, lName, yr, sec]);
 
         // Pre-registration always uses the Global System Settings (never client-supplied values)
@@ -1841,8 +1921,8 @@ app.post('/registrar/record-vaccine', isAuthenticated, async (req, res) => {
         const vaccine = vRes.rows[0];
 
         const lastDoseRes = await client.query(`
-            SELECT * FROM student_vaccinations 
-            WHERE student_id = $1 AND vaccine_id = $2 
+            SELECT *, to_char(date_given, 'YYYY-MM-DD') AS date_str FROM student_vaccinations 
+            WHERE student_id = $1 AND vaccine_id = $2 AND voided_at IS NULL
             ORDER BY cycle_number DESC, dose_number DESC LIMIT 1
         `, [studentId, vaccineId]);
 
@@ -1856,12 +1936,22 @@ app.post('/registrar/record-vaccine', isAuthenticated, async (req, res) => {
             const expiryDate = new Date(lastDate);
             expiryDate.setMonth(expiryDate.getMonth() + validityMonths);
 
+            if (dateGiven < last.date_str) {
+                throw new UserError(`The date cannot be earlier than the previous dose (${last.date_str}).`);
+            }
+
             if (new Date() > expiryDate && vaccine.restart_when_expired && last.dose_number < vaccine.doses_required) {
                 cycleNum = last.cycle_number + 1;
                 nextDoseNum = 1;
             } else if (last.dose_number < vaccine.doses_required) {
                 nextDoseNum = last.dose_number + 1;
                 cycleNum = last.cycle_number;
+
+                const minDays = vaccine.min_days_between || 0;
+                const earliest = addDaysYmd(last.date_str, minDays);
+                if (minDays > 0 && dateGiven < earliest) {
+                    throw new UserError(`${vaccine.name}: dose ${nextDoseNum} must be at least ${minDays} days after dose ${last.dose_number}. Earliest allowed date: ${earliest}.`);
+                }
             } else {
                 cycleNum = last.cycle_number + 1;
                 nextDoseNum = 1;
@@ -1892,6 +1982,54 @@ app.post('/registrar/record-vaccine', isAuthenticated, async (req, res) => {
     } finally {
         if (client) client.release();
     }
+});
+
+app.post('/registrar/void-vaccine', isAuthenticated, async (req, res) => {
+    if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
+
+    let client;
+    const studentId = req.body.student_id ? String(req.body.student_id).trim() : '';
+    try {
+        const doseId = parseInt(req.body.dose_id, 10);
+        if (!studentId || !Number.isInteger(doseId)) throw new UserError('Invalid request.');
+
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        const doseRes = await client.query(`
+            SELECT d.id, d.vaccine_id, d.dose_number, d.cycle_number, v.name
+            FROM student_vaccinations d JOIN vaccine_types v ON v.id = d.vaccine_id
+            WHERE d.id = $1 AND d.student_id = $2 AND d.voided_at IS NULL
+            FOR UPDATE OF d
+        `, [doseId, studentId]);
+        if (doseRes.rows.length === 0) throw new UserError('Dose record not found.');
+        const dose = doseRes.rows[0];
+
+        // Only the most recent dose of a vaccine can be removed, so the series order never breaks.
+        const newer = await client.query(`
+            SELECT 1 FROM student_vaccinations
+            WHERE student_id = $1 AND vaccine_id = $2 AND voided_at IS NULL
+              AND (cycle_number > $3 OR (cycle_number = $3 AND dose_number > $4))
+            LIMIT 1
+        `, [studentId, dose.vaccine_id, dose.cycle_number, dose.dose_number]);
+        if (newer.rows.length > 0) throw new UserError('Only the most recently recorded dose can be removed.');
+
+        await client.query('UPDATE student_vaccinations SET voided_at = NOW(), voided_by = $1 WHERE id = $2', [req.session.user.username, doseId]);
+        await client.query(
+            'INSERT INTO immunization_access_logs (student_id, accessed_by, action_type) VALUES ($1, $2, $3)',
+            [studentId, req.session.user.username, 'VOID']
+        );
+
+        await client.query('COMMIT');
+        setFlash(req, 'msg', `Removed dose ${dose.dose_number} of ${dose.name}. You can now record the correct dose.`);
+    } catch (err) {
+        if (client) await client.query('ROLLBACK').catch(() => {});
+        console.error('Void vaccine error:', err);
+        setFlash(req, 'err', safeMsg(err, 'Failed to remove the vaccine dose.'));
+    } finally {
+        if (client) client.release();
+    }
+    res.redirect(studentId ? `/registrar?student_id=${encodeURIComponent(studentId)}` : '/registrar');
 });
 
 app.post('/registrar/update-student-year-section', isAuthenticated, async (req, res) => {
@@ -2068,13 +2206,13 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
     if (req.session.user.role !== 'registrar' && req.session.user.role !== 'admin') return res.status(403).send('Access denied');
 
     const cleanId = req.body.student_id ? String(req.body.student_id).trim() : '';
-    const newPass = req.body.new_password ? String(req.body.new_password).trim() : '';
-    if (!cleanId || !newPass) {
+    if (!cleanId) {
         setFlash(req, 'err', 'Invalid password reset request.');
         return res.redirect('/registrar');
     }
 
     try {
+        const newPass = generateSecurePassword();
         const hashedPassword = await bcrypt.hash(newPass, BCRYPT_COST);
         const updateRes = await pool.query(`
             UPDATE users SET password_hash = $1, must_change_password = TRUE, password_changed_at = NOW(), failed_login_attempts = 0, is_locked = FALSE, locked_at = NULL 
@@ -2085,7 +2223,7 @@ app.post('/registrar/reset-student-password', isAuthenticated, async (req, res) 
             setFlash(req, 'err', 'Student account not found.');
         } else {
             await logSecurityEvent(cleanId, 'PASSWORD_RESET', req.session.user.username);
-            setFlash(req, 'msg', `Password successfully reset for Student ID ${cleanId}.`);
+            setFlash(req, 'msg', `Password reset for Student ID ${cleanId}. Temporary password (shown once): ${newPass}`);
         }
         res.redirect(`/registrar?student_id=${encodeURIComponent(cleanId)}`);
     } catch (err) {
@@ -2155,6 +2293,60 @@ app.get('/registrar/security-log', isAuthenticated, async (req, res) => {
     } catch (err) {
         console.error('Security log load error:', err);
         res.status(500).send('Unable to load the account security log.');
+    }
+});
+
+const IMMUNIZATION_ACTIONS = ['VIEW', 'EDIT', 'VOID', 'RULES'];
+
+app.get('/registrar/immunization-log', isAuthenticated, async (req, res) => {
+    const role = req.session.user.role;
+    if (role !== 'registrar' && role !== 'admin') return res.redirect('/portal');
+
+    try {
+        const q = req.query.q ? String(req.query.q).trim().slice(0, 100) : '';
+        const actionFilter = IMMUNIZATION_ACTIONS.includes(String(req.query.action || '')) ? String(req.query.action) : '';
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const PAGE_SIZE = 50;
+
+        const conditions = [];
+        const params = [];
+        if (q) {
+            params.push(`%${q.replace(/[\\%_]/g, '\\$&')}%`);
+            conditions.push(`(l.student_id ILIKE $${params.length} OR l.accessed_by ILIKE $${params.length})`);
+        }
+        if (actionFilter) {
+            params.push(actionFilter);
+            conditions.push(`l.action_type = $${params.length}`);
+        }
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const countRes = await pool.query(`SELECT COUNT(*) AS total FROM immunization_access_logs l ${where}`, params);
+        const total = parseInt(countRes.rows[0].total, 10);
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const safePage = Math.min(page, totalPages);
+
+        const logRes = await pool.query(`
+            SELECT l.id, l.student_id, l.accessed_by, l.action_type, l.created_at,
+                   s.first_name, s.middle_name, s.last_name
+            FROM immunization_access_logs l
+            LEFT JOIN students s ON s.student_id = l.student_id
+            ${where}
+            ORDER BY l.created_at DESC, l.id DESC
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+        `, [...params, PAGE_SIZE, (safePage - 1) * PAGE_SIZE]);
+
+        res.render('immunization_log', {
+            currentUser: req.session.user,
+            logs: logRes.rows,
+            q: q,
+            actionFilter: actionFilter,
+            page: safePage,
+            totalPages: totalPages,
+            total: total
+        });
+    } catch (err) {
+        console.error('Immunization log load error:', err);
+        res.status(500).send('Unable to load the immunization access log.');
     }
 });
 
@@ -2285,7 +2477,8 @@ app.post('/registrar/add-single-course', isAuthenticated, async (req, res) => {
             INSERT INTO grades (student_id, course_code, final_grade, instructor, instructor_username, remarks, enrolled_term, academic_year)
             VALUES ($1, $2, '', $3, $4, '', $5, $6)
             ON CONFLICT (student_id, course_code, academic_year, enrolled_term) 
-            DO UPDATE SET instructor = $3, instructor_username = $4;
+            DO UPDATE SET instructor = COALESCE(NULLIF($3, ''), grades.instructor),
+                          instructor_username = COALESCE(NULLIF($4, ''), grades.instructor_username);
         `, [cleanId, courseCode, facFormalName, facUser, term, currentAy]);
 
         setFlash(req, 'msg', `Subject ${courseCode} successfully enrolled for A.Y. ${currentAy}.`);
@@ -2316,7 +2509,7 @@ app.post('/registrar/update-grades-batch', isAuthenticated, async (req, res) => 
         const codes = Array.isArray(course_codes) ? course_codes : (course_codes ? [course_codes] : []);
         const grades = Array.isArray(final_grades) ? final_grades : (final_grades !== undefined ? [final_grades] : []);
 
-        if (codes.length !== grades.length) {
+        if (grades.length > 0 && codes.length !== grades.length) {
             throw new UserError('The submitted grades did not match the subject list. Please reload the page and try again. No changes were saved.');
         }
 
@@ -2643,11 +2836,9 @@ app.post('/faculty/update-grades-sheet', isAuthenticated, async (req, res) => {
             await client.query(`
                 UPDATE grades 
                 SET final_grade = $1, 
-                    remarks = $2,
-                    instructor = CASE WHEN COALESCE(TRIM(instructor), '') = '' THEN $3 ELSE instructor END,
-                    instructor_username = CASE WHEN COALESCE(TRIM(instructor_username), '') = '' THEN $4 ELSE instructor_username END
-                WHERE student_id = $5 AND course_code = $6 AND academic_year = $7 AND enrolled_term = $8
-            `, [cleanGrade, computedRemark, facultyFullName, facultyUsername, sId, courseCode, systemSettings.current_ay, rosterEntry.enrolled_term]);
+                    remarks = $2
+                WHERE student_id = $3 AND course_code = $4 AND academic_year = $5 AND enrolled_term = $6
+            `, [cleanGrade, computedRemark, sId, courseCode, systemSettings.current_ay, rosterEntry.enrolled_term]);
 
             if ((rosterEntry.final_grade || '') !== cleanGrade) {
                 await client.query(`
@@ -2747,6 +2938,17 @@ function cleanupStaleTempFiles() {
         console.error('Temp file cleanup error:', err.message);
     }
 }
+
+// ==================== 404 AND ERROR HANDLERS ====================
+app.use((req, res) => {
+    res.status(404).send('Page not found. <a href="/">Back to the portal</a>');
+});
+
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    if (res.headersSent) return next(err);
+    res.status(500).send('Something went wrong. Please go back and try again. <a href="/">Back to the portal</a>');
+});
 
 async function startServer() {
     try {
