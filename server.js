@@ -1492,10 +1492,13 @@ app.get('/registrar', isAuthenticated, async (req, res) => {
             const studentRes = await client.query('SELECT * FROM students WHERE student_id = $1 AND COALESCE(is_archived, FALSE) = FALSE', [targetStudentId]);
             student = studentRes.rows[0] || null;
 
+            if (!student) {
+                setFlash(req, 'err', `No student record found for ID '${targetStudentId}'. Please check the number or use Pre-Register.`);
+                return res.redirect('/registrar');
+            }
+            
             if (student) {
                 const defaultTerm = ((parseInt(student.year_level, 10) - 1) * 2 + parseInt(systemSettings.current_semester, 10)).toString();
-                selectedTerm = req.query.view_term && /^[1-8]$/.test(req.query.view_term) ? String(req.query.view_term) : defaultTerm;
-
                 const gradesRes = await client.query(`
                     SELECT g.id, g.course_code, g.final_grade, g.instructor, g.instructor_username, g.remarks, g.enrolled_term, g.academic_year,
                            c.descriptive_title, c.lec_units, c.rle_units, c.total_units
