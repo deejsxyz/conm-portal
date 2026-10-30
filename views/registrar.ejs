@@ -1137,28 +1137,53 @@
                         msgContainer.textContent = `✅ Student found: ${formalName}. Details loaded below. You may pre-register.`;
 
                         if (data.immunization && data.immunization.length > 0) {
-                            immContainer.classList.remove('hidden');
-                            let immHtml = '';
-                            data.immunization.forEach(v => {
-                                const lastDateText = v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None';
-                                const expiryText = v.next_due_date ? ` | Next Due: ${new Date(v.next_due_date).toLocaleDateString()}` : '';
-                                immHtml += `
-                                    <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs flex flex-col justify-between">
-                                        <div class="space-y-1">
-                                            <div class="flex justify-between items-center font-bold">
-                                                <span>${escapeHtml(v.name)}</span>
-                                                <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
-                                            </div>
-                                            <p class="text-slate-600 text-[11px]">Progress: <strong>Dose ${v.dose_number} of ${v.doses_required}</strong></p>
-                                            <p class="text-[10px] text-slate-500 font-medium">Last Dose: ${escapeHtml(lastDateText)}${escapeHtml(expiryText)}</p>
-                                        </div>
-                                    </div>
-                                `;
-                            });
-                            immGrid.innerHTML = immHtml;
-                        } else {
-                            immContainer.classList.add('hidden');
-                        }
+    immContainer.classList.remove('hidden');
+    let immHtml = '';
+    data.immunization.forEach(v => {
+        const lastDateText = v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None';
+        const expiryText = v.next_due_date ? ` | Next Due: ${new Date(v.next_due_date).toLocaleDateString()}` : '';
+        
+        let actionFormsHtml = `
+            <form action="/registrar/record-vaccine" method="POST" class="pt-2 border-t border-slate-200 space-y-1.5">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="hidden" name="student_id" value="${escapeHtml(data.student.student_id)}">
+                <input type="hidden" name="vaccine_id" value="${v.vaccine_id}">
+                <div class="flex gap-1">
+                    <input type="date" name="date_given" required class="px-2 py-1 bg-white border border-slate-300 rounded text-[10px] flex-grow">
+                    <button type="submit" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10px] font-bold whitespace-nowrap cursor-pointer">+ Dose</button>
+                </div>
+            </form>
+        `;
+        
+        if (v.last_dose_id) {
+            actionFormsHtml += `
+                <form action="/registrar/void-vaccine" method="POST" class="confirm-form mt-1" data-confirm-msg="Remove the most recent ${escapeHtml(v.name)} dose (dose ${v.dose_number})? Use this only to correct a mistake.">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="student_id" value="${escapeHtml(data.student.student_id)}">
+                    <input type="hidden" name="dose_id" value="${v.last_dose_id}">
+                    <button type="submit" class="text-[9px] font-bold text-red-600 hover:text-red-800 underline cursor-pointer">Remove last dose</button>
+                </form>
+            `;
+        }
+
+        immHtml += `
+            <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs flex flex-col justify-between shadow-sm">
+                <div class="space-y-1">
+                    <div class="flex justify-between items-center font-bold">
+                        <span>${escapeHtml(v.name)}</span>
+                        <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
+                    </div>
+                    <p class="text-slate-600 text-[11px]">Progress: <strong>Dose ${v.dose_number} of ${v.doses_required}</strong></p>
+                    <p class="text-[10px] text-slate-500 font-medium">Last Dose: ${escapeHtml(lastDateText)}${escapeHtml(expiryText)}</p>
+                </div>
+                ${actionFormsHtml}
+            </div>
+        `;
+    });
+    immGrid.innerHTML = immHtml;
+} else {
+    immContainer.classList.add('hidden');
+}
                     } else {
                         msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-amber-100 text-amber-800 border border-amber-300';
                         msgContainer.textContent = '⚠️ No student record. Please register/enroll.';
