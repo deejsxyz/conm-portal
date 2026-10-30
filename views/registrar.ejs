@@ -477,7 +477,7 @@
                             <div>
                                 <label class="block text-[10px] uppercase font-bold text-slate-500 mb-1">Student Number</label>
                                 <div class="flex">
-                                    <input type="text" id="regStudentIdInput" name="student_id" placeholder="e.g. xxxx-xxxxxx" class="w-full px-3 py-2 rounded-l-lg border border-slate-300 bg-slate-50 text-xs font-mono">
+                                    <input type="text" id="regStudentIdInput" name="student_id" placeholder="xxxx-xxxxxx" class="w-full px-3 py-2 rounded-l-lg border border-slate-300 bg-slate-50 text-xs font-mono">
                                     <button type="button" id="lookupStudentApiBtn" class="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-r-lg text-xs font-bold flex items-center justify-center cursor-pointer" title="Search Student">
                                         🔍
                                     </button>
@@ -533,7 +533,7 @@
                                     <option value="1" <%= parseInt(systemSettings.current_semester, 10) === 1 ? 'selected' : '' %>>1st Semester</option>
                                     <option value="2" <%= parseInt(systemSettings.current_semester, 10) === 2 ? 'selected' : '' %>>2nd Semester</option>
                                 </select>
-                                <p class="mt-1 text-[10px] font-semibold text-slate-500">🔒 Set from Global System Settings</p>
+                                <p class="mt-1 text-[10px] font-semibold text-slate-500">🔒 Auto</p>
                             </div>
                         </div>
                     
