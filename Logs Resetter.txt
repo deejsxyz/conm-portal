@@ -1,0 +1,3 @@
+TRUNCATE TABLE grade_audit_logs RESTART IDENTITY;
+TRUNCATE TABLE account_security_logs RESTART IDENTITY;
+TRUNCATE TABLE immunization_access_logs RESTART IDENTITY;
