@@ -1020,7 +1020,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Auto-hide floating flash alerts after 4 seconds smoothly without layout shift
+            // Auto-hide flash alerts after 4 seconds smoothly without layout shift
             setTimeout(() => {
                 document.querySelectorAll('.flash-alert').forEach(el => {
                     el.style.opacity = '0';
@@ -1132,13 +1132,16 @@
                         sectionSelect.value = data.student.section || 'A';
                         updateSubjectChecklist();
 
+                        const formalName = `${data.student.last_name}, ${data.student.first_name} ${data.student.middle_name || ''}`.trim();
                         msgContainer.className = 'mb-3 p-3 text-xs font-bold rounded-lg text-center bg-emerald-100 text-emerald-800 border border-emerald-300';
-                        msgContainer.textContent = `✅ Student found: ${data.student.last_name}, ${data.student.first_name}. Details loaded below. You may enroll.`;
+                        msgContainer.textContent = `✅ Student found: ${formalName}. Details loaded below. You may pre-register.`;
 
                         if (data.immunization && data.immunization.length > 0) {
                             immContainer.classList.remove('hidden');
                             let immHtml = '';
                             data.immunization.forEach(v => {
+                                const lastDateText = v.last_dose_date ? new Date(v.last_dose_date).toLocaleDateString() : 'None';
+                                const expiryText = v.next_due_date ? ` | Next Due: ${new Date(v.next_due_date).toLocaleDateString()}` : '';
                                 immHtml += `
                                     <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-2 text-xs flex flex-col justify-between">
                                         <div class="space-y-1">
@@ -1147,6 +1150,7 @@
                                                 <span class="px-2 py-0.5 border rounded-full text-[9px] uppercase ${escapeHtml(v.status_cls)}">${escapeHtml(v.status)}</span>
                                             </div>
                                             <p class="text-slate-600 text-[11px]">Progress: <strong>Dose ${v.dose_number} of ${v.doses_required}</strong></p>
+                                            <p class="text-[10px] text-slate-500 font-medium">Last Dose: ${escapeHtml(lastDateText)}${escapeHtml(expiryText)}</p>
                                         </div>
                                     </div>
                                 `;
