@@ -41,15 +41,15 @@
             let currentTermLabel = termNames[currentTerm] || "Unknown Term";
         %>
 
-        <!-- FLOATING TOP NOTIFICATIONS -->
+        <!-- IN-FLOW AUTO-DISAPPEAR ALERTS -->
         <% if (locals.message) { %>
-            <div class="flash-alert fixed top-6 left-1/2 transform -translate-x-1/2 w-[90%] max-w-4xl z-[100] p-4 bg-emerald-100/90 backdrop-blur-sm border border-emerald-400 text-emerald-900 text-xs font-bold rounded-xl shadow-lg text-center pointer-events-auto transition-opacity duration-500">
+            <div class="flash-alert p-3 bg-emerald-100/90 backdrop-blur-sm border border-emerald-400 text-emerald-900 text-xs font-bold rounded-xl shadow-sm text-center transition-all duration-500 overflow-hidden relative">
                 ✅ <%= message %>
             </div>
         <% } %>
 
         <% if (locals.error) { %>
-            <div class="flash-alert fixed top-6 left-1/2 transform -translate-x-1/2 w-[90%] max-w-4xl z-[100] p-4 bg-red-100/90 backdrop-blur-sm border border-red-400 text-red-900 text-xs font-bold rounded-xl shadow-lg text-center pointer-events-auto transition-opacity duration-500">
+            <div class="flash-alert p-3 bg-red-100/90 backdrop-blur-sm border border-red-400 text-red-900 text-xs font-bold rounded-xl shadow-sm text-center transition-all duration-500 overflow-hidden relative">
                 ⚠️ <%= error %>
             </div>
         <% } %>
