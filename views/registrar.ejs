@@ -128,18 +128,18 @@
 
         <div class="space-y-4">
 
-            <div id="studentPanel" class="space-y-4">
+            <div id="studentPanel" class="<%= studentPanelOpen ? '' : 'hidden' %> space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div role="tablist" aria-label="Student tools" class="inline-flex p-1 bg-slate-200 rounded-xl gap-1">
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="<%= studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">✏️ Manage/Enroll Student</button>
-                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="<%= !studentPanelOpen ? 'true' : 'false' %>" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer <%= !studentPanelOpen ? 'bg-white text-indigo-900 shadow' : 'text-slate-600 hover:text-slate-900' %>">➕ Pre-Register</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentManageSection" aria-selected="true" aria-controls="studentManageSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer bg-white text-indigo-900 shadow">✏️ Manage/Enroll Student</button>
+                        <button type="button" role="tab" data-tab-parent="studentPanel" data-tab-target="studentRegSection" aria-selected="false" aria-controls="studentRegSection" class="sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer text-slate-600 hover:text-slate-900">➕ Pre-Register</button>
                     </div>
                     <% if (selectedStudent) { %>
                         <a href="/registrar" class="text-xs font-bold text-slate-600 hover:text-slate-900 underline">Close student record</a>
                     <% } %>
                 </div>
 
-                <div id="studentManageSection" class="<%= !studentPanelOpen ? 'hidden' : '' %> space-y-4">
+                <div id="studentManageSection" class="space-y-4">
                     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                         <form method="GET" action="/registrar" class="flex flex-col sm:flex-row items-end gap-3 w-full">
                             <div class="flex-grow w-full">
@@ -443,7 +443,7 @@
                 </div>
 
                 <!-- Pre-Register Student Form -->
-                <div id="studentRegSection" class="<%= !studentPanelOpen ? 'hidden' : '' %> bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <div id="studentRegSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                     <h3 class="text-sm font-bold uppercase tracking-wider text-indigo-900 mb-3">Pre-Register Student Account</h3>
                     
                     <div id="lookupMessageContainer" class="hidden mb-3 p-3 text-xs font-bold rounded-lg text-center"></div>
@@ -778,7 +778,7 @@
                 .replace(/'/g, '&#39;');
         }
 
-        const PANEL_IDS = ['settingsPanel', 'studentPanel', 'facultyPanel', 'batchUploadSection', 'lockedAccountsPanel'];
+        const PANEL_IDS = ['studentPanel', 'facultyPanel', 'batchUploadSection', 'lockedAccountsPanel'];
         const SUB_PANELS = {
             studentPanel: ['studentManageSection', 'studentRegSection'],
             facultyPanel: ['facultyManageSection', 'facultyRegSection']
