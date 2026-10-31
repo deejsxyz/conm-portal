@@ -76,6 +76,28 @@ app.use(helmet({
 // Static assets (logo). Mounted before the no-store middleware below so browsers can cache them.
 app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: '7d' }));
 
+// Automatic dark mode: add the dark-mode stylesheet to every rendered page.
+// The stylesheet only takes effect when the user's device is set to dark mode (and never when printing).
+// If you edit public/dark.css, change the version number (v=1) below so browsers download the new copy.
+const DARK_CSS_LINK = '<link rel="stylesheet" href="/static/dark.css?v=1">';
+app.use((req, res, next) => {
+    const originalRender = res.render.bind(res);
+    res.render = (view, options, callback) => {
+        const done = typeof options === 'function' ? options : callback;
+        const locals = typeof options === 'function' ? undefined : options;
+        originalRender(view, locals, (err, html) => {
+            if (err) {
+                if (done) return done(err);
+                return next(err);
+            }
+            const out = String(html).replace('</head>', '    ' + DARK_CSS_LINK + '\n</head>');
+            if (done) return done(null, out);
+            res.send(out);
+        });
+    };
+    next();
+});
+
 app.use(express.urlencoded({ extended: false, parameterLimit: 5000, limit: '1mb' }));
 
 app.use((req, res, next) => {
